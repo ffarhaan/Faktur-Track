@@ -211,12 +211,14 @@ export default function DataTable({
           itemNames.includes(q);
 
         let matchesTab = true;
-        if (activeTab === "queue_normal") {
-          matchesTab = g.has_unprinted && !g.isSplit;
-        } else if (activeTab === "queue_split") {
-          matchesTab = g.isSplit;
-        } else if (activeTab === "printed") {
-          matchesTab = g.status_cetak;
+        if (!q) {
+          if (activeTab === "queue_normal") {
+            matchesTab = g.has_unprinted && !g.isSplit;
+          } else if (activeTab === "queue_split") {
+            matchesTab = g.isSplit;
+          } else if (activeTab === "printed") {
+            matchesTab = g.status_cetak;
+          }
         }
 
         const matchesDate =
