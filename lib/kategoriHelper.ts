@@ -52,7 +52,9 @@ export function getKategori(r: FakturRecord): KategoriTier {
     // 2. Cek keyword spesifik 1P
     if (
       norm.includes("halomedika") ||
-      norm.includes("heliosmedika") ||
+      norm.includes("helios") ||
+      norm.includes("alchemist") ||
+      norm.includes("hak") ||
       norm.includes("medikaprima") ||
       norm.includes("pastihemat") ||
       norm.includes("sbsfarma") ||
