@@ -71,9 +71,27 @@ export default function HomePage() {
   function autoDetectMapping(hdrs: string[]): ColumnMapping | null {
     const normalized = hdrs.map((h) => h.toLowerCase().replace(/[^a-z0-9]/g, ""));
     const targets: Record<string, string[]> = {
-      no_faktur: ["noinvoicear", "invoicear", "invoiceno", "nofaktur", "faktur", "nomorfaktur", "invoicenumber", "invoice"],
+      no_faktur: [
+        "noinvoicear",
+        "invoicear",
+        "invoiceno",
+        "nofaktur",
+        "faktur",
+        "nomorfaktur",
+        "invoicenumber",
+        "invoice",
+        // New patterns for the DOO/ORA style files
+        "reference",
+        "ref",
+        "transactionnumber",
+        "transaction number",
+        "transaction_no",
+        "transactionno",
+        "transnumber",
+        "tran_no",
+      ],
       no_delivery_order: ["nodo", "deliveryorder", "nodeliveryorder", "do", "deliverynumber", "suratjalan", "nosj"],
-      no_sales_order: ["ordernumber", "salesorder", "nosalesorder", "noso", "so", "orderno"],
+      no_sales_order: ["ordernumber", "salesorder", "nosalesorder", "noso", "so", "orderno", "reference"],
     };
     const mapping: ColumnMapping = {};
     for (const field of REQUIRED_FIELDS) {
