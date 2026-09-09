@@ -42,9 +42,9 @@ function saveMapping(headers: string[], mapping: ColumnMapping) {
 function guessColumn(headers: string[], fieldLabel: string, fieldKey: string): string {
   const normalized = headers.map((h) => h.toLowerCase().replace(/[^a-z0-9]/g, ""));
   const targets: Record<string, string[]> = {
-    no_faktur: ["nofaktur", "faktur", "invoiceno", "nomorfaktur", "invoicenumber"],
-    no_delivery_order: ["nodo", "deliveryorder", "nodeliveryorder", "do"],
-    no_sales_order: ["noso", "salesorder", "nosalesorder", "so"],
+    no_faktur: ["noinvoicear", "invoicear", "invoiceno", "nofaktur", "faktur", "nomorfaktur", "invoicenumber", "invoice"],
+    no_delivery_order: ["nodo", "deliveryorder", "nodeliveryorder", "do", "deliverynumber", "suratjalan", "nosj"],
+    no_sales_order: ["ordernumber", "salesorder", "nosalesorder", "noso", "so", "orderno"],
   };
   const candidates = targets[fieldKey] ?? [];
   for (const candidate of candidates) {
@@ -67,7 +67,8 @@ export default function ColumnMapper({ headers, onConfirm, onCancel }: Props) {
 
   const wasAutoRemembered = useMemo(() => !!loadSavedMapping(headers), [headers]);
 
-  const isComplete = REQUIRED_FIELDS.every((f) => mapping[f.key]);
+  // Hanya No Faktur yang wajib diisi, No DO & No SO opsional jika tidak ada di Excel
+  const isComplete = !!mapping.no_faktur;
 
   function handleConfirm() {
     saveMapping(headers, mapping);

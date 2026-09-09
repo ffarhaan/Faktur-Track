@@ -32,15 +32,39 @@ export default function UploadExcel({ onParsed }: Props) {
         return;
       }
 
-      const headerRow = (raw[0] as unknown[]).map((h) => String(h).trim());
-      const dataRows = raw.slice(1);
+      // Cari baris header yang sesungguhnya (skip metadata report Oracle di baris 0-10)
+      let headerRowIndex = 0;
+      for (let i = 0; i < Math.min(30, raw.length); i++) {
+        const rowCells = (raw[i] as unknown[]).map((c) => String(c ?? "").trim());
+        const nonEmpties = rowCells.filter((c) => c !== "");
+        // Baris header biasanya punya banyak kolom dan berisi teks
+        if (
+          nonEmpties.length >= 3 &&
+          rowCells.some((c) =>
+            /invoice|faktur|order|pelanggan|customer|item|entity/i.test(c)
+          )
+        ) {
+          headerRowIndex = i;
+          break;
+        } else if (nonEmpties.length >= 5) {
+          headerRowIndex = i;
+          break;
+        }
+      }
+
+      const headerRow = (raw[headerRowIndex] as unknown[]).map((h, idx) => {
+        const val = String(h ?? "").trim();
+        return val !== "" ? val : `Kolom_${idx + 1}`;
+      });
+
+      const dataRows = raw.slice(headerRowIndex + 1);
 
       const rows: ParsedExcelRow[] = dataRows
-        .filter((r) => r.some((cell) => String(cell).trim() !== ""))
+        .filter((r) => (r as unknown[]).some((cell) => String(cell ?? "").trim() !== ""))
         .map((r) => {
           const obj: ParsedExcelRow = {};
           headerRow.forEach((h, i) => {
-            const val = r[i];
+            const val = (r as unknown[])[i];
             obj[h] = val === undefined || val === "" ? null : (val as string | number);
           });
           return obj;
