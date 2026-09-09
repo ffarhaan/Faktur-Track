@@ -639,19 +639,19 @@ export default function DataTable({
                       </div>
                     </td>
 
-                    {/* Status */}
+                    {/* Status Print / Done */}
                     <td className="px-4 py-2">
                       <button
                         disabled={updatingId === r.id || editingId === r.id}
                         onClick={() => toggleStatus(r)}
-                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition shadow-sm cursor-pointer ${
+                        className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition shadow-sm cursor-pointer ${
                           r.status_cetak
-                            ? "bg-green-100 text-green-800 border border-green-300 hover:bg-green-200"
-                            : "bg-yellow-100 text-yellow-800 border border-yellow-300 hover:bg-yellow-200"
+                            ? "bg-green-50 text-green-800 border border-green-300 hover:bg-yellow-50 hover:text-yellow-800 hover:border-yellow-300"
+                            : "bg-green-600 text-white hover:bg-green-700 ring-2 ring-green-600/30"
                         } ${updatingId === r.id ? "opacity-50" : ""}`}
-                        title="Klik untuk mengubah status cetak (Sudah / Belum)"
+                        title={r.status_cetak ? "Sudah selesai dicetak. Klik jika ingin membatalkan." : "Klik untuk menandai faktur ini SELESAI DICETAK dan langsung pindah ke list Sudah Print"}
                       >
-                        <span>{r.status_cetak ? "✅ Sudah Print" : "⏳ Belum Print (Klik)"}</span>
+                        <span>{r.status_cetak ? "✅ Sudah Print (Batalkan)" : "✓ Selesai Print"}</span>
                       </button>
                     </td>
 
