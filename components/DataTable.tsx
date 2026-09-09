@@ -65,15 +65,12 @@ export default function DataTable({
   const [activeTab, setActiveTab] = useState<ViewTab>("queue_normal");
   const [search, setSearch] = useState("");
   const [dateFilter, setDateFilter] = useState<DateFilter>("all");
-  const [typeFilter, setTypeFilter] = useState<OrderTypeFilter>("all");
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState<Partial<FakturRecord>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [deletingBulk, setDeletingBulk] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null); // Accordion item detail
 
   // ── Pemetaan 1 SO -> Multiple Invoice ─────────────────────────
@@ -111,12 +108,10 @@ export default function DataTable({
     const splitCount = records.filter((r) => !r.status_cetak && getRelatedInvoices(r).length > 0).length;
     const normalQueue = notPrinted - splitCount;
     const newItems = records.filter((r) => isNew(r.imported_at)).length;
-    const dooCount = records.filter((r) => getOrderType(r) === "DOO").length;
-    const oraCount = records.filter((r) => getOrderType(r) === "ORA").length;
-    return { total, printed, notPrinted, splitCount, normalQueue, newItems, dooCount, oraCount };
+    return { total, printed, notPrinted, splitCount, normalQueue, newItems };
   }, [records, soToInvoicesMap]);
 
-  // ── Filter Data Sesuai Tab, Search, Date & Type ─────────────────
+  // ── Filter Data Sesuai Tab, Search & Date ───────────────────────
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     const now = Date.now();
@@ -134,11 +129,13 @@ export default function DataTable({
           .map((it: ItemDetail) => `${it.item_code ?? ""} ${it.item_description ?? ""}`)
           .join(" ")
           .toLowerCase();
+        const orderType = getOrderType(r).toLowerCase();
 
         const matchesSearch =
           !q ||
           r.no_faktur?.toLowerCase().includes(q) ||
           r.no_sales_order?.toLowerCase().includes(q) ||
+          orderType.includes(q) ||
           custName.includes(q) ||
           itemNames.includes(q);
 
@@ -162,10 +159,7 @@ export default function DataTable({
           r.imported_at === highlightImportedAt ||
           Math.abs(new Date(r.imported_at).getTime() - new Date(highlightImportedAt).getTime()) < 5000;
 
-        const orderType = getOrderType(r);
-        const matchesType = typeFilter === "all" || orderType === typeFilter;
-
-        return matchesSearch && matchesTab && matchesDate && matchesHighlight && matchesType;
+        return matchesSearch && matchesTab && matchesDate && matchesHighlight;
       })
       .sort((a, b) => {
         const numA = parseFakturNum(a.no_faktur);
@@ -175,7 +169,7 @@ export default function DataTable({
         }
         return (b.no_faktur || "").localeCompare(a.no_faktur || "", undefined, { numeric: true });
       });
-  }, [records, search, activeTab, dateFilter, typeFilter, highlightImportedAt, soToInvoicesMap]);
+  }, [records, search, activeTab, dateFilter, highlightImportedAt, soToInvoicesMap]);
 
   // ── Pagination ──────────────────────────────────────────────────
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
@@ -214,37 +208,6 @@ export default function DataTable({
     if (data) onRecordUpdated(data as FakturRecord);
   }
 
-  // Bulk update status print untuk semua yang dicentang
-  async function setBulkStatus(markAsPrinted: boolean) {
-    if (selectedIds.size === 0) return;
-    const ids = Array.from(selectedIds);
-    const nowIso = new Date().toISOString();
-
-    records.forEach((r) => {
-      if (selectedIds.has(r.id)) {
-        onRecordUpdated({
-          ...r,
-          status_cetak: markAsPrinted,
-          printed_at: markAsPrinted ? nowIso : null,
-        });
-      }
-    });
-
-    const { error } = await supabase
-      .from("faktur_records")
-      .update({
-        status_cetak: markAsPrinted,
-        printed_at: markAsPrinted ? nowIso : null,
-      })
-      .in("id", ids);
-
-    if (error) {
-      alert("Gagal update status massal: " + error.message);
-      return;
-    }
-    setSelectedIds(new Set());
-  }
-
   async function deleteRecord(id: string) {
     if (!confirm("Hapus data faktur ini?")) return;
     setDeletingId(id);
@@ -252,18 +215,6 @@ export default function DataTable({
     setDeletingId(null);
     if (error) { alert("Gagal hapus: " + error.message); return; }
     onRecordDeleted(id);
-  }
-
-  async function deleteBulk() {
-    if (selectedIds.size === 0) return;
-    if (!confirm(`Hapus ${selectedIds.size} data yang dipilih?`)) return;
-    setDeletingBulk(true);
-    const ids = Array.from(selectedIds);
-    const { error } = await supabase.from("faktur_records").delete().in("id", ids);
-    setDeletingBulk(false);
-    if (error) { alert("Gagal hapus: " + error.message); return; }
-    ids.forEach((id) => onRecordDeleted(id));
-    setSelectedIds(new Set());
   }
 
   function startEdit(record: FakturRecord) {
@@ -292,30 +243,14 @@ export default function DataTable({
     setEditDraft({});
   }
 
-  function toggleSelect(id: string) {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
-  }
-
-  function toggleSelectAll() {
-    if (selectedIds.size === paginated.length) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(paginated.map((r) => r.id)));
-    }
-  }
-
   function exportToExcel() {
     const rows = filtered.map((r) => {
       const oType = getOrderType(r);
       return {
-        "No Invoice AR": r.no_faktur,
         "Order Number (SO)": r.no_sales_order,
-        "Tipe Order": oType === "DOO" ? "DOO (3rd Party)" : oType === "ORA" ? "ORA (Priority)" : "-",
+        "No Invoice AR": r.no_faktur,
         "Nama Pelanggan": r.extra?.nama_pelanggan ?? "",
+        "Jenis Transaksi": oType === "DOO" ? "DOO (3rd Party)" : oType === "ORA" ? "ORA (Priority)" : "-",
         "Jumlah Item": r.extra?.items?.length ?? 0,
         "Status Cetak": r.status_cetak ? "Sudah Print" : "Belum Print",
         "Tanggal Print": r.printed_at ? new Date(r.printed_at).toLocaleString("id-ID") : "",
@@ -401,51 +336,6 @@ export default function DataTable({
         </button>
       </div>
 
-      {/* ── Quick Filter: DOO vs ORA ── */}
-      <div className="flex flex-wrap items-center gap-2 mb-4 bg-white p-2 rounded-xl border border-slate-200 shadow-sm">
-        <span className="text-xs font-bold text-slate-500 px-2">Filter Tipe:</span>
-        <button
-          onClick={() => { setTypeFilter("all"); setPage(1); }}
-          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${
-            typeFilter === "all"
-              ? "bg-slate-800 text-white shadow-sm"
-              : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-          }`}
-        >
-          Semua Tipe ({stats.total})
-        </button>
-        <button
-          onClick={() => { setTypeFilter("DOO"); setPage(1); }}
-          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
-            typeFilter === "DOO"
-              ? "bg-purple-700 text-white shadow-sm ring-2 ring-purple-400"
-              : "bg-purple-50 text-purple-800 border border-purple-200 hover:bg-purple-100"
-          }`}
-        >
-          <span>🟣 DOO (3rd Party)</span>
-          <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
-            typeFilter === "DOO" ? "bg-white text-purple-900" : "bg-purple-200 text-purple-900"
-          }`}>
-            {stats.dooCount}
-          </span>
-        </button>
-        <button
-          onClick={() => { setTypeFilter("ORA"); setPage(1); }}
-          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
-            typeFilter === "ORA"
-              ? "bg-teal-700 text-white shadow-sm ring-2 ring-teal-400"
-              : "bg-teal-50 text-teal-800 border border-teal-200 hover:bg-teal-100"
-          }`}
-        >
-          <span>🔷 ORA (Priority)</span>
-          <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
-            typeFilter === "ORA" ? "bg-white text-teal-900" : "bg-teal-200 text-teal-900"
-          }`}>
-            {stats.oraCount}
-          </span>
-        </button>
-      </div>
-
       {/* ── Highlight aktif banner ── */}
       {highlightImportedAt && (
         <div className="mb-3 flex items-center gap-2 text-xs text-blue-700 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
@@ -460,15 +350,15 @@ export default function DataTable({
       <div className="flex flex-wrap items-center gap-3 mb-4">
         <input
           type="text"
-          placeholder="Cari No Invoice / SO / Nama Pelanggan / Nama Barang..."
+          placeholder="Cari No Invoice / SO / DOO / ORA / Nama Pelanggan / Nama Barang..."
           value={search}
           onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-          className="border border-gray-300 rounded-xl px-3.5 py-2.5 text-sm flex-1 min-w-[260px] shadow-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+          className="border border-gray-300 rounded-xl px-3.5 py-2.5 text-sm flex-1 min-w-[280px] shadow-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
         />
         <select
           value={dateFilter}
           onChange={(e) => { setDateFilter(e.target.value as DateFilter); setPage(1); }}
-          className="border border-gray-300 rounded-xl px-3 py-2.5 text-sm bg-white shadow-sm"
+          className="border border-gray-300 rounded-xl px-3 py-2.5 text-sm bg-white shadow-sm font-medium"
         >
           <option value="all">Semua Tanggal</option>
           <option value="today">Hari ini (Baru)</option>
@@ -481,36 +371,10 @@ export default function DataTable({
         >
           Export Excel
         </button>
-
-        {selectedIds.size > 0 && (
-          <div className="flex flex-wrap items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-300">
-            <span className="text-xs font-bold text-slate-700">{selectedIds.size} dipilih:</span>
-            <button
-              onClick={() => setBulkStatus(true)}
-              className="px-3 py-1.5 bg-green-600 text-white rounded-lg text-xs font-bold hover:bg-green-700 shadow-sm transition"
-            >
-              ✓ Selesai Print
-            </button>
-            <button
-              onClick={() => setBulkStatus(false)}
-              className="px-3 py-1.5 bg-yellow-500 text-white rounded-lg text-xs font-bold hover:bg-yellow-600 shadow-sm transition"
-            >
-              ✕ Belum Print
-            </button>
-            <button
-              onClick={deleteBulk}
-              disabled={deletingBulk}
-              className="px-3 py-1.5 bg-red-600 text-white rounded-lg text-xs font-bold hover:bg-red-700 shadow-sm transition disabled:opacity-50"
-            >
-              {deletingBulk ? "Menghapus..." : "🗑️ Hapus"}
-            </button>
-          </div>
-        )}
       </div>
 
       <p className="text-xs text-gray-500 mb-2">
         Menampilkan <strong>{filtered.length}</strong> dari {records.length} data
-        {typeFilter !== "all" && <span className="font-bold text-purple-700"> ({typeFilter} saja)</span>}
         {totalPages > 1 && ` — Hal. ${safePage} / ${totalPages}`}
       </p>
 
@@ -519,20 +383,13 @@ export default function DataTable({
         <table className="min-w-full text-sm">
           <thead className="bg-slate-50 border-b border-slate-200 text-slate-700">
             <tr>
-              <th className="px-3 py-3 w-10 text-center">
-                <input
-                  type="checkbox"
-                  checked={paginated.length > 0 && selectedIds.size === paginated.length}
-                  onChange={toggleSelectAll}
-                />
-              </th>
-              <th className="text-left px-4 py-3 font-bold">No Invoice AR</th>
-              <th className="text-left px-4 py-3 font-bold">Order Number (SO)</th>
+              <th className="text-left px-4 py-3 font-bold">Order Number</th>
+              <th className="text-left px-4 py-3 font-bold">Inv AR</th>
               <th className="text-left px-4 py-3 font-bold">Nama Pelanggan</th>
+              <th className="text-left px-4 py-3 font-bold">Jenis Transaksi</th>
               <th className="text-left px-4 py-3 font-bold">Daftar Barang</th>
-              <th className="text-left px-4 py-3 font-bold">Status Print (Aksi)</th>
-              <th className="text-left px-4 py-3 font-bold">Tanggal Print</th>
-              <th className="text-left px-4 py-3 font-bold">Aksi</th>
+              <th className="text-left px-4 py-3 font-bold">Status Print</th>
+              <th className="text-center px-4 py-3 font-bold w-20">Aksi</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
@@ -555,40 +412,7 @@ export default function DataTable({
                       ? "bg-yellow-50/30"
                       : ""
                   }`}>
-                    <td className="px-3 py-3 text-center">
-                      <input
-                        type="checkbox"
-                        checked={selectedIds.has(r.id)}
-                        onChange={() => toggleSelect(r.id)}
-                      />
-                    </td>
-
-                    {/* No Invoice AR */}
-                    <td className="px-4 py-3 font-bold text-gray-900">
-                      {editingId === r.id ? (
-                        <input
-                          value={editDraft.no_faktur ?? ""}
-                          onChange={(e) => setEditDraft((d) => ({ ...d, no_faktur: e.target.value }))}
-                          className="border border-blue-300 rounded px-2 py-0.5 text-sm w-full"
-                        />
-                      ) : (
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-base font-black text-slate-900 font-mono">{r.no_faktur}</span>
-                          {isNew(r.imported_at) && (
-                            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-700">
-                              BARU
-                            </span>
-                          )}
-                          {hasSplit && (
-                            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-700 border border-red-200">
-                              ⚠️ Pecah Inv
-                            </span>
-                          )}
-                        </div>
-                      )}
-                    </td>
-
-                    {/* No SO + Badge DOO / ORA */}
+                    {/* 1. Order Number (SO) */}
                     <td className="px-4 py-3">
                       {editingId === r.id ? (
                         <input
@@ -598,38 +422,18 @@ export default function DataTable({
                         />
                       ) : (
                         <div>
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <span
-                              onClick={() => {
-                                if (r.no_sales_order) {
-                                  setSearch(r.no_sales_order.split(",")[0].trim());
-                                  setPage(1);
-                                }
-                              }}
-                              className="font-mono font-semibold text-gray-800 cursor-pointer hover:underline"
-                              title="Klik untuk filter SO ini"
-                            >
-                              {r.no_sales_order ?? "-"}
-                            </span>
-
-                            {/* Badge DOO vs ORA */}
-                            {orderType === "DOO" && (
-                              <span
-                                className="px-1.5 py-0.5 rounded text-[10px] font-black bg-purple-100 text-purple-800 border border-purple-300"
-                                title="DOO (TRADE_3RD PARTY)"
-                              >
-                                DOO
-                              </span>
-                            )}
-                            {orderType === "ORA" && (
-                              <span
-                                className="px-1.5 py-0.5 rounded text-[10px] font-black bg-teal-100 text-teal-800 border border-teal-300"
-                                title="ORA (TRADE_PRIORITY)"
-                              >
-                                ORA
-                              </span>
-                            )}
-                          </div>
+                          <span
+                            onClick={() => {
+                              if (r.no_sales_order) {
+                                setSearch(r.no_sales_order.split(",")[0].trim());
+                                setPage(1);
+                              }
+                            }}
+                            className="font-mono font-bold text-slate-800 cursor-pointer hover:underline"
+                            title="Klik untuk filter SO ini"
+                          >
+                            {r.no_sales_order ?? "-"}
+                          </span>
 
                           {hasSplit && (
                             <div className="text-[11px] text-red-600 font-medium mt-0.5">
@@ -654,14 +458,62 @@ export default function DataTable({
                       )}
                     </td>
 
-                    {/* Nama Pelanggan */}
+                    {/* 2. Inv AR */}
+                    <td className="px-4 py-3 font-bold text-gray-900">
+                      {editingId === r.id ? (
+                        <input
+                          value={editDraft.no_faktur ?? ""}
+                          onChange={(e) => setEditDraft((d) => ({ ...d, no_faktur: e.target.value }))}
+                          className="border border-blue-300 rounded px-2 py-0.5 text-sm w-full"
+                        />
+                      ) : (
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-base font-black text-slate-900 font-mono">{r.no_faktur}</span>
+                          {isNew(r.imported_at) && (
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-700">
+                              BARU
+                            </span>
+                          )}
+                          {hasSplit && (
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-700 border border-red-200">
+                              ⚠️ Pecah Inv
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </td>
+
+                    {/* 3. Nama Pelanggan */}
                     <td className="px-4 py-3">
                       <span className="font-semibold text-slate-800 block max-w-[220px] truncate" title={String(custName || "-")}>
                         {custName ? String(custName) : <span className="text-gray-400 italic">-</span>}
                       </span>
                     </td>
 
-                    {/* Tombol Buka Daftar Barang */}
+                    {/* 4. Jenis Transaksi */}
+                    <td className="px-4 py-3">
+                      {orderType === "DOO" && (
+                        <span
+                          className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-black bg-purple-100 text-purple-800 border border-purple-300 shadow-sm"
+                          title="DOO (TRADE_3RD PARTY)"
+                        >
+                          DOO
+                        </span>
+                      )}
+                      {orderType === "ORA" && (
+                        <span
+                          className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-black bg-teal-100 text-teal-800 border border-teal-300 shadow-sm"
+                          title="ORA (TRADE_PRIORITY)"
+                        >
+                          ORA
+                        </span>
+                      )}
+                      {orderType === "OTHER" && (
+                        <span className="text-gray-400 text-xs">-</span>
+                      )}
+                    </td>
+
+                    {/* 5. Daftar Barang */}
                     <td className="px-4 py-3">
                       <button
                         onClick={() => setExpandedId(isExpanded ? null : r.id)}
@@ -677,30 +529,32 @@ export default function DataTable({
                       </button>
                     </td>
 
-                    {/* Status Print / Aksi */}
+                    {/* 6. Status Print */}
                     <td className="px-4 py-3">
-                      <button
-                        disabled={updatingId === r.id || editingId === r.id}
-                        onClick={() => toggleStatus(r)}
-                        className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition shadow-sm cursor-pointer ${
-                          r.status_cetak
-                            ? "bg-green-100 text-green-800 border border-green-300 hover:bg-yellow-50 hover:text-yellow-800 hover:border-yellow-300"
-                            : "bg-green-600 text-white hover:bg-green-700 ring-2 ring-green-600/30"
-                        } ${updatingId === r.id ? "opacity-50" : ""}`}
-                        title={r.status_cetak ? "Sudah selesai dicetak. Klik jika ingin membatalkan." : "Klik untuk menandai faktur ini SELESAI DICETAK dan langsung pindah ke list Sudah Print"}
-                      >
-                        <span>{r.status_cetak ? "✅ Sudah Print (Batalkan)" : "✓ Selesai Print"}</span>
-                      </button>
+                      <div className="flex flex-col gap-1 items-start">
+                        <button
+                          disabled={updatingId === r.id || editingId === r.id}
+                          onClick={() => toggleStatus(r)}
+                          className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition shadow-sm cursor-pointer ${
+                            r.status_cetak
+                              ? "bg-green-100 text-green-800 border border-green-300 hover:bg-yellow-50 hover:text-yellow-800 hover:border-yellow-300"
+                              : "bg-green-600 text-white hover:bg-green-700 ring-2 ring-green-600/30"
+                          } ${updatingId === r.id ? "opacity-50" : ""}`}
+                          title={r.status_cetak ? "Sudah dicetak. Klik jika ingin membatalkan." : "Klik untuk tandai selesai dicetak"}
+                        >
+                          <span>{r.status_cetak ? "✅ Sudah Print" : "✓ Selesai Print"}</span>
+                        </button>
+                        {r.printed_at && (
+                          <span className="text-[10px] text-gray-500 font-mono">
+                            {new Date(r.printed_at).toLocaleString("id-ID")}
+                          </span>
+                        )}
+                      </div>
                     </td>
 
-                    {/* Tanggal Print */}
-                    <td className="px-4 py-3 text-gray-500 text-xs font-mono">
-                      {r.printed_at ? new Date(r.printed_at).toLocaleString("id-ID") : "-"}
-                    </td>
-
-                    {/* Aksi */}
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-1">
+                    {/* 7. Aksi */}
+                    <td className="px-4 py-3 text-center">
+                      <div className="flex items-center justify-center gap-1">
                         {editingId === r.id ? (
                           <>
                             <button
@@ -743,7 +597,7 @@ export default function DataTable({
                   {/* ── EXPANDED ITEM ACCORDION DRAWER ── */}
                   {isExpanded && (
                     <tr className="bg-slate-100/70 border-b border-slate-300">
-                      <td colSpan={8} className="px-6 py-4">
+                      <td colSpan={7} className="px-6 py-4">
                         <div className="rounded-2xl border border-slate-300 bg-white p-5 shadow-md">
                           <div className="flex flex-wrap items-center justify-between gap-2 mb-4 pb-3 border-b border-slate-200">
                             <div>
@@ -819,7 +673,7 @@ export default function DataTable({
             })}
             {paginated.length === 0 && (
               <tr>
-                <td colSpan={8} className="text-center text-gray-400 py-10 font-medium">
+                <td colSpan={7} className="text-center text-gray-400 py-10 font-medium">
                   Tidak ada data pada tampilan ini.
                 </td>
               </tr>
