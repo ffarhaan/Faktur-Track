@@ -25,6 +25,12 @@ function isNew(importedAt: string) {
   return Date.now() - new Date(importedAt).getTime() < NEW_THRESHOLD_MS;
 }
 
+function parseFakturNum(val?: string | null): number {
+  if (!val) return 0;
+  const num = parseInt(val.replace(/\D/g, ""), 10);
+  return isNaN(num) ? 0 : num;
+}
+
 export default function DataTable({
   records,
   onRecordUpdated,
@@ -58,7 +64,7 @@ export default function DataTable({
     return { total, printed, notPrinted, newItems };
   }, [records]);
 
-  // ── Filter ──────────────────────────────────────────────────────
+  // ── Filter & Urutkan Faktur Terbaru (Angka Terbesar) di Paling Atas ─
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     const now = Date.now();
@@ -69,31 +75,38 @@ export default function DataTable({
       "30days": now - 30 * 24 * 60 * 60 * 1000,
     };
 
-    return records.filter((r) => {
-      const matchesSearch =
-        !q ||
-        r.no_faktur?.toLowerCase().includes(q) ||
-        r.no_delivery_order?.toLowerCase().includes(q) ||
-        r.no_sales_order?.toLowerCase().includes(q);
+    return records
+      .filter((r) => {
+        const matchesSearch =
+          !q ||
+          r.no_faktur?.toLowerCase().includes(q) ||
+          r.no_sales_order?.toLowerCase().includes(q);
 
-      const matchesStatus =
-        effectiveStatusFilter === "all" ||
-        (effectiveStatusFilter === "printed" && r.status_cetak) ||
-        (effectiveStatusFilter === "not_printed" && !r.status_cetak);
+        const matchesStatus =
+          effectiveStatusFilter === "all" ||
+          (effectiveStatusFilter === "printed" && r.status_cetak) ||
+          (effectiveStatusFilter === "not_printed" && !r.status_cetak);
 
-      const matchesDate =
-        dateFilter === "all" ||
-        new Date(r.imported_at).getTime() >= cutoffs[dateFilter];
+        const matchesDate =
+          dateFilter === "all" ||
+          new Date(r.imported_at).getTime() >= cutoffs[dateFilter];
 
-      // Kalau highlight aktif, hanya tampilkan dari sesi import itu
-      const matchesHighlight =
-        !highlightImportedAt ||
-        r.imported_at === highlightImportedAt ||
-        // toleransi ±5 detik karena batch bisa beda beberapa ms
-        Math.abs(new Date(r.imported_at).getTime() - new Date(highlightImportedAt).getTime()) < 5000;
+        const matchesHighlight =
+          !highlightImportedAt ||
+          r.imported_at === highlightImportedAt ||
+          Math.abs(new Date(r.imported_at).getTime() - new Date(highlightImportedAt).getTime()) < 5000;
 
-      return matchesSearch && matchesStatus && matchesDate && matchesHighlight;
-    });
+        return matchesSearch && matchesStatus && matchesDate && matchesHighlight;
+      })
+      .sort((a, b) => {
+        // Urutkan angka No Invoice terbesar ke terkecil (terbaru di atas)
+        const numA = parseFakturNum(a.no_faktur);
+        const numB = parseFakturNum(b.no_faktur);
+        if (numA !== numB) {
+          return numB - numA;
+        }
+        return (b.no_faktur || "").localeCompare(a.no_faktur || "", undefined, { numeric: true });
+      });
   }, [records, search, effectiveStatusFilter, dateFilter, highlightImportedAt]);
 
   // ── Pagination ──────────────────────────────────────────────────
@@ -144,7 +157,6 @@ export default function DataTable({
     setEditingId(record.id);
     setEditDraft({
       no_faktur: record.no_faktur,
-      no_delivery_order: record.no_delivery_order,
       no_sales_order: record.no_sales_order,
     });
   }
@@ -155,7 +167,6 @@ export default function DataTable({
       .from("faktur_records")
       .update({
         no_faktur: editDraft.no_faktur ?? record.no_faktur,
-        no_delivery_order: editDraft.no_delivery_order ?? null,
         no_sales_order: editDraft.no_sales_order ?? null,
       })
       .eq("id", record.id)
@@ -186,9 +197,8 @@ export default function DataTable({
 
   function exportToExcel() {
     const rows = filtered.map((r) => ({
-      "No Faktur": r.no_faktur,
-      "No Delivery Order": r.no_delivery_order,
-      "No Sales Order": r.no_sales_order,
+      "No Invoice AR": r.no_faktur,
+      "Order Number (SO)": r.no_sales_order,
       "Status Cetak": r.status_cetak ? "Sudah Print" : "Belum Print",
       "Tanggal Print": r.printed_at ? new Date(r.printed_at).toLocaleString("id-ID") : "",
       "Tanggal Import": new Date(r.imported_at).toLocaleString("id-ID"),
@@ -238,7 +248,7 @@ export default function DataTable({
       <div className="flex flex-wrap items-center gap-3 mb-4">
         <input
           type="text"
-          placeholder="Cari No Faktur / DO / SO..."
+          placeholder="Cari No Invoice AR / No SO..."
           value={search}
           onChange={(e) => { setSearch(e.target.value); setPage(1); }}
           className="border border-gray-300 rounded-lg px-3 py-2 text-sm flex-1 min-w-[180px]"
@@ -296,10 +306,9 @@ export default function DataTable({
                   onChange={toggleSelectAll}
                 />
               </th>
-              <th className="text-left px-4 py-2 font-medium text-gray-600">No Faktur</th>
-              <th className="text-left px-4 py-2 font-medium text-gray-600">No Delivery Order</th>
-              <th className="text-left px-4 py-2 font-medium text-gray-600">No Sales Order</th>
-              <th className="text-left px-4 py-2 font-medium text-gray-600">Status</th>
+              <th className="text-left px-4 py-2 font-medium text-gray-600">No Invoice AR</th>
+              <th className="text-left px-4 py-2 font-medium text-gray-600">Order Number (SO)</th>
+              <th className="text-left px-4 py-2 font-medium text-gray-600">Status Cetak</th>
               <th className="text-left px-4 py-2 font-medium text-gray-600">Tanggal Print</th>
               <th className="text-left px-4 py-2 font-medium text-gray-600">Aksi</th>
             </tr>
@@ -315,7 +324,7 @@ export default function DataTable({
                   />
                 </td>
 
-                {/* No Faktur */}
+                {/* No Invoice AR */}
                 <td className="px-4 py-2 font-medium">
                   {editingId === r.id ? (
                     <input
@@ -332,19 +341,6 @@ export default function DataTable({
                         </span>
                       )}
                     </span>
-                  )}
-                </td>
-
-                {/* No DO */}
-                <td className="px-4 py-2">
-                  {editingId === r.id ? (
-                    <input
-                      value={editDraft.no_delivery_order ?? ""}
-                      onChange={(e) => setEditDraft((d) => ({ ...d, no_delivery_order: e.target.value }))}
-                      className="border border-blue-300 rounded px-2 py-0.5 text-sm w-full"
-                    />
-                  ) : (
-                    r.no_delivery_order ?? "-"
                   )}
                 </td>
 
@@ -425,7 +421,7 @@ export default function DataTable({
             ))}
             {paginated.length === 0 && (
               <tr>
-                <td colSpan={7} className="text-center text-gray-400 py-8">
+                <td colSpan={6} className="text-center text-gray-400 py-8">
                   Tidak ada data.
                 </td>
               </tr>
@@ -475,5 +471,3 @@ export default function DataTable({
     </div>
   );
 }
-
-

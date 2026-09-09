@@ -102,10 +102,10 @@ export default function HomePage() {
 
         return {
           no_faktur: String(noFaktur).trim(),
-          no_delivery_order: row[mapping.no_delivery_order]
+          no_delivery_order: mapping.no_delivery_order && row[mapping.no_delivery_order]
             ? String(row[mapping.no_delivery_order]).trim()
             : null,
-          no_sales_order: row[mapping.no_sales_order]
+          no_sales_order: mapping.no_sales_order && row[mapping.no_sales_order]
             ? String(row[mapping.no_sales_order]).trim()
             : null,
           imported_at: importedAt,

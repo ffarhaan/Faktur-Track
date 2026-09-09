@@ -11,15 +11,14 @@ export type FakturRecord = {
   imported_at: string; // kapan terakhir kali diimport dari Excel
 };
 
-// Field wajib yang harus dipetakan dari kolom Excel
+// Field yang dipetakan dari kolom Excel
 export const REQUIRED_FIELDS = [
-  { key: "no_faktur", label: "No Faktur" },
-  { key: "no_delivery_order", label: "No Delivery Order" },
-  { key: "no_sales_order", label: "No Sales Order" },
+  { key: "no_faktur", label: "No Invoice AR / No Faktur" },
+  { key: "no_sales_order", label: "Order Number / No SO" },
 ] as const;
 
 export type RequiredFieldKey = (typeof REQUIRED_FIELDS)[number]["key"];
 
-export type ColumnMapping = Record<RequiredFieldKey, string>; // field -> nama kolom Excel
+export type ColumnMapping = Record<string, string>; // field -> nama kolom Excel
 
 export type ParsedExcelRow = Record<string, string | number | null>;
