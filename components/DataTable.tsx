@@ -269,27 +269,102 @@ export default function DataTable({
 
   return (
     <div>
-      {/* ── Statistik ── */}
+      {/* ── Statistik Interaktif (Klik kartu mana saja untuk memfilter atau reset) ── */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-5">
         {[
-          { label: "Total", value: stats.total, color: "bg-gray-100 text-gray-700", onClick: undefined },
-          { label: "Sudah Print", value: stats.printed, color: "bg-green-100 text-green-700", onClick: undefined },
-          { label: "Belum Print", value: stats.notPrinted, color: "bg-yellow-100 text-yellow-700", onClick: undefined },
-          { label: "Baru (<24 jam)", value: stats.newItems, color: "bg-blue-100 text-blue-700", onClick: undefined },
+          {
+            label: "Total Data",
+            value: stats.total,
+            sub: "Tampilkan Semua",
+            isActive: statusFilter === "all" && !onlySplitSo && dateFilter === "all" && !highlightImportedAt && !search,
+            color: (statusFilter === "all" && !onlySplitSo && dateFilter === "all" && !highlightImportedAt && !search)
+              ? "bg-slate-800 text-white shadow-md ring-2 ring-slate-900"
+              : "bg-slate-100 text-slate-800 hover:bg-slate-200",
+            onClick: () => {
+              setStatusFilter("all");
+              setOnlySplitSo(false);
+              setDateFilter("all");
+              setSearch("");
+              onClearHighlight();
+              setPage(1);
+            },
+          },
+          {
+            label: "Sudah Print",
+            value: stats.printed,
+            sub: "Filter Sudah Print",
+            isActive: statusFilter === "printed" && !onlySplitSo,
+            color: (statusFilter === "printed" && !onlySplitSo)
+              ? "bg-green-600 text-white shadow-md ring-2 ring-green-700"
+              : "bg-green-50 text-green-700 border border-green-200 hover:bg-green-100",
+            onClick: () => {
+              setStatusFilter(statusFilter === "printed" ? "all" : "printed");
+              setOnlySplitSo(false);
+              onClearHighlight();
+              setPage(1);
+            },
+          },
+          {
+            label: "Belum Print",
+            value: stats.notPrinted,
+            sub: "Filter Belum Print",
+            isActive: statusFilter === "not_printed" && !onlySplitSo,
+            color: (statusFilter === "not_printed" && !onlySplitSo)
+              ? "bg-yellow-500 text-white shadow-md ring-2 ring-yellow-600"
+              : "bg-yellow-50 text-yellow-800 border border-yellow-200 hover:bg-yellow-100",
+            onClick: () => {
+              setStatusFilter(statusFilter === "not_printed" ? "all" : "not_printed");
+              setOnlySplitSo(false);
+              onClearHighlight();
+              setPage(1);
+            },
+          },
+          {
+            label: "Baru (<24 jam)",
+            value: stats.newItems,
+            sub: "Filter Data Hari Ini",
+            isActive: dateFilter === "today" && !onlySplitSo,
+            color: (dateFilter === "today" && !onlySplitSo)
+              ? "bg-blue-600 text-white shadow-md ring-2 ring-blue-700"
+              : "bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100",
+            onClick: () => {
+              setDateFilter(dateFilter === "today" ? "all" : "today");
+              setOnlySplitSo(false);
+              setPage(1);
+            },
+          },
           {
             label: "⚠️ 1 SO 2+ Faktur",
             value: stats.splitCount,
-            color: onlySplitSo ? "bg-red-600 text-white ring-2 ring-red-400" : "bg-red-100 text-red-700 hover:bg-red-200 cursor-pointer",
-            onClick: () => { setOnlySplitSo((s) => !s); setPage(1); },
+            sub: "Filter Pecah Inv",
+            isActive: onlySplitSo,
+            color: onlySplitSo
+              ? "bg-red-600 text-white shadow-md ring-2 ring-red-700"
+              : "bg-red-50 text-red-700 border border-red-200 hover:bg-red-100",
+            onClick: () => {
+              setOnlySplitSo((s) => !s);
+              setPage(1);
+            },
           },
         ].map((s) => (
           <div
             key={s.label}
             onClick={s.onClick}
-            className={`rounded-xl px-4 py-3 transition ${s.color}`}
+            className={`rounded-xl px-4 py-3 transition cursor-pointer select-none ${s.color}`}
+            title={`Klik untuk ${s.sub}`}
           >
-            <p className="text-2xl font-bold">{s.value}</p>
-            <p className="text-xs font-medium mt-0.5">{s.label}</p>
+            <div className="flex items-baseline justify-between">
+              <p className="text-2xl font-bold">{s.value}</p>
+              {s.isActive && (
+                <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-white/20">
+                  Aktif
+                </span>
+              )}
+            </div>
+            <p className="text-xs font-semibold mt-0.5">{s.label}</p>
+            <p className="text-[10px] opacity-75 mt-0.5">
+              {s.isActive ? "Klik untuk lepas filter" : "Klik untuk filter"}
+            </p>
           </div>
         ))}
       </div>
