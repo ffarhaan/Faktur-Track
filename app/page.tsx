@@ -50,6 +50,22 @@ export default function HomePage() {
 
   useEffect(() => {
     fetchRecords();
+
+    // Supabase Realtime: Otomatis sinkron data tanpa refresh manual saat ada perubahan
+    const channel = supabase
+      .channel("faktur-records-realtime")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "faktur_records" },
+        () => {
+          fetchRecords();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   function handleParsed(hdrs: string[], rows: ParsedExcelRow[]) {

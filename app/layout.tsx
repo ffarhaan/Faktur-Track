@@ -1,5 +1,6 @@
 import "./globals.css";
 import type { Metadata } from "next";
+import AutoUpdater from "@/components/AutoUpdater";
 
 export const metadata: Metadata = {
   title: "Faktur Tracker",
@@ -13,7 +14,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="id">
-      <body>{children}</body>
+      <body>
+        <AutoUpdater />
+        {children}
+      </body>
     </html>
   );
 }
