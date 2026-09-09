@@ -138,6 +138,7 @@ export default function HomePage() {
         : null;
 
       const custName = findRowVal(row, [/nama.*pelanggan/i, /customer/i, /pelanggan/i]);
+      const orderTypeVal = findRowVal(row, [/order.*type/i, /transaction.*type/i, /order.*source/i, /line.*type/i]);
       const itemCode = findRowVal(row, [/item.*code/i, /kode.*barang/i, /item/i]);
       const itemDesc = findRowVal(row, [/item.*desc/i, /nama.*barang/i, /description/i, /product/i]);
       const qtyVal = findRowVal(row, [/^qty$/i, /quantity/i, /jumlah/i]);
@@ -170,6 +171,7 @@ export default function HomePage() {
           imported_at: importedAt,
           extra: {
             nama_pelanggan: custName ? String(custName) : null,
+            order_type: orderTypeVal ? String(orderTypeVal) : null,
             items: (itemCode || itemDesc) ? [itemObj] : [],
           },
           _soSet: soSet,
@@ -178,6 +180,9 @@ export default function HomePage() {
         if (soVal) existing._soSet.add(soVal);
         if (!existing.extra.nama_pelanggan && custName) {
           existing.extra.nama_pelanggan = String(custName);
+        }
+        if (!existing.extra.order_type && orderTypeVal) {
+          existing.extra.order_type = String(orderTypeVal);
         }
         if (itemCode || itemDesc) {
           existing.extra.items.push(itemObj);

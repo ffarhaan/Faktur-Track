@@ -15,9 +15,28 @@ type Props = {
 
 type ViewTab = "queue_normal" | "queue_split" | "printed" | "all";
 type DateFilter = "all" | "today" | "7days" | "30days";
+export type OrderTypeFilter = "all" | "DOO" | "ORA";
 
 const PAGE_SIZE = 50;
 const NEW_THRESHOLD_MS = 24 * 60 * 60 * 1000;
+
+export function getOrderType(r: FakturRecord): "DOO" | "ORA" | "OTHER" {
+  if (r.extra?.order_type) {
+    const ot = String(r.extra.order_type).toUpperCase();
+    if (ot.includes("3RD") || ot.includes("DOO")) return "DOO";
+    if (ot.includes("PRIORITY") || ot.includes("ORA")) return "ORA";
+  }
+  if (!r.no_sales_order) return "OTHER";
+  // Alphanumeric SO (e.g. ZLGMXL-5393, KY74DY-8596) -> DOO (TRADE_3RD PARTY)
+  if (/[A-Za-z]/.test(r.no_sales_order)) {
+    return "DOO";
+  }
+  // Numeric SO (e.g. 9066, 9512, 9328) -> ORA (TRADE_PRIORITY)
+  if (/^\s*\d+[\d\s,]*$/.test(r.no_sales_order)) {
+    return "ORA";
+  }
+  return "OTHER";
+}
 
 function isNew(importedAt: string) {
   return Date.now() - new Date(importedAt).getTime() < NEW_THRESHOLD_MS;
@@ -46,6 +65,7 @@ export default function DataTable({
   const [activeTab, setActiveTab] = useState<ViewTab>("queue_normal");
   const [search, setSearch] = useState("");
   const [dateFilter, setDateFilter] = useState<DateFilter>("all");
+  const [typeFilter, setTypeFilter] = useState<OrderTypeFilter>("all");
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -91,10 +111,12 @@ export default function DataTable({
     const splitCount = records.filter((r) => !r.status_cetak && getRelatedInvoices(r).length > 0).length;
     const normalQueue = notPrinted - splitCount;
     const newItems = records.filter((r) => isNew(r.imported_at)).length;
-    return { total, printed, notPrinted, splitCount, normalQueue, newItems };
+    const dooCount = records.filter((r) => getOrderType(r) === "DOO").length;
+    const oraCount = records.filter((r) => getOrderType(r) === "ORA").length;
+    return { total, printed, notPrinted, splitCount, normalQueue, newItems, dooCount, oraCount };
   }, [records, soToInvoicesMap]);
 
-  // ── Filter Data Sesuai Tab & Search ────────────────────────────
+  // ── Filter Data Sesuai Tab, Search, Date & Type ─────────────────
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     const now = Date.now();
@@ -140,7 +162,10 @@ export default function DataTable({
           r.imported_at === highlightImportedAt ||
           Math.abs(new Date(r.imported_at).getTime() - new Date(highlightImportedAt).getTime()) < 5000;
 
-        return matchesSearch && matchesTab && matchesDate && matchesHighlight;
+        const orderType = getOrderType(r);
+        const matchesType = typeFilter === "all" || orderType === typeFilter;
+
+        return matchesSearch && matchesTab && matchesDate && matchesHighlight && matchesType;
       })
       .sort((a, b) => {
         const numA = parseFakturNum(a.no_faktur);
@@ -150,7 +175,7 @@ export default function DataTable({
         }
         return (b.no_faktur || "").localeCompare(a.no_faktur || "", undefined, { numeric: true });
       });
-  }, [records, search, activeTab, dateFilter, highlightImportedAt, soToInvoicesMap]);
+  }, [records, search, activeTab, dateFilter, typeFilter, highlightImportedAt, soToInvoicesMap]);
 
   // ── Pagination ──────────────────────────────────────────────────
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
@@ -284,15 +309,19 @@ export default function DataTable({
   }
 
   function exportToExcel() {
-    const rows = filtered.map((r) => ({
-      "No Invoice AR": r.no_faktur,
-      "Order Number (SO)": r.no_sales_order,
-      "Nama Pelanggan": r.extra?.nama_pelanggan ?? "",
-      "Jumlah Item": r.extra?.items?.length ?? 0,
-      "Status Cetak": r.status_cetak ? "Sudah Print" : "Belum Print",
-      "Tanggal Print": r.printed_at ? new Date(r.printed_at).toLocaleString("id-ID") : "",
-      "Tanggal Import": new Date(r.imported_at).toLocaleString("id-ID"),
-    }));
+    const rows = filtered.map((r) => {
+      const oType = getOrderType(r);
+      return {
+        "No Invoice AR": r.no_faktur,
+        "Order Number (SO)": r.no_sales_order,
+        "Tipe Order": oType === "DOO" ? "DOO (3rd Party)" : oType === "ORA" ? "ORA (Priority)" : "-",
+        "Nama Pelanggan": r.extra?.nama_pelanggan ?? "",
+        "Jumlah Item": r.extra?.items?.length ?? 0,
+        "Status Cetak": r.status_cetak ? "Sudah Print" : "Belum Print",
+        "Tanggal Print": r.printed_at ? new Date(r.printed_at).toLocaleString("id-ID") : "",
+        "Tanggal Import": new Date(r.imported_at).toLocaleString("id-ID"),
+      };
+    });
     const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Data Faktur");
@@ -302,7 +331,7 @@ export default function DataTable({
   return (
     <div>
       {/* ── 3 TAB UTAMA WORKFLOW KERJA OPERATOR ── */}
-      <div className="flex flex-wrap gap-2.5 mb-6 p-1.5 bg-slate-200/80 rounded-2xl border border-slate-300 shadow-inner">
+      <div className="flex flex-wrap gap-2.5 mb-4 p-1.5 bg-slate-200/80 rounded-2xl border border-slate-300 shadow-inner">
         <button
           onClick={() => { setActiveTab("queue_normal"); setPage(1); }}
           className={`flex-1 min-w-[200px] flex items-center justify-between px-4 py-3 rounded-xl font-bold text-sm transition ${
@@ -372,6 +401,51 @@ export default function DataTable({
         </button>
       </div>
 
+      {/* ── Quick Filter: DOO vs ORA ── */}
+      <div className="flex flex-wrap items-center gap-2 mb-4 bg-white p-2 rounded-xl border border-slate-200 shadow-sm">
+        <span className="text-xs font-bold text-slate-500 px-2">Filter Tipe:</span>
+        <button
+          onClick={() => { setTypeFilter("all"); setPage(1); }}
+          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${
+            typeFilter === "all"
+              ? "bg-slate-800 text-white shadow-sm"
+              : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+          }`}
+        >
+          Semua Tipe ({stats.total})
+        </button>
+        <button
+          onClick={() => { setTypeFilter("DOO"); setPage(1); }}
+          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+            typeFilter === "DOO"
+              ? "bg-purple-700 text-white shadow-sm ring-2 ring-purple-400"
+              : "bg-purple-50 text-purple-800 border border-purple-200 hover:bg-purple-100"
+          }`}
+        >
+          <span>🟣 DOO (3rd Party)</span>
+          <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
+            typeFilter === "DOO" ? "bg-white text-purple-900" : "bg-purple-200 text-purple-900"
+          }`}>
+            {stats.dooCount}
+          </span>
+        </button>
+        <button
+          onClick={() => { setTypeFilter("ORA"); setPage(1); }}
+          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+            typeFilter === "ORA"
+              ? "bg-teal-700 text-white shadow-sm ring-2 ring-teal-400"
+              : "bg-teal-50 text-teal-800 border border-teal-200 hover:bg-teal-100"
+          }`}
+        >
+          <span>🔷 ORA (Priority)</span>
+          <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
+            typeFilter === "ORA" ? "bg-white text-teal-900" : "bg-teal-200 text-teal-900"
+          }`}>
+            {stats.oraCount}
+          </span>
+        </button>
+      </div>
+
       {/* ── Highlight aktif banner ── */}
       {highlightImportedAt && (
         <div className="mb-3 flex items-center gap-2 text-xs text-blue-700 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
@@ -436,6 +510,7 @@ export default function DataTable({
 
       <p className="text-xs text-gray-500 mb-2">
         Menampilkan <strong>{filtered.length}</strong> dari {records.length} data
+        {typeFilter !== "all" && <span className="font-bold text-purple-700"> ({typeFilter} saja)</span>}
         {totalPages > 1 && ` — Hal. ${safePage} / ${totalPages}`}
       </p>
 
@@ -467,6 +542,7 @@ export default function DataTable({
               const isExpanded = expandedId === r.id;
               const items = r.extra?.items || [];
               const custName = r.extra?.nama_pelanggan;
+              const orderType = getOrderType(r);
 
               return (
                 <Fragment key={r.id}>
@@ -512,7 +588,7 @@ export default function DataTable({
                       )}
                     </td>
 
-                    {/* No SO */}
+                    {/* No SO + Badge DOO / ORA */}
                     <td className="px-4 py-3">
                       {editingId === r.id ? (
                         <input
@@ -522,18 +598,38 @@ export default function DataTable({
                         />
                       ) : (
                         <div>
-                          <span
-                            onClick={() => {
-                              if (r.no_sales_order) {
-                                setSearch(r.no_sales_order.split(",")[0].trim());
-                                setPage(1);
-                              }
-                            }}
-                            className="font-mono font-semibold text-gray-800 cursor-pointer hover:underline"
-                            title="Klik untuk tampilkan semua faktur dari SO ini"
-                          >
-                            {r.no_sales_order ?? "-"}
-                          </span>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span
+                              onClick={() => {
+                                if (r.no_sales_order) {
+                                  setSearch(r.no_sales_order.split(",")[0].trim());
+                                  setPage(1);
+                                }
+                              }}
+                              className="font-mono font-semibold text-gray-800 cursor-pointer hover:underline"
+                              title="Klik untuk filter SO ini"
+                            >
+                              {r.no_sales_order ?? "-"}
+                            </span>
+
+                            {/* Badge DOO vs ORA */}
+                            {orderType === "DOO" && (
+                              <span
+                                className="px-1.5 py-0.5 rounded text-[10px] font-black bg-purple-100 text-purple-800 border border-purple-300"
+                                title="DOO (TRADE_3RD PARTY)"
+                              >
+                                DOO
+                              </span>
+                            )}
+                            {orderType === "ORA" && (
+                              <span
+                                className="px-1.5 py-0.5 rounded text-[10px] font-black bg-teal-100 text-teal-800 border border-teal-300"
+                                title="ORA (TRADE_PRIORITY)"
+                              >
+                                ORA
+                              </span>
+                            )}
+                          </div>
 
                           {hasSplit && (
                             <div className="text-[11px] text-red-600 font-medium mt-0.5">
@@ -558,7 +654,7 @@ export default function DataTable({
                       )}
                     </td>
 
-                    {/* Nama Pelanggan (Kolom Khusus Jelas) */}
+                    {/* Nama Pelanggan */}
                     <td className="px-4 py-3">
                       <span className="font-semibold text-slate-800 block max-w-[220px] truncate" title={String(custName || "-")}>
                         {custName ? String(custName) : <span className="text-gray-400 italic">-</span>}
@@ -651,9 +747,21 @@ export default function DataTable({
                         <div className="rounded-2xl border border-slate-300 bg-white p-5 shadow-md">
                           <div className="flex flex-wrap items-center justify-between gap-2 mb-4 pb-3 border-b border-slate-200">
                             <div>
-                              <p className="text-base font-black text-slate-900">
-                                📦 Rincian Barang — Faktur #{r.no_faktur}
-                              </p>
+                              <div className="flex items-center gap-2">
+                                <p className="text-base font-black text-slate-900">
+                                  📦 Rincian Barang — Faktur #{r.no_faktur}
+                                </p>
+                                {orderType === "DOO" && (
+                                  <span className="px-2 py-0.5 rounded text-xs font-black bg-purple-100 text-purple-800 border border-purple-300">
+                                    DOO (TRADE_3RD PARTY)
+                                  </span>
+                                )}
+                                {orderType === "ORA" && (
+                                  <span className="px-2 py-0.5 rounded text-xs font-black bg-teal-100 text-teal-800 border border-teal-300">
+                                    ORA (TRADE_PRIORITY)
+                                  </span>
+                                )}
+                              </div>
                               <p className="text-xs text-slate-600 mt-1">
                                 No SO: <span className="font-mono font-bold text-slate-800">{r.no_sales_order || "-"}</span>
                                 {custName && (

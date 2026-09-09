@@ -20,6 +20,7 @@ export type FakturRecord = {
   extra: {
     items?: ItemDetail[];
     nama_pelanggan?: string | null;
+    order_type?: string | null;
     [key: string]: unknown;
   };
   created_at: string;
