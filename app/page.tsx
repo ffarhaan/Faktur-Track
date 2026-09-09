@@ -119,7 +119,16 @@ export default function HomePage() {
       return;
     }
 
-    const batches = chunk(payload, 500);
+    // Deduplikasi berdasarkan no_faktur (karena 1 nomor invoice bisa ada banyak baris item di Excel Oracle)
+    const uniqueMap = new Map<string, (typeof payload)[0]>();
+    for (const item of payload) {
+      if (!uniqueMap.has(item.no_faktur)) {
+        uniqueMap.set(item.no_faktur, item);
+      }
+    }
+    const uniquePayload = Array.from(uniqueMap.values());
+
+    const batches = chunk(uniquePayload, 500);
     let importedCount = 0;
 
     for (const batch of batches) {
@@ -136,7 +145,7 @@ export default function HomePage() {
     }
 
     // Hitung statistik: data baru & yang belum diprint
-    const newItems = payload.filter((p) => !existingNoFaktur.has(p.no_faktur));
+    const newItems = uniquePayload.filter((p) => !existingNoFaktur.has(p.no_faktur));
     const newCount = newItems.length;
     // Data baru → belum diprint (status_cetak default false untuk yang baru)
     const newUnprintedCount = newItems.filter(
