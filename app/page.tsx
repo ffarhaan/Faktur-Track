@@ -117,6 +117,15 @@ export default function HomePage() {
   //        Item Code, Item Description, Qty, UOM, LOT Number,
   //        HNA, Diskon, Harga Jual, Total Harga, COGS/Unit, Profit
   // ─────────────────────────────────────────────
+function getInvoiceKey(noFaktur: string, txType?: string | null, custName?: string | null): string {
+  const is1P =
+    String(txType || "").includes("PRIORITY") ||
+    String(txType || "").includes("ORA") ||
+    String(custName || "").toLowerCase().includes("helios") ||
+    String(custName || "").toLowerCase().includes("hak");
+  return is1P ? `${noFaktur}-1P` : noFaktur;
+}
+
   // ─────────────────────────────────────────────
   // IMPORT XXCUST
   // Kolom: No Invoice AR (No Faktur), Order Number (No SO), Nama Pelanggan,
@@ -168,8 +177,8 @@ export default function HomePage() {
         findRowVal(row, [/no\s*faktur/i, /nofaktur/i]);
       if (!rawFaktur) continue;
 
-      const noFaktur = String(rawFaktur).trim();
-      if (!noFaktur || noFaktur === "0") continue;
+      const baseFaktur = String(rawFaktur).trim();
+      if (!baseFaktur || baseFaktur === "0") continue;
 
       // Cari Order Number (No SO)
       const soRaw = findRowVal(row, [/^order\s*number$/i, /^no\s*so$/i, /^sales\s*order/i]);
@@ -196,6 +205,8 @@ export default function HomePage() {
       const accDate   = parseExcelDate(findRowVal(row, [/^accounting\s*date$/i]));
       const orderDate = parseExcelDate(findRowVal(row, [/^order\s*date$/i]));
 
+      const noFaktur = getInvoiceKey(baseFaktur, jenisTrans ? String(jenisTrans) : null, custName ? String(custName) : null);
+
       const itemObj = {
         item_code: itemCode,
         item_description: itemDesc,
@@ -217,7 +228,6 @@ export default function HomePage() {
       const existing = uniqueMap.get(noFaktur);
       if (!existing) {
         const soSet = new Set<string>();
-        // Gabungkan nomor SO lama dari database (misal dari DOO import sebelumnya)
         const dbRec = dbRecordMap.get(noFaktur);
         if (dbRec?.no_sales_order) {
           dbRec.no_sales_order.split(",").forEach((s) => s.trim() && soSet.add(s.trim()));
@@ -324,8 +334,8 @@ export default function HomePage() {
         findRowVal(row, [/invoice\s*number/i, /no\s*invoice/i, /no\s*faktur/i]);
       if (!rawFaktur) continue;
 
-      const noFaktur = String(rawFaktur).trim();
-      if (!noFaktur || noFaktur === "0") continue;
+      const baseFaktur = String(rawFaktur).trim();
+      if (!baseFaktur || baseFaktur === "0") continue;
 
       // 2. Reference = No Sales Order DOO
       const refRaw = findRowVal(row, [/^reference$/i, /order\s*number/i, /no\s*so$/i]);
@@ -341,10 +351,11 @@ export default function HomePage() {
           ? "DOO"
           : "ORA";
 
+      const noFaktur = getInvoiceKey(baseFaktur, txSourceStr, custName ? String(custName) : null);
+
       const existing = uniqueMap.get(noFaktur);
       if (!existing) {
         const soSet = new Set<string>();
-        // Gabungkan nomor SO yang sudah ada di DB jika ada
         const dbRec = dbRecordMap.get(noFaktur);
         if (dbRec?.no_sales_order) {
           dbRec.no_sales_order.split(",").forEach((s) => s.trim() && soSet.add(s.trim()));

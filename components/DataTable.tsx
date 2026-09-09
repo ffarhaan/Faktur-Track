@@ -301,7 +301,7 @@ export default function DataTable({
       const kat = getKategori(g.representativeRecord);
       return {
         "Order Number (SO)": g.no_sales_order,
-        "No Invoice AR": g.no_fakturs.join(", "),
+        "No Invoice AR": g.no_fakturs.map(f => f ? f.replace(/-1P$/i, "") : "").join(", "),
         "Jumlah Faktur": g.no_fakturs.length,
         "Nama Pelanggan": g.extra?.nama_pelanggan ?? "",
         "Kategori": kat,
@@ -504,7 +504,7 @@ export default function DataTable({
                                 : "bg-slate-100 text-slate-900 border-slate-300"
                             }`}
                           >
-                            {inv != null ? `#${inv}` : "Pending"}
+                            {inv != null ? `#${inv.replace(/-1P$/i, "")}` : "Pending"}
                           </span>
                         ))}
                         {isNew(g.imported_at) && (
@@ -674,7 +674,7 @@ export default function DataTable({
                                 )}
                               </div>
                               <p className="text-xs text-slate-600 mt-1">
-                                No Faktur: <span className="font-mono font-bold text-slate-900">{g.no_fakturs.map(f => f ? `#${f}` : "Pending").join(", ")}</span>
+                                No Faktur: <span className="font-mono font-bold text-slate-900">{g.no_fakturs.map(f => f ? `#${f.replace(/-1P$/i, "")}` : "Pending").join(", ")}</span>
                                 {custName && (
                                   <> | Pelanggan: <span className="font-bold text-blue-900">{String(custName)}</span></>
                                 )}
@@ -691,7 +691,7 @@ export default function DataTable({
                               {g.isSplit && (
                                 <div className="flex items-center gap-2 mb-2">
                                   <span className="px-2.5 py-1 rounded-lg text-xs font-black bg-blue-700 text-white font-mono shadow-sm">
-                                    📄 Faktur {invGroup.no_faktur ? `#${invGroup.no_faktur}` : "Pending"}
+                                    📄 Faktur {invGroup.no_faktur ? `#${invGroup.no_faktur.replace(/-1P$/i, "")}` : "Pending"}
                                   </span>
                                   <span className="text-xs text-slate-500 font-semibold">
                                     ({invGroup.items.length} Item Barang)
