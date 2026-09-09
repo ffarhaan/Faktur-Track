@@ -483,43 +483,52 @@ export default function DataTable({
 
                     {/* 4. Jenis Transaksi */}
                     <td className="px-4 py-3">
-                      {kategori === "1P" && (
-                        <span
-                          className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-black bg-blue-100 text-blue-800 border border-blue-300 shadow-sm"
-                          title="1P (Direct / Mandiri)"
-                        >
-                          1P
-                        </span>
-                      )}
-                      {kategori === "2P" && (
-                        <span
-                          className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-black bg-teal-100 text-teal-800 border border-teal-300 shadow-sm"
-                          title="2P (ORA Priority)"
-                        >
-                          2P
-                        </span>
-                      )}
-                      {kategori === "3P" && (
-                        <span
-                          className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-black bg-purple-100 text-purple-800 border border-purple-300 shadow-sm"
-                          title="3P (DOO 3rd Party)"
-                        >
-                          3P
-                        </span>
-                      )}
-                      {kategori === "OTHER" && (
-                        orderType === "DOO" ? (
-                          <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-black bg-purple-100 text-purple-800 border border-purple-300 shadow-sm">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {kategori === "1P" && (
+                          <span
+                            className="inline-flex items-center px-2 py-0.5 rounded-lg text-xs font-black bg-blue-100 text-blue-800 border border-blue-300 shadow-sm"
+                            title="1P (Direct / Mandiri)"
+                          >
+                            1P
+                          </span>
+                        )}
+                        {kategori === "2P" && (
+                          <span
+                            className="inline-flex items-center px-2 py-0.5 rounded-lg text-xs font-black bg-emerald-100 text-emerald-800 border border-emerald-300 shadow-sm"
+                            title="2P (2nd Party)"
+                          >
+                            2P
+                          </span>
+                        )}
+                        {kategori === "3P" && (
+                          <span
+                            className="inline-flex items-center px-2 py-0.5 rounded-lg text-xs font-black bg-purple-100 text-purple-800 border border-purple-300 shadow-sm"
+                            title="3P (3rd Party)"
+                          >
+                            3P
+                          </span>
+                        )}
+
+                        {orderType === "DOO" && (
+                          <span
+                            className="inline-flex items-center px-2 py-0.5 rounded-lg text-[11px] font-bold bg-purple-50 text-purple-700 border border-purple-200 shadow-sm"
+                            title="DOO (TRADE_3RD PARTY)"
+                          >
                             DOO
                           </span>
-                        ) : orderType === "ORA" ? (
-                          <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-black bg-teal-100 text-teal-800 border border-teal-300 shadow-sm">
+                        )}
+                        {orderType === "ORA" && (
+                          <span
+                            className="inline-flex items-center px-2 py-0.5 rounded-lg text-[11px] font-bold bg-teal-50 text-teal-700 border border-teal-200 shadow-sm"
+                            title="ORA (TRADE_PRIORITY)"
+                          >
                             ORA
                           </span>
-                        ) : (
+                        )}
+                        {kategori === "OTHER" && orderType === "OTHER" && (
                           <span className="text-gray-400 text-xs">-</span>
-                        )
-                      )}
+                        )}
+                      </div>
                     </td>
 
                     {/* 5. Daftar Barang */}
