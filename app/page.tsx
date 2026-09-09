@@ -88,50 +88,99 @@ export default function HomePage() {
       records.map((r) => [r.no_faktur, r.status_cetak])
     );
 
-    const payload = parsedRows
-      .map((row) => {
-        const noFaktur = row[mapping.no_faktur];
-        if (!noFaktur) return null; // skip baris tanpa no faktur
-
-        const extra: Record<string, string | number | null> = {};
-        Object.entries(row).forEach(([key, value]) => {
-          if (!mappedColumns.has(key)) {
-            extra[key] = value;
+    // Helper mencari value dari kolom row dengan fuzzy key match
+    function findRowVal(row: ParsedExcelRow, patterns: RegExp[]): string | number | null {
+      for (const pattern of patterns) {
+        for (const [key, val] of Object.entries(row)) {
+          if (pattern.test(key) && val !== null && val !== undefined && val !== "") {
+            return val;
           }
-        });
-
-        return {
-          no_faktur: String(noFaktur).trim(),
-          no_delivery_order: mapping.no_delivery_order && row[mapping.no_delivery_order]
-            ? String(row[mapping.no_delivery_order]).trim()
-            : null,
-          no_sales_order: mapping.no_sales_order && row[mapping.no_sales_order]
-            ? String(row[mapping.no_sales_order]).trim()
-            : null,
-          imported_at: importedAt,
-          extra,
-        };
-      })
-      .filter((r): r is NonNullable<typeof r> => r !== null);
-
-    if (payload.length === 0) {
-      setStage("idle");
-      return;
+        }
+      }
+      return null;
     }
 
-    // Deduplikasi berdasarkan no_faktur & gabungkan multiple SO jika 1 invoice punya lebih dari 1 SO
-    type PayloadItem = (typeof payload)[0] & { _soSet: Set<string> };
-    const uniqueMap = new Map<string, PayloadItem>();
+    type AggregatedInvoice = {
+      no_faktur: string;
+      no_delivery_order: string | null;
+      no_sales_order: string | null;
+      imported_at: string;
+      extra: {
+        items: Array<{
+          item_code?: string | number | null;
+          item_description?: string | number | null;
+          qty?: string | number | null;
+          uom?: string | number | null;
+          lot_number?: string | number | null;
+          harga_jual?: string | number | null;
+          total_harga?: string | number | null;
+          nama_pelanggan?: string | number | null;
+          order_number?: string | number | null;
+        }>;
+        nama_pelanggan?: string | null;
+        [key: string]: unknown;
+      };
+      _soSet: Set<string>;
+    };
 
-    for (const item of payload) {
-      const existing = uniqueMap.get(item.no_faktur);
+    const uniqueMap = new Map<string, AggregatedInvoice>();
+
+    for (const row of parsedRows) {
+      const rawNoFaktur = row[mapping.no_faktur];
+      if (!rawNoFaktur) continue; // skip baris tanpa no faktur
+
+      const noFaktur = String(rawNoFaktur).trim();
+      const soVal = mapping.no_sales_order && row[mapping.no_sales_order]
+        ? String(row[mapping.no_sales_order]).trim()
+        : null;
+      const doVal = mapping.no_delivery_order && row[mapping.no_delivery_order]
+        ? String(row[mapping.no_delivery_order]).trim()
+        : null;
+
+      const custName = findRowVal(row, [/nama.*pelanggan/i, /customer/i, /pelanggan/i]);
+      const itemCode = findRowVal(row, [/item.*code/i, /kode.*barang/i, /item/i]);
+      const itemDesc = findRowVal(row, [/item.*desc/i, /nama.*barang/i, /description/i, /product/i]);
+      const qtyVal = findRowVal(row, [/^qty$/i, /quantity/i, /jumlah/i]);
+      const uomVal = findRowVal(row, [/^uom$/i, /satuan/i, /unit/i]);
+      const lotVal = findRowVal(row, [/lot/i, /batch/i]);
+      const hargaJual = findRowVal(row, [/harga.*jual/i, /unit.*price/i, /hna/i]);
+      const totalHarga = findRowVal(row, [/total.*harga/i, /amount/i, /total/i]);
+
+      const itemObj = {
+        item_code: itemCode,
+        item_description: itemDesc,
+        qty: qtyVal,
+        uom: uomVal,
+        lot_number: lotVal,
+        harga_jual: hargaJual,
+        total_harga: totalHarga,
+        nama_pelanggan: custName,
+        order_number: soVal,
+      };
+
+      const existing = uniqueMap.get(noFaktur);
       if (!existing) {
         const soSet = new Set<string>();
-        if (item.no_sales_order) soSet.add(item.no_sales_order);
-        uniqueMap.set(item.no_faktur, { ...item, _soSet: soSet });
+        if (soVal) soSet.add(soVal);
+
+        uniqueMap.set(noFaktur, {
+          no_faktur: noFaktur,
+          no_delivery_order: doVal,
+          no_sales_order: soVal,
+          imported_at: importedAt,
+          extra: {
+            nama_pelanggan: custName ? String(custName) : null,
+            items: (itemCode || itemDesc) ? [itemObj] : [],
+          },
+          _soSet: soSet,
+        });
       } else {
-        if (item.no_sales_order) {
-          existing._soSet.add(item.no_sales_order);
+        if (soVal) existing._soSet.add(soVal);
+        if (!existing.extra.nama_pelanggan && custName) {
+          existing.extra.nama_pelanggan = String(custName);
+        }
+        if (itemCode || itemDesc) {
+          existing.extra.items.push(itemObj);
         }
       }
     }
@@ -143,6 +192,11 @@ export default function HomePage() {
         no_sales_order: _soSet.size > 0 ? Array.from(_soSet).join(", ") : null,
       };
     });
+
+    if (uniquePayload.length === 0) {
+      setStage("idle");
+      return;
+    }
 
     const batches = chunk(uniquePayload, 500);
     let importedCount = 0;
