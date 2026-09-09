@@ -159,20 +159,67 @@ export default function DataTable({
 
   // ── Actions ─────────────────────────────────────────────────────
   async function toggleStatus(record: FakturRecord) {
-    setUpdatingId(record.id);
     const newStatus = !record.status_cetak;
+    const nowIso = new Date().toISOString();
+
+    // Optimistic Update: Langsung ubah warna & status di layar tanpa nunggu loading
+    onRecordUpdated({
+      ...record,
+      status_cetak: newStatus,
+      printed_at: newStatus ? nowIso : null,
+    });
+
+    setUpdatingId(record.id);
     const { data, error } = await supabase
       .from("faktur_records")
       .update({
         status_cetak: newStatus,
-        printed_at: newStatus ? new Date().toISOString() : null,
+        printed_at: newStatus ? nowIso : null,
       })
       .eq("id", record.id)
       .select()
       .single();
     setUpdatingId(null);
-    if (error) { alert("Gagal update status: " + error.message); return; }
+
+    if (error) {
+      alert("Gagal update status di server: " + error.message);
+      // Revert if error
+      onRecordUpdated(record);
+      return;
+    }
     if (data) onRecordUpdated(data as FakturRecord);
+  }
+
+  // Bulk update status print untuk semua yang dicentang
+  async function setBulkStatus(markAsPrinted: boolean) {
+    if (selectedIds.size === 0) return;
+    const ids = Array.from(selectedIds);
+    const nowIso = new Date().toISOString();
+
+    // Optimistic update
+    records.forEach((r) => {
+      if (selectedIds.has(r.id)) {
+        onRecordUpdated({
+          ...r,
+          status_cetak: markAsPrinted,
+          printed_at: markAsPrinted ? nowIso : null,
+        });
+      }
+    });
+
+    const { error } = await supabase
+      .from("faktur_records")
+      .update({
+        status_cetak: markAsPrinted,
+        printed_at: markAsPrinted ? nowIso : null,
+      })
+      .in("id", ids);
+
+    if (error) {
+      alert("Gagal update status massal: " + error.message);
+      return;
+    }
+    setSelectedIds(new Set());
   }
 
   async function deleteRecord(id: string) {
@@ -433,13 +480,28 @@ export default function DataTable({
           Export Excel
         </button>
         {selectedIds.size > 0 && (
-          <button
-            onClick={deleteBulk}
-            disabled={deletingBulk}
-            className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 disabled:opacity-50"
-          >
-            {deletingBulk ? "Menghapus..." : `Hapus ${selectedIds.size} dipilih`}
-          </button>
+          <div className="flex flex-wrap items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-300">
+            <span className="text-xs font-bold text-slate-700">{selectedIds.size} dipilih:</span>
+            <button
+              onClick={() => setBulkStatus(true)}
+              className="px-3 py-1.5 bg-green-600 text-white rounded-lg text-xs font-bold hover:bg-green-700 shadow-sm transition"
+            >
+              ✓ Tandai Sudah Print
+            </button>
+            <button
+              onClick={() => setBulkStatus(false)}
+              className="px-3 py-1.5 bg-yellow-500 text-white rounded-lg text-xs font-bold hover:bg-yellow-600 shadow-sm transition"
+            >
+              ✕ Tandai Belum Print
+            </button>
+            <button
+              onClick={deleteBulk}
+              disabled={deletingBulk}
+              className="px-3 py-1.5 bg-red-600 text-white rounded-lg text-xs font-bold hover:bg-red-700 shadow-sm transition disabled:opacity-50"
+            >
+              {deletingBulk ? "Menghapus..." : "🗑️ Hapus"}
+            </button>
+          </div>
         )}
       </div>
 
@@ -582,13 +644,14 @@ export default function DataTable({
                       <button
                         disabled={updatingId === r.id || editingId === r.id}
                         onClick={() => toggleStatus(r)}
-                        className={`px-3 py-1 rounded-full text-xs font-medium transition ${
+                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition shadow-sm cursor-pointer ${
                           r.status_cetak
-                            ? "bg-green-200 text-green-800 hover:bg-green-300"
-                            : "bg-yellow-100 text-yellow-700 hover:bg-yellow-200"
+                            ? "bg-green-100 text-green-800 border border-green-300 hover:bg-green-200"
+                            : "bg-yellow-100 text-yellow-800 border border-yellow-300 hover:bg-yellow-200"
                         } ${updatingId === r.id ? "opacity-50" : ""}`}
+                        title="Klik untuk mengubah status cetak (Sudah / Belum)"
                       >
-                        {r.status_cetak ? "✓ Sudah Print" : "Belum Print"}
+                        <span>{r.status_cetak ? "✅ Sudah Print" : "⏳ Belum Print (Klik)"}</span>
                       </button>
                     </td>
 
