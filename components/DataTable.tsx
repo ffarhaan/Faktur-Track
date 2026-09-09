@@ -41,6 +41,32 @@ function formatRp(val?: string | number | null) {
   return new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(num);
 }
 
+export type InvoiceSubGroup = {
+  no_faktur: string;
+  record: FakturRecord;
+  items: ItemDetail[];
+};
+
+export type GroupedOrder = {
+  id: string;
+  groupKey: string;
+  no_sales_order: string | null;
+  no_fakturs: string[];
+  records: FakturRecord[];
+  status_cetak: boolean;
+  has_unprinted: boolean;
+  printed_at: string | null;
+  imported_at: string;
+  isSplit: boolean;
+  extra: {
+    nama_pelanggan?: string | null;
+    order_type?: string | null;
+    items: ItemDetail[];
+    invoiceGroups: InvoiceSubGroup[];
+  };
+  representativeRecord: FakturRecord;
+};
+
 export default function DataTable({
   records,
   onRecordUpdated,
@@ -53,49 +79,88 @@ export default function DataTable({
   const [dateFilter, setDateFilter] = useState<DateFilter>("all");
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editDraft, setEditDraft] = useState<Partial<FakturRecord>>({});
-  const [savingId, setSavingId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
-  const [expandedId, setExpandedId] = useState<string | null>(null); // Accordion item detail
+  const [expandedKey, setExpandedKey] = useState<string | null>(null);
 
-  // ── Pemetaan 1 SO -> Multiple Invoice ─────────────────────────
-  const soToInvoicesMap = useMemo(() => {
-    const map = new Map<string, string[]>();
+  // ── Gabungkan Record Berdasarkan Order Number (SO) ───────────────
+  // Jika 1 SO punya 2+ No Faktur, disatukan jadi 1 Baris SO dengan daftar No Faktur di dalamnya
+  const groupedOrders = useMemo(() => {
+    const map = new Map<string, GroupedOrder>();
+
     for (const r of records) {
-      if (!r.no_sales_order) continue;
-      const sos = r.no_sales_order.split(",").map((s) => s.trim()).filter(Boolean);
-      for (const s of sos) {
-        if (!map.has(s)) map.set(s, []);
-        map.get(s)!.push(r.no_faktur);
-      }
-    }
-    return map;
-  }, [records]);
+      const key = r.no_sales_order ? r.no_sales_order.trim() : `INV_${r.no_faktur}`;
 
-  function getRelatedInvoices(r: FakturRecord): string[] {
-    if (!r.no_sales_order) return [];
-    const sos = r.no_sales_order.split(",").map((s) => s.trim()).filter(Boolean);
-    const related = new Set<string>();
-    for (const s of sos) {
-      const list = soToInvoicesMap.get(s) || [];
-      for (const inv of list) {
-        if (inv !== r.no_faktur) related.add(inv);
+      if (!map.has(key)) {
+        map.set(key, {
+          id: r.id,
+          groupKey: key,
+          no_sales_order: r.no_sales_order,
+          no_fakturs: [r.no_faktur],
+          records: [r],
+          status_cetak: r.status_cetak,
+          has_unprinted: !r.status_cetak,
+          printed_at: r.printed_at,
+          imported_at: r.imported_at,
+          isSplit: false,
+          extra: {
+            nama_pelanggan: r.extra?.nama_pelanggan,
+            order_type: r.extra?.order_type,
+            items: [...(r.extra?.items || [])],
+            invoiceGroups: [
+              {
+                no_faktur: r.no_faktur,
+                record: r,
+                items: r.extra?.items || [],
+              },
+            ],
+          },
+          representativeRecord: r,
+        });
+      } else {
+        const g = map.get(key)!;
+        if (!g.no_fakturs.includes(r.no_faktur)) {
+          g.no_fakturs.push(r.no_faktur);
+        }
+        g.records.push(r);
+        g.isSplit = true;
+        g.status_cetak = g.status_cetak && r.status_cetak;
+        if (!r.status_cetak) g.has_unprinted = true;
+        if (r.printed_at && (!g.printed_at || r.printed_at > g.printed_at)) {
+          g.printed_at = r.printed_at;
+        }
+        if (r.imported_at > g.imported_at) {
+          g.imported_at = r.imported_at;
+        }
+        if (!g.extra.nama_pelanggan && r.extra?.nama_pelanggan) {
+          g.extra.nama_pelanggan = r.extra.nama_pelanggan;
+        }
+        if (!g.extra.order_type && r.extra?.order_type) {
+          g.extra.order_type = r.extra.order_type;
+        }
+        if (r.extra?.items) {
+          g.extra.items.push(...r.extra.items);
+          g.extra.invoiceGroups.push({
+            no_faktur: r.no_faktur,
+            record: r,
+            items: r.extra.items,
+          });
+        }
       }
     }
-    return Array.from(related);
-  }
+
+    return Array.from(map.values());
+  }, [records]);
 
   // ── Statistik ──────────────────────────────────────────────────
   const stats = useMemo(() => {
-    const total = records.length;
-    const printed = records.filter((r) => r.status_cetak).length;
+    const total = groupedOrders.length;
+    const printed = groupedOrders.filter((g) => g.status_cetak).length;
     const notPrinted = total - printed;
-    const splitCount = records.filter((r) => !r.status_cetak && getRelatedInvoices(r).length > 0).length;
+    const splitCount = groupedOrders.filter((g) => g.isSplit && g.has_unprinted).length;
     const normalQueue = notPrinted - splitCount;
-    const newItems = records.filter((r) => isNew(r.imported_at)).length;
+    const newItems = groupedOrders.filter((g) => isNew(g.imported_at)).length;
     return { total, printed, notPrinted, splitCount, normalQueue, newItems };
-  }, [records, soToInvoicesMap]);
+  }, [groupedOrders]);
 
   // ── Filter Data Sesuai Tab, Search & Date ───────────────────────
   const filtered = useMemo(() => {
@@ -108,56 +173,55 @@ export default function DataTable({
       "30days": now - 30 * 24 * 60 * 60 * 1000,
     };
 
-    return records
-      .filter((r) => {
-        const custName = r.extra?.nama_pelanggan ? String(r.extra.nama_pelanggan).toLowerCase() : "";
-        const itemNames = (r.extra?.items || [])
+    return groupedOrders
+      .filter((g) => {
+        const custName = g.extra?.nama_pelanggan ? String(g.extra.nama_pelanggan).toLowerCase() : "";
+        const itemNames = (g.extra?.items || [])
           .map((it: ItemDetail) => `${it.item_code ?? ""} ${it.item_description ?? ""}`)
           .join(" ")
           .toLowerCase();
-        const orderType = getOrderType(r).toLowerCase();
-        const kategori = getKategori(r).toLowerCase();
+        const orderType = getOrderType(g.representativeRecord).toLowerCase();
+        const kategori = getKategori(g.representativeRecord).toLowerCase();
+        const fakturMatches = g.no_fakturs.some((f) => f.toLowerCase().includes(q));
 
         const matchesSearch =
           !q ||
-          r.no_faktur?.toLowerCase().includes(q) ||
-          r.no_sales_order?.toLowerCase().includes(q) ||
+          fakturMatches ||
+          g.no_sales_order?.toLowerCase().includes(q) ||
           orderType.includes(q) ||
           kategori.includes(q) ||
           custName.includes(q) ||
           itemNames.includes(q);
 
-        const isSplit = getRelatedInvoices(r).length > 0;
-
         let matchesTab = true;
         if (activeTab === "queue_normal") {
-          matchesTab = !r.status_cetak && !isSplit;
+          matchesTab = g.has_unprinted && !g.isSplit;
         } else if (activeTab === "queue_split") {
-          matchesTab = isSplit;
+          matchesTab = g.isSplit;
         } else if (activeTab === "printed") {
-          matchesTab = r.status_cetak;
+          matchesTab = g.status_cetak;
         }
 
         const matchesDate =
           dateFilter === "all" ||
-          new Date(r.imported_at).getTime() >= cutoffs[dateFilter];
+          new Date(g.imported_at).getTime() >= cutoffs[dateFilter];
 
         const matchesHighlight =
           !highlightImportedAt ||
-          r.imported_at === highlightImportedAt ||
-          Math.abs(new Date(r.imported_at).getTime() - new Date(highlightImportedAt).getTime()) < 5000;
+          g.imported_at === highlightImportedAt ||
+          Math.abs(new Date(g.imported_at).getTime() - new Date(highlightImportedAt).getTime()) < 5000;
 
         return matchesSearch && matchesTab && matchesDate && matchesHighlight;
       })
       .sort((a, b) => {
-        const numA = parseFakturNum(a.no_faktur);
-        const numB = parseFakturNum(b.no_faktur);
+        const numA = parseFakturNum(a.no_fakturs[0]);
+        const numB = parseFakturNum(b.no_fakturs[0]);
         if (numA !== numB) {
           return numB - numA;
         }
-        return (b.no_faktur || "").localeCompare(a.no_faktur || "", undefined, { numeric: true });
+        return (b.no_fakturs[0] || "").localeCompare(a.no_fakturs[0] || "", undefined, { numeric: true });
       });
-  }, [records, search, activeTab, dateFilter, highlightImportedAt, soToInvoicesMap]);
+  }, [groupedOrders, search, activeTab, dateFilter, highlightImportedAt]);
 
   // ── Pagination ──────────────────────────────────────────────────
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
@@ -165,86 +229,62 @@ export default function DataTable({
   const paginated = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
   // ── Actions ─────────────────────────────────────────────────────
-  async function toggleStatus(record: FakturRecord) {
-    const newStatus = !record.status_cetak;
+  async function toggleGroupStatus(group: GroupedOrder) {
+    const newStatus = !group.status_cetak;
     const nowIso = new Date().toISOString();
+    const ids = group.records.map((r) => r.id);
 
-    // Optimistic Update: Langsung ubah status di state
-    onRecordUpdated({
-      ...record,
-      status_cetak: newStatus,
-      printed_at: newStatus ? nowIso : null,
+    // Optimistic Update
+    group.records.forEach((r) => {
+      onRecordUpdated({
+        ...r,
+        status_cetak: newStatus,
+        printed_at: newStatus ? nowIso : null,
+      });
     });
 
-    setUpdatingId(record.id);
-    const { data, error } = await supabase
+    setUpdatingId(group.id);
+    const { error } = await supabase
       .from("faktur_records")
       .update({
         status_cetak: newStatus,
         printed_at: newStatus ? nowIso : null,
       })
-      .eq("id", record.id)
-      .select()
-      .single();
+      .in("id", ids);
     setUpdatingId(null);
 
     if (error) {
       alert("Gagal update status di database: " + error.message);
-      onRecordUpdated(record);
-      return;
+      group.records.forEach((r) => onRecordUpdated(r));
     }
-    if (data) onRecordUpdated(data as FakturRecord);
   }
 
-  async function deleteRecord(id: string) {
-    if (!confirm("Hapus data faktur ini?")) return;
-    setDeletingId(id);
-    const { error } = await supabase.from("faktur_records").delete().eq("id", id);
+  async function deleteGroup(group: GroupedOrder) {
+    const label = group.no_sales_order || group.no_fakturs.join(", ");
+    if (!confirm(`Hapus data order SO ${label} ini (${group.records.length} faktur)?`)) return;
+    setDeletingId(group.id);
+    const ids = group.records.map((r) => r.id);
+    const { error } = await supabase.from("faktur_records").delete().in("id", ids);
     setDeletingId(null);
     if (error) { alert("Gagal hapus: " + error.message); return; }
-    onRecordDeleted(id);
-  }
-
-  function startEdit(record: FakturRecord) {
-    setEditingId(record.id);
-    setEditDraft({
-      no_faktur: record.no_faktur,
-      no_sales_order: record.no_sales_order,
-    });
-  }
-
-  async function saveEdit(record: FakturRecord) {
-    setSavingId(record.id);
-    const { data, error } = await supabase
-      .from("faktur_records")
-      .update({
-        no_faktur: editDraft.no_faktur ?? record.no_faktur,
-        no_sales_order: editDraft.no_sales_order ?? null,
-      })
-      .eq("id", record.id)
-      .select()
-      .single();
-    setSavingId(null);
-    if (error) { alert("Gagal simpan: " + error.message); return; }
-    if (data) onRecordUpdated(data as FakturRecord);
-    setEditingId(null);
-    setEditDraft({});
+    ids.forEach((id) => onRecordDeleted(id));
   }
 
   function exportToExcel() {
-    const rows = filtered.map((r) => {
-      const oType = getOrderType(r);
-      const kat = getKategori(r);
+    const rows = filtered.map((g) => {
+      const oType = getOrderType(g.representativeRecord);
+      const kat = getKategori(g.representativeRecord);
       return {
-        "Order Number (SO)": r.no_sales_order,
-        "No Invoice AR": r.no_faktur,
-        "Nama Pelanggan": r.extra?.nama_pelanggan ?? "",
+        "Order Number (SO)": g.no_sales_order,
+        "No Invoice AR": g.no_fakturs.join(", "),
+        "Jumlah Faktur": g.no_fakturs.length,
+        "Nama Pelanggan": g.extra?.nama_pelanggan ?? "",
         "Kategori": kat,
         "Jenis Transaksi": oType === "DOO" ? "DOO (3rd Party)" : oType === "ORA" ? "ORA (Priority)" : "-",
-        "Jumlah Item": r.extra?.items?.length ?? 0,
-        "Status Cetak": r.status_cetak ? "Sudah Print" : "Belum Print",
-        "Tanggal Print": r.printed_at ? new Date(r.printed_at).toLocaleString("id-ID") : "",
-        "Tanggal Import": new Date(r.imported_at).toLocaleString("id-ID"),
+        "Jumlah Item": g.extra?.items?.length ?? 0,
+        "Status Cetak": g.status_cetak ? "Sudah Print" : "Belum Print",
+        "Tanggal Print": g.printed_at ? new Date(g.printed_at).toLocaleString("id-ID") : "",
+        "Tanggal Import": new Date(g.imported_at).toLocaleString("id-ID"),
       };
     });
     const ws = XLSX.utils.json_to_sheet(rows);
@@ -285,8 +325,8 @@ export default function DataTable({
           }`}
         >
           <div className="flex items-center gap-2">
-            <span className="text-base">⚠️</span>
-            <span>2. Perhatian: 1 SO 2+ Faktur</span>
+            <span className="text-base">⚡</span>
+            <span>2. Perhatian: 1 SO 2+ Faktur (Pecah Inv)</span>
           </div>
           <span className={`px-2 py-0.5 rounded-full text-xs font-black ${
             activeTab === "queue_split" ? "bg-white text-red-700" : "bg-red-600 text-white"
@@ -322,7 +362,7 @@ export default function DataTable({
               : "text-slate-600 hover:bg-white/60"
           }`}
         >
-          <span>📊 Semua Data ({stats.total})</span>
+          <span>📊 Semua Order ({stats.total})</span>
         </button>
       </div>
 
@@ -364,7 +404,7 @@ export default function DataTable({
       </div>
 
       <p className="text-xs text-gray-500 mb-2">
-        Menampilkan <strong>{filtered.length}</strong> dari {records.length} data
+        Menampilkan <strong>{filtered.length}</strong> order SO dari total {groupedOrders.length} order
         {totalPages > 1 && ` — Hal. ${safePage} / ${totalPages}`}
       </p>
 
@@ -379,99 +419,72 @@ export default function DataTable({
               <th className="text-left px-4 py-3 font-bold">Jenis Transaksi</th>
               <th className="text-left px-4 py-3 font-bold">Daftar Barang</th>
               <th className="text-left px-4 py-3 font-bold">Status Print</th>
-              <th className="text-center px-4 py-3 font-bold w-20">Aksi</th>
+              <th className="text-center px-4 py-3 font-bold w-16">Aksi</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {paginated.map((r) => {
-              const relatedInvoices = getRelatedInvoices(r);
-              const hasSplit = relatedInvoices.length > 0;
-              const isExpanded = expandedId === r.id;
-              const items = r.extra?.items || [];
-              const custName = r.extra?.nama_pelanggan;
-              const orderType = getOrderType(r);
-              const kategori = getKategori(r);
+            {paginated.map((g) => {
+              const isExpanded = expandedKey === g.groupKey;
+              const items = g.extra?.items || [];
+              const custName = g.extra?.nama_pelanggan;
+              const orderType = getOrderType(g.representativeRecord);
+              const kategori = getKategori(g.representativeRecord);
 
               return (
-                <Fragment key={r.id}>
+                <Fragment key={g.groupKey}>
                   <tr className={`transition hover:bg-slate-50/80 ${
-                    hasSplit
-                      ? "bg-red-50/40 border-l-4 border-l-red-500"
-                      : r.status_cetak
+                    g.isSplit
+                      ? "bg-amber-50/40 border-l-4 border-l-amber-500"
+                      : g.status_cetak
                       ? "bg-green-50/30"
-                      : isNew(r.imported_at)
+                      : isNew(g.imported_at)
                       ? "bg-yellow-50/30"
                       : ""
                   }`}>
                     {/* 1. Order Number (SO) */}
                     <td className="px-4 py-3">
-                      {editingId === r.id ? (
-                        <input
-                          value={editDraft.no_sales_order ?? ""}
-                          onChange={(e) => setEditDraft((d) => ({ ...d, no_sales_order: e.target.value }))}
-                          className="border border-blue-300 rounded px-2 py-0.5 text-sm w-full"
-                        />
-                      ) : (
-                        <div>
-                          <span
-                            onClick={() => {
-                              if (r.no_sales_order) {
-                                setSearch(r.no_sales_order.split(",")[0].trim());
-                                setPage(1);
-                              }
-                            }}
-                            className="font-mono font-bold text-slate-800 cursor-pointer hover:underline"
-                            title="Klik untuk filter SO ini"
-                          >
-                            {r.no_sales_order ?? "-"}
+                      <div>
+                        <span
+                          onClick={() => {
+                            if (g.no_sales_order) {
+                              setSearch(g.no_sales_order.split(",")[0].trim());
+                              setPage(1);
+                            }
+                          }}
+                          className="font-mono font-bold text-slate-900 cursor-pointer hover:underline text-base"
+                          title="Klik untuk filter SO ini"
+                        >
+                          {g.no_sales_order ?? "-"}
+                        </span>
+                        {g.isSplit && (
+                          <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-[10px] font-black bg-amber-100 text-amber-800 border border-amber-300">
+                            ⚡ 1 SO {g.no_fakturs.length} Faktur
                           </span>
-
-                          {hasSplit && (
-                            <div className="text-[11px] text-red-600 font-medium mt-0.5">
-                              ↳ Juga di Faktur:{" "}
-                              {relatedInvoices.map((inv, idx) => (
-                                <button
-                                  key={inv}
-                                  onClick={() => {
-                                    if (r.no_sales_order) {
-                                      setSearch(r.no_sales_order.split(",")[0].trim());
-                                      setPage(1);
-                                    }
-                                  }}
-                                  className="underline font-bold hover:text-red-800 ml-1"
-                                >
-                                  #{inv}{idx < relatedInvoices.length - 1 ? "," : ""}
-                                </button>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      )}
+                        )}
+                      </div>
                     </td>
 
-                    {/* 2. Inv AR */}
-                    <td className="px-4 py-3 font-bold text-gray-900">
-                      {editingId === r.id ? (
-                        <input
-                          value={editDraft.no_faktur ?? ""}
-                          onChange={(e) => setEditDraft((d) => ({ ...d, no_faktur: e.target.value }))}
-                          className="border border-blue-300 rounded px-2 py-0.5 text-sm w-full"
-                        />
-                      ) : (
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-base font-black text-slate-900 font-mono">{r.no_faktur}</span>
-                          {isNew(r.imported_at) && (
-                            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-700">
-                              BARU
-                            </span>
-                          )}
-                          {hasSplit && (
-                            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-700 border border-red-200">
-                              ⚠️ Pecah Inv
-                            </span>
-                          )}
-                        </div>
-                      )}
+                    {/* 2. Inv AR (Daftar Faktur yang Terpisah) */}
+                    <td className="px-4 py-3">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        {g.no_fakturs.map((inv) => (
+                          <span
+                            key={inv}
+                            className={`px-2 py-1 rounded-lg font-mono font-black text-sm border shadow-sm ${
+                              g.isSplit
+                                ? "bg-amber-100/80 text-amber-900 border-amber-300 ring-1 ring-amber-400"
+                                : "bg-slate-100 text-slate-900 border-slate-300"
+                            }`}
+                          >
+                            #{inv}
+                          </span>
+                        ))}
+                        {isNew(g.imported_at) && (
+                          <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-700">
+                            BARU
+                          </span>
+                        )}
+                      </div>
                     </td>
 
                     {/* 3. Nama Pelanggan */}
@@ -534,7 +547,7 @@ export default function DataTable({
                     {/* 5. Daftar Barang */}
                     <td className="px-4 py-3">
                       <button
-                        onClick={() => setExpandedId(isExpanded ? null : r.id)}
+                        onClick={() => setExpandedKey(isExpanded ? null : g.groupKey)}
                         className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition shadow-sm ${
                           isExpanded
                             ? "bg-slate-800 text-white"
@@ -551,20 +564,20 @@ export default function DataTable({
                     <td className="px-4 py-3">
                       <div className="flex flex-col gap-1 items-start">
                         <button
-                          disabled={updatingId === r.id || editingId === r.id}
-                          onClick={() => toggleStatus(r)}
+                          disabled={updatingId === g.id}
+                          onClick={() => toggleGroupStatus(g)}
                           className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition shadow-sm cursor-pointer ${
-                            r.status_cetak
+                            g.status_cetak
                               ? "bg-green-100 text-green-800 border border-green-300 hover:bg-yellow-50 hover:text-yellow-800 hover:border-yellow-300"
                               : "bg-green-600 text-white hover:bg-green-700 ring-2 ring-green-600/30"
-                          } ${updatingId === r.id ? "opacity-50" : ""}`}
-                          title={r.status_cetak ? "Sudah dicetak. Klik jika ingin membatalkan." : "Klik untuk tandai selesai dicetak"}
+                          } ${updatingId === g.id ? "opacity-50" : ""}`}
+                          title={g.status_cetak ? "Sudah dicetak. Klik jika ingin membatalkan." : "Klik untuk tandai selesai dicetak"}
                         >
-                          <span>{r.status_cetak ? "✅ Sudah Print" : "✓ Selesai Print"}</span>
+                          <span>{g.status_cetak ? "✅ Sudah Print" : "✓ Selesai Print"}</span>
                         </button>
-                        {r.printed_at && (
+                        {g.printed_at && (
                           <span className="text-[10px] text-gray-500 font-mono">
-                            {new Date(r.printed_at).toLocaleString("id-ID")}
+                            {new Date(g.printed_at).toLocaleString("id-ID")}
                           </span>
                         )}
                       </div>
@@ -572,43 +585,14 @@ export default function DataTable({
 
                     {/* 7. Aksi */}
                     <td className="px-4 py-3 text-center">
-                      <div className="flex items-center justify-center gap-1">
-                        {editingId === r.id ? (
-                          <>
-                            <button
-                              onClick={() => saveEdit(r)}
-                              disabled={savingId === r.id}
-                              className="px-2 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700 disabled:opacity-50"
-                            >
-                              {savingId === r.id ? "..." : "Simpan"}
-                            </button>
-                            <button
-                              onClick={() => { setEditingId(null); setEditDraft({}); }}
-                              className="px-2 py-1 bg-gray-100 text-gray-600 rounded text-xs hover:bg-gray-200"
-                            >
-                              Batal
-                            </button>
-                          </>
-                        ) : (
-                          <>
-                            <button
-                              onClick={() => startEdit(r)}
-                              className="px-2 py-1 bg-gray-100 text-gray-600 rounded text-xs hover:bg-gray-200"
-                              title="Edit"
-                            >
-                              ✏️
-                            </button>
-                            <button
-                              onClick={() => deleteRecord(r.id)}
-                              disabled={deletingId === r.id}
-                              className="px-2 py-1 bg-red-50 text-red-600 rounded text-xs hover:bg-red-100 disabled:opacity-50"
-                              title="Hapus"
-                            >
-                              {deletingId === r.id ? "..." : "🗑️"}
-                            </button>
-                          </>
-                        )}
-                      </div>
+                      <button
+                        onClick={() => deleteGroup(g)}
+                        disabled={deletingId === g.id}
+                        className="px-2 py-1 bg-red-50 text-red-600 rounded text-xs hover:bg-red-100 disabled:opacity-50 font-bold"
+                        title="Hapus Order Ini"
+                      >
+                        {deletingId === g.id ? "..." : "🗑️"}
+                      </button>
                     </td>
                   </tr>
 
@@ -621,7 +605,7 @@ export default function DataTable({
                             <div>
                               <div className="flex items-center gap-2">
                                 <p className="text-base font-black text-slate-900">
-                                  📦 Rincian Barang — Faktur #{r.no_faktur}
+                                  📦 Rincian Barang — SO {g.no_sales_order || g.no_fakturs.join(", ")}
                                 </p>
                                 {orderType === "DOO" && (
                                   <span className="px-2 py-0.5 rounded text-xs font-black bg-purple-100 text-purple-800 border border-purple-300">
@@ -635,53 +619,69 @@ export default function DataTable({
                                 )}
                               </div>
                               <p className="text-xs text-slate-600 mt-1">
-                                No SO: <span className="font-mono font-bold text-slate-800">{r.no_sales_order || "-"}</span>
+                                No Faktur: <span className="font-mono font-bold text-slate-900">{g.no_fakturs.map(f => `#${f}`).join(", ")}</span>
                                 {custName && (
                                   <> | Pelanggan: <span className="font-bold text-blue-900">{String(custName)}</span></>
                                 )}
                               </p>
                             </div>
                             <span className="text-xs font-black px-3 py-1.5 bg-blue-100 text-blue-800 rounded-lg">
-                              Total: {items.length} Item Barang
+                              Total: {items.length} Item Barang ({g.no_fakturs.length} Faktur)
                             </span>
                           </div>
 
-                          {items.length === 0 ? (
-                            <p className="text-xs text-gray-400 italic py-2">
-                              Tidak ada data item pada faktur ini.
-                            </p>
-                          ) : (
-                            <div className="overflow-x-auto rounded-xl border border-slate-200">
-                              <table className="min-w-full text-xs">
-                                <thead className="bg-slate-100 text-slate-700">
-                                  <tr>
-                                    <th className="px-3 py-2 text-center font-bold w-8">#</th>
-                                    <th className="px-3 py-2 text-left font-bold">Kode Barang</th>
-                                    <th className="px-3 py-2 text-left font-bold">Nama Barang (Description)</th>
-                                    <th className="px-3 py-2 text-center font-bold">Qty</th>
-                                    <th className="px-3 py-2 text-center font-bold">Satuan</th>
-                                    <th className="px-3 py-2 text-left font-bold">LOT Number</th>
-                                    <th className="px-3 py-2 text-right font-bold">Harga Jual</th>
-                                    <th className="px-3 py-2 text-right font-bold">Total Harga</th>
-                                  </tr>
-                                </thead>
-                                <tbody className="divide-y divide-slate-100">
-                                  {items.map((it: ItemDetail, idx: number) => (
-                                    <tr key={idx} className="hover:bg-slate-50">
-                                      <td className="px-3 py-2 text-center text-slate-400 font-mono">{idx + 1}</td>
-                                      <td className="px-3 py-2 font-mono font-semibold text-slate-700">{it.item_code ?? "-"}</td>
-                                      <td className="px-3 py-2 font-bold text-slate-900">{it.item_description ?? "-"}</td>
-                                      <td className="px-3 py-2 text-center font-black text-blue-700 bg-blue-50/50">{it.qty ?? "-"}</td>
-                                      <td className="px-3 py-2 text-center font-semibold text-slate-600">{it.uom ?? "-"}</td>
-                                      <td className="px-3 py-2 font-mono text-slate-600">{it.lot_number ?? "-"}</td>
-                                      <td className="px-3 py-2 text-right text-slate-600">{formatRp(it.harga_jual)}</td>
-                                      <td className="px-3 py-2 text-right font-black text-slate-900">{formatRp(it.total_harga)}</td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
+                          {/* Rincian per Faktur (jika pecah faktur) */}
+                          {g.extra.invoiceGroups.map((invGroup, gIdx) => (
+                            <div key={gIdx} className="mb-4 last:mb-0">
+                              {g.isSplit && (
+                                <div className="flex items-center gap-2 mb-2">
+                                  <span className="px-2.5 py-1 rounded-lg text-xs font-black bg-blue-700 text-white font-mono shadow-sm">
+                                    📄 Faktur #{invGroup.no_faktur}
+                                  </span>
+                                  <span className="text-xs text-slate-500 font-semibold">
+                                    ({invGroup.items.length} Item Barang)
+                                  </span>
+                                </div>
+                              )}
+
+                              {invGroup.items.length === 0 ? (
+                                <p className="text-xs text-gray-400 italic py-2">
+                                  Tidak ada data item pada faktur ini.
+                                </p>
+                              ) : (
+                                <div className="overflow-x-auto rounded-xl border border-slate-200">
+                                  <table className="min-w-full text-xs">
+                                    <thead className="bg-slate-100 text-slate-700">
+                                      <tr>
+                                        <th className="px-3 py-2 text-center font-bold w-8">#</th>
+                                        <th className="px-3 py-2 text-left font-bold">Kode Barang</th>
+                                        <th className="px-3 py-2 text-left font-bold">Nama Barang (Description)</th>
+                                        <th className="px-3 py-2 text-center font-bold">Qty</th>
+                                        <th className="px-3 py-2 text-center font-bold">Satuan</th>
+                                        <th className="px-3 py-2 text-left font-bold">LOT Number</th>
+                                        <th className="px-3 py-2 text-right font-bold">Harga Jual</th>
+                                        <th className="px-3 py-2 text-right font-bold">Total Harga</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-100">
+                                      {invGroup.items.map((it: ItemDetail, idx: number) => (
+                                        <tr key={idx} className="hover:bg-slate-50">
+                                          <td className="px-3 py-2 text-center text-slate-400 font-mono">{idx + 1}</td>
+                                          <td className="px-3 py-2 font-mono font-semibold text-slate-700">{it.item_code ?? "-"}</td>
+                                          <td className="px-3 py-2 font-bold text-slate-900">{it.item_description ?? "-"}</td>
+                                          <td className="px-3 py-2 text-center font-black text-blue-700 bg-blue-50/50">{it.qty ?? "-"}</td>
+                                          <td className="px-3 py-2 text-center font-semibold text-slate-600">{it.uom ?? "-"}</td>
+                                          <td className="px-3 py-2 font-mono text-slate-600">{it.lot_number ?? "-"}</td>
+                                          <td className="px-3 py-2 text-right text-slate-600">{formatRp(it.harga_jual)}</td>
+                                          <td className="px-3 py-2 text-right font-black text-slate-900">{formatRp(it.total_harga)}</td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              )}
                             </div>
-                          )}
+                          ))}
                         </div>
                       </td>
                     </tr>
@@ -725,4 +725,3 @@ export default function DataTable({
     </div>
   );
 }
-
