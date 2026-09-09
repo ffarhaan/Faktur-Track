@@ -134,6 +134,8 @@ export default function HomePage() {
       extra: {
         nama_pelanggan?: string | null;
         jenis_transaksi?: string | null;
+        accounting_date?: string | null;
+        order_date?: string | null;
         items: Array<Record<string, unknown>>;
       };
       _soSet: Set<string>;
@@ -173,6 +175,22 @@ export default function HomePage() {
       const custName   = findRowVal(row, [/^nama\s*pelanggan$/i, /^customer$/i, /^pelanggan$/i]);
       const jenisTrans = findRowVal(row, [/^jenis\s*transaksi$/i, /^transaction\s*type$/i]);
 
+      // Tanggal
+      const accDateRaw   = findRowVal(row, [/^accounting\s*date$/i]);
+      const orderDateRaw = findRowVal(row, [/^order\s*date$/i]);
+
+      function parseExcelDate(val: string | number | null): string | null {
+        if (val == null || val === "") return null;
+        if (typeof val === "number") {
+          const d = new Date(Math.round((val - 25569) * 86400 * 1000));
+          return d.toISOString().split("T")[0];
+        }
+        return String(val).trim() || null;
+      }
+
+      const accDate   = parseExcelDate(accDateRaw);
+      const orderDate = parseExcelDate(orderDateRaw);
+
       const itemObj = {
         item_code: itemCode,
         item_description: itemDesc,
@@ -204,6 +222,8 @@ export default function HomePage() {
           extra: {
             nama_pelanggan: custName ? String(custName) : null,
             jenis_transaksi: jenisTrans ? String(jenisTrans) : null,
+            accounting_date: accDate,
+            order_date: orderDate,
             items: (itemCode || itemDesc) ? [itemObj] : [],
           },
           _soSet: soSet,
@@ -212,6 +232,8 @@ export default function HomePage() {
         if (soVal) existing._soSet.add(soVal);
         if (!existing.extra.nama_pelanggan && custName) existing.extra.nama_pelanggan = String(custName);
         if (!existing.extra.jenis_transaksi && jenisTrans) existing.extra.jenis_transaksi = String(jenisTrans);
+        if (!existing.extra.accounting_date && accDate) existing.extra.accounting_date = accDate;
+        if (!existing.extra.order_date && orderDate) existing.extra.order_date = orderDate;
         if (itemCode || itemDesc) existing.extra.items.push(itemObj);
       }
     }
