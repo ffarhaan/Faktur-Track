@@ -105,7 +105,8 @@ export default function DataTable({
     const map = new Map<string, GroupedOrder>();
 
     for (const r of records) {
-      const key = r.no_sales_order ? r.no_sales_order.trim() : `INV_${r.no_faktur}`;
+      const kategori = getKategori(r);
+      const key = r.no_sales_order ? `${r.no_sales_order.trim()}_${kategori}` : `INV_${r.no_faktur}_${kategori}`;
 
       if (!map.has(key)) {
         map.set(key, {
