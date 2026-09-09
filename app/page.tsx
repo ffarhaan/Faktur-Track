@@ -270,7 +270,24 @@ export default function HomePage() {
     setImportResult(null);
     const importedAt = new Date().toISOString();
 
-    const existingSO = new Set(records.map((r) => r.no_sales_order).filter(Boolean));
+    // Fetch fresh dari DB — jangan pakai state lama yang mungkin sudah stale
+    const { data: existingData } = await supabase
+      .from("faktur_records")
+      .select("no_sales_order, no_faktur");
+    // SO yang sudah ada dan sudah punya no_faktur (sudah di-invoice) → jangan overwrite
+    const existingSOwithFaktur = new Set(
+      (existingData ?? [])
+        .filter((r: { no_faktur: string | null }) => r.no_faktur != null)
+        .map((r: { no_sales_order: string | null }) => r.no_sales_order)
+        .filter(Boolean)
+    );
+    // SO yang sudah ada sebagai pending (no_faktur null) → juga skip insert baru
+    const existingPendingSO = new Set(
+      (existingData ?? [])
+        .filter((r: { no_faktur: string | null }) => r.no_faktur == null)
+        .map((r: { no_sales_order: string | null }) => r.no_sales_order)
+        .filter(Boolean)
+    );
 
     type DOORecord = {
       no_faktur: null;
@@ -281,6 +298,7 @@ export default function HomePage() {
       extra: {
         nama_pelanggan?: string | null;
         jenis_transaksi?: string | null;
+        accounting_date?: string | null;
         items: [];
       };
     };
@@ -294,8 +312,30 @@ export default function HomePage() {
       const soVal = String(refRaw).trim();
       if (!soVal) continue;
 
-      const custName   = findRowVal(row, [/^bill.to\s*customer$/i, /^ship.to\s*customer$/i, /^customer$/i]);
-      const txSource   = findRowVal(row, [/^transaction\s*source$/i]);
+      // Skip jika SO sudah punya faktur (sudah ter-invoice)
+      if (existingSOwithFaktur.has(soVal)) continue;
+
+      const custName    = findRowVal(row, [/^bill.to\s*customer$/i, /^ship.to\s*customer$/i, /^customer$/i]);
+      const txSource    = findRowVal(row, [/^transaction\s*source$/i]);
+      const accDateRaw  = findRowVal(row, [/^accounting\s*date$/i]);
+
+      // Format accounting date jika berupa Excel serial number
+      let accDate: string | null = null;
+      if (accDateRaw != null && accDateRaw !== "") {
+        if (typeof accDateRaw === "number") {
+          // Excel date serial → JS Date
+          const d = new Date(Math.round((accDateRaw - 25569) * 86400 * 1000));
+          accDate = d.toISOString().split("T")[0]; // YYYY-MM-DD
+        } else {
+          accDate = String(accDateRaw).trim();
+        }
+      }
+
+      // Deteksi source: DOO jika Transaction Source mengandung "Distributed" atau "DOO"
+      const txSourceStr = txSource ? String(txSource) : "";
+      const sourceFile = txSourceStr.toLowerCase().includes("distributed") || txSourceStr.toLowerCase().includes("doo")
+        ? "DOO"
+        : "ORA";
 
       if (!uniqueMap.has(soVal)) {
         uniqueMap.set(soVal, {
@@ -303,10 +343,11 @@ export default function HomePage() {
           no_delivery_order: null,
           no_sales_order: soVal,
           imported_at: importedAt,
-          source_file: txSource ? String(txSource).includes("DOO") ? "DOO" : "ORA" : "DOO",
+          source_file: sourceFile,
           extra: {
             nama_pelanggan: custName ? String(custName) : null,
-            jenis_transaksi: txSource ? String(txSource) : null,
+            jenis_transaksi: txSourceStr || null,
+            accounting_date: accDate,
             items: [],
           },
         });
@@ -316,22 +357,31 @@ export default function HomePage() {
     const payload = Array.from(uniqueMap.values());
     if (payload.length === 0) { setStage("idle"); return; }
 
-    // Upsert by no_sales_order (hanya untuk record yang no_faktur-nya NULL)
+    // Insert record baru: skip yang sudah ada (baik yang punya faktur maupun yang pending)
     let importedCount = 0;
-    for (const batch of chunk(payload, 500)) {
-      // Insert baru jika no_sales_order belum ada, skip jika sudah ada (termasuk yang sudah punya faktur)
-      const newRecords = batch.filter((r) => !existingSO.has(r.no_sales_order));
-      if (newRecords.length > 0) {
-        const { error } = await supabase
-          .from("faktur_records")
-          .insert(newRecords);
-        if (error) { alert("Gagal import DOO: " + error.message); setStage("idle"); return; }
-        importedCount += newRecords.length;
-      }
+    const newRecords = payload.filter(
+      (r) => !existingSOwithFaktur.has(r.no_sales_order) && !existingPendingSO.has(r.no_sales_order)
+    );
+
+    for (const batch of chunk(newRecords, 500)) {
+      const { error } = await supabase
+        .from("faktur_records")
+        .insert(batch);
+      if (error) { alert("Gagal import DOO: " + error.message); setStage("idle"); return; }
+      importedCount += batch.length;
     }
 
-    const newCount = importedCount;
-    setImportResult({ totalImported: payload.length, newCount, newUnprintedCount: 0, importedAt });
+    // Update pending records yang sudah ada (mungkin accounting_date belum ada)
+    const existingPendingToUpdate = payload.filter((r) => existingPendingSO.has(r.no_sales_order));
+    for (const rec of existingPendingToUpdate) {
+      await supabase
+        .from("faktur_records")
+        .update({ extra: rec.extra, imported_at: importedAt })
+        .eq("no_sales_order", rec.no_sales_order)
+        .is("no_faktur", null);
+    }
+
+    setImportResult({ totalImported: payload.length, newCount: importedCount, newUnprintedCount: 0, importedAt });
     setStage("idle");
     setShowUpload(false);
     setParsedRows([]);
