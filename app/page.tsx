@@ -117,13 +117,22 @@ export default function HomePage() {
   //        Item Code, Item Description, Qty, UOM, LOT Number,
   //        HNA, Diskon, Harga Jual, Total Harga, COGS/Unit, Profit
   // ─────────────────────────────────────────────
+  // ─────────────────────────────────────────────
+  // IMPORT XXCUST
+  // Kolom: No Invoice AR (No Faktur), Order Number (No SO), Nama Pelanggan,
+  //        Accounting Date, Order Date, Item Code, Item Desc, Qty, LOT, HNA, Harga Jual, dsb.
+  // ─────────────────────────────────────────────
   async function executeImportXXCUST(rowsToImport: ParsedExcelRow[]) {
     setStage("importing");
     setImportResult(null);
     const importedAt = new Date().toISOString();
 
-    const existingNoFaktur = new Set(records.map((r) => r.no_faktur).filter(Boolean));
-    const existingStatusMap = new Map(records.map((r) => [r.no_faktur, r.status_cetak]));
+    const { data: currentDB } = await supabase.from("faktur_records").select("*");
+    const dbRecordMap = new Map<string, FakturRecord>(
+      (currentDB ?? []).map((r: FakturRecord) => [String(r.no_faktur).trim(), r])
+    );
+    const existingNoFaktur = new Set(dbRecordMap.keys());
+    const existingStatusMap = new Map((currentDB ?? []).map((r: FakturRecord) => [r.no_faktur, r.status_cetak]));
 
     type AggInvoice = {
       no_faktur: string;
@@ -142,6 +151,15 @@ export default function HomePage() {
     };
 
     const uniqueMap = new Map<string, AggInvoice>();
+
+    function parseExcelDate(val: string | number | null): string | null {
+      if (val == null || val === "") return null;
+      if (typeof val === "number") {
+        const d = new Date(Math.round((val - 25569) * 86400 * 1000));
+        return d.toISOString().split("T")[0];
+      }
+      return String(val).trim() || null;
+    }
 
     for (const row of rowsToImport) {
       // Cari No Invoice AR
@@ -175,21 +193,8 @@ export default function HomePage() {
       const custName   = findRowVal(row, [/^nama\s*pelanggan$/i, /^customer$/i, /^pelanggan$/i]);
       const jenisTrans = findRowVal(row, [/^jenis\s*transaksi$/i, /^transaction\s*type$/i]);
 
-      // Tanggal
-      const accDateRaw   = findRowVal(row, [/^accounting\s*date$/i]);
-      const orderDateRaw = findRowVal(row, [/^order\s*date$/i]);
-
-      function parseExcelDate(val: string | number | null): string | null {
-        if (val == null || val === "") return null;
-        if (typeof val === "number") {
-          const d = new Date(Math.round((val - 25569) * 86400 * 1000));
-          return d.toISOString().split("T")[0];
-        }
-        return String(val).trim() || null;
-      }
-
-      const accDate   = parseExcelDate(accDateRaw);
-      const orderDate = parseExcelDate(orderDateRaw);
+      const accDate   = parseExcelDate(findRowVal(row, [/^accounting\s*date$/i]));
+      const orderDate = parseExcelDate(findRowVal(row, [/^order\s*date$/i]));
 
       const itemObj = {
         item_code: itemCode,
@@ -212,7 +217,13 @@ export default function HomePage() {
       const existing = uniqueMap.get(noFaktur);
       if (!existing) {
         const soSet = new Set<string>();
+        // Gabungkan nomor SO lama dari database (misal dari DOO import sebelumnya)
+        const dbRec = dbRecordMap.get(noFaktur);
+        if (dbRec?.no_sales_order) {
+          dbRec.no_sales_order.split(",").forEach((s) => s.trim() && soSet.add(s.trim()));
+        }
         if (soVal) soSet.add(soVal);
+
         uniqueMap.set(noFaktur, {
           no_faktur: noFaktur,
           no_sales_order: soVal,
@@ -220,9 +231,9 @@ export default function HomePage() {
           imported_at: importedAt,
           source_file: "XXCUST",
           extra: {
-            nama_pelanggan: custName ? String(custName) : null,
-            jenis_transaksi: jenisTrans ? String(jenisTrans) : null,
-            accounting_date: accDate,
+            nama_pelanggan: custName ? String(custName) : (dbRec?.extra?.nama_pelanggan ?? null),
+            jenis_transaksi: (jenisTrans ? String(jenisTrans) : (dbRec?.extra?.jenis_transaksi as string)) ?? null,
+            accounting_date: (accDate ?? (dbRec?.extra?.accounting_date as string)) ?? null,
             order_date: orderDate,
             items: (itemCode || itemDesc) ? [itemObj] : [],
           },
@@ -245,30 +256,11 @@ export default function HomePage() {
 
     if (payload.length === 0) { setStage("idle"); return; }
 
-    // Upsert by no_faktur
     for (const batch of chunk(payload, 500)) {
       const { error } = await supabase
         .from("faktur_records")
         .upsert(batch, { onConflict: "no_faktur" });
       if (error) { alert("Gagal import XXCUST: " + error.message); setStage("idle"); return; }
-    }
-
-    // Untuk setiap no_so dari XXCUST, update record DOO (yang no_faktur-nya null) agar dapat no_faktur
-    const soToFakturMap = new Map<string, string>();
-    for (const item of payload) {
-      if (item.no_sales_order) {
-        for (const so of item.no_sales_order.split(", ")) {
-          soToFakturMap.set(so.trim(), item.no_faktur);
-        }
-      }
-    }
-    // Update DOO records yang cocok
-    for (const [so, faktur] of soToFakturMap.entries()) {
-      await supabase
-        .from("faktur_records")
-        .update({ no_faktur: faktur, source_file: "XXCUST", imported_at: importedAt })
-        .eq("no_sales_order", so)
-        .is("no_faktur", null);
     }
 
     const newItems = payload.filter((p) => !existingNoFaktur.has(p.no_faktur));
@@ -284,126 +276,121 @@ export default function HomePage() {
   }
 
   // ─────────────────────────────────────────────
-  // IMPORT DOO / ORA
-  // Kolom: Reference (No SO), Bill-to Customer, Transaction Source, Accounting Date
+  // IMPORT DOO / ORA (export.xls / DOO.xls)
+  // Kolom: Reference (No SO), Transaction Number (No Faktur AR), Bill-to Customer, Accounting Date
   // ─────────────────────────────────────────────
   async function executeImportDOO(rowsToImport: ParsedExcelRow[]) {
     setStage("importing");
     setImportResult(null);
     const importedAt = new Date().toISOString();
 
-    // Fetch fresh dari DB — jangan pakai state lama yang mungkin sudah stale
-    const { data: existingData } = await supabase
-      .from("faktur_records")
-      .select("no_sales_order, no_faktur");
-    // SO yang sudah ada dan sudah punya no_faktur (sudah di-invoice) → jangan overwrite
-    const existingSOwithFaktur = new Set(
-      (existingData ?? [])
-        .filter((r: { no_faktur: string | null }) => r.no_faktur != null)
-        .map((r: { no_sales_order: string | null }) => r.no_sales_order)
-        .filter(Boolean)
+    const { data: currentDB } = await supabase.from("faktur_records").select("*");
+    const dbRecordMap = new Map<string, FakturRecord>(
+      (currentDB ?? []).map((r: FakturRecord) => [String(r.no_faktur).trim(), r])
     );
-    // SO yang sudah ada sebagai pending (no_faktur null) → juga skip insert baru
-    const existingPendingSO = new Set(
-      (existingData ?? [])
-        .filter((r: { no_faktur: string | null }) => r.no_faktur == null)
-        .map((r: { no_sales_order: string | null }) => r.no_sales_order)
-        .filter(Boolean)
-    );
+    const existingNoFaktur = new Set(dbRecordMap.keys());
+    const existingStatusMap = new Map((currentDB ?? []).map((r: FakturRecord) => [r.no_faktur, r.status_cetak]));
 
-    type DOORecord = {
-      no_faktur: null;
+    type AggDOORecord = {
+      no_faktur: string;
       no_delivery_order: null;
-      no_sales_order: string;
+      no_sales_order: string | null;
       imported_at: string;
       source_file: string;
       extra: {
         nama_pelanggan?: string | null;
         jenis_transaksi?: string | null;
         accounting_date?: string | null;
-        items: [];
+        items: Array<Record<string, unknown>>;
       };
+      _soSet: Set<string>;
     };
 
-    const uniqueMap = new Map<string, DOORecord>();
+    const uniqueMap = new Map<string, AggDOORecord>();
+
+    function parseExcelDate(val: string | number | null): string | null {
+      if (val == null || val === "") return null;
+      if (typeof val === "number") {
+        const d = new Date(Math.round((val - 25569) * 86400 * 1000));
+        return d.toISOString().split("T")[0];
+      }
+      return String(val).trim() || null;
+    }
 
     for (const row of rowsToImport) {
-      // Reference = No SO
-      const refRaw = findRowVal(row, [/^reference$/i]);
-      if (!refRaw) continue;
-      const soVal = String(refRaw).trim();
-      if (!soVal) continue;
+      // 1. Transaction Number = No Faktur AR
+      const rawFaktur =
+        findRowVal(row, [/transaction\s*number/i, /transaction_no/i, /trans.*number/i, /tran_no/i]) ??
+        findRowVal(row, [/invoice\s*number/i, /no\s*invoice/i, /no\s*faktur/i]);
+      if (!rawFaktur) continue;
 
-      // Skip jika SO sudah punya faktur (sudah ter-invoice)
-      if (existingSOwithFaktur.has(soVal)) continue;
+      const noFaktur = String(rawFaktur).trim();
+      if (!noFaktur || noFaktur === "0") continue;
 
-      const custName    = findRowVal(row, [/^bill.to\s*customer$/i, /^ship.to\s*customer$/i, /^customer$/i]);
-      const txSource    = findRowVal(row, [/^transaction\s*source$/i]);
-      const accDateRaw  = findRowVal(row, [/^accounting\s*date$/i]);
+      // 2. Reference = No Sales Order DOO
+      const refRaw = findRowVal(row, [/^reference$/i, /order\s*number/i, /no\s*so$/i]);
+      const soVal = refRaw ? String(refRaw).trim() : null;
 
-      // Format accounting date jika berupa Excel serial number
-      let accDate: string | null = null;
-      if (accDateRaw != null && accDateRaw !== "") {
-        if (typeof accDateRaw === "number") {
-          // Excel date serial → JS Date
-          const d = new Date(Math.round((accDateRaw - 25569) * 86400 * 1000));
-          accDate = d.toISOString().split("T")[0]; // YYYY-MM-DD
-        } else {
-          accDate = String(accDateRaw).trim();
-        }
-      }
+      const custName   = findRowVal(row, [/^bill.to\s*customer$/i, /^ship.to\s*customer$/i, /^customer$/i]);
+      const txSource   = findRowVal(row, [/^transaction\s*source$/i]);
+      const accDate    = parseExcelDate(findRowVal(row, [/^accounting\s*date$/i, /^transaction\s*date$/i]));
 
-      // Deteksi source: DOO jika Transaction Source mengandung "Distributed" atau "DOO"
       const txSourceStr = txSource ? String(txSource) : "";
-      const sourceFile = txSourceStr.toLowerCase().includes("distributed") || txSourceStr.toLowerCase().includes("doo")
-        ? "DOO"
-        : "ORA";
+      const sourceFile =
+        txSourceStr.toLowerCase().includes("distributed") || txSourceStr.toLowerCase().includes("doo")
+          ? "DOO"
+          : "ORA";
 
-      if (!uniqueMap.has(soVal)) {
-        uniqueMap.set(soVal, {
-          no_faktur: null,
+      const existing = uniqueMap.get(noFaktur);
+      if (!existing) {
+        const soSet = new Set<string>();
+        // Gabungkan nomor SO yang sudah ada di DB jika ada
+        const dbRec = dbRecordMap.get(noFaktur);
+        if (dbRec?.no_sales_order) {
+          dbRec.no_sales_order.split(",").forEach((s) => s.trim() && soSet.add(s.trim()));
+        }
+        if (soVal) soSet.add(soVal);
+
+        uniqueMap.set(noFaktur, {
+          no_faktur: noFaktur,
           no_delivery_order: null,
           no_sales_order: soVal,
           imported_at: importedAt,
           source_file: sourceFile,
           extra: {
-            nama_pelanggan: custName ? String(custName) : null,
-            jenis_transaksi: txSourceStr || null,
-            accounting_date: accDate,
-            items: [],
+            nama_pelanggan: custName ? String(custName) : (dbRec?.extra?.nama_pelanggan ?? null),
+            jenis_transaksi: (txSourceStr || (dbRec?.extra?.jenis_transaksi as string)) ?? null,
+            accounting_date: accDate ?? (dbRec?.extra?.accounting_date as string) ?? null,
+            items: ((dbRec?.extra?.items as Array<Record<string, unknown>>) || []),
           },
+          _soSet: soSet,
         });
+      } else {
+        if (soVal) existing._soSet.add(soVal);
+        if (!existing.extra.nama_pelanggan && custName) existing.extra.nama_pelanggan = String(custName);
+        if (!existing.extra.accounting_date && accDate) existing.extra.accounting_date = accDate;
       }
     }
 
-    const payload = Array.from(uniqueMap.values());
+    const payload = Array.from(uniqueMap.values()).map(({ _soSet, ...rest }) => ({
+      ...rest,
+      no_sales_order: _soSet.size > 0 ? Array.from(_soSet).join(", ") : rest.no_sales_order,
+    }));
+
     if (payload.length === 0) { setStage("idle"); return; }
 
-    // Insert record baru: skip yang sudah ada (baik yang punya faktur maupun yang pending)
-    let importedCount = 0;
-    const newRecords = payload.filter(
-      (r) => !existingSOwithFaktur.has(r.no_sales_order) && !existingPendingSO.has(r.no_sales_order)
-    );
-
-    for (const batch of chunk(newRecords, 500)) {
+    for (const batch of chunk(payload, 500)) {
       const { error } = await supabase
         .from("faktur_records")
-        .insert(batch);
+        .upsert(batch, { onConflict: "no_faktur" });
       if (error) { alert("Gagal import DOO: " + error.message); setStage("idle"); return; }
-      importedCount += batch.length;
     }
 
-    // Update pending records yang sudah ada (mungkin accounting_date belum ada)
-    const existingPendingToUpdate = payload.filter((r) => existingPendingSO.has(r.no_sales_order));
-    for (const rec of existingPendingToUpdate) {
-      await supabase
-        .from("faktur_records")
-        .update({ extra: rec.extra, imported_at: importedAt })
-        .eq("no_sales_order", rec.no_sales_order)
-        .is("no_faktur", null);
-    }
+    const newItems = payload.filter((p) => !existingNoFaktur.has(p.no_faktur));
+    const newCount = newItems.length;
+    const newUnprintedCount = newItems.filter((p) => !existingStatusMap.get(p.no_faktur)).length;
 
-    setImportResult({ totalImported: payload.length, newCount: importedCount, newUnprintedCount: 0, importedAt });
+    setImportResult({ totalImported: payload.length, newCount, newUnprintedCount, importedAt });
     setStage("idle");
     setShowUpload(false);
     setParsedRows([]);
