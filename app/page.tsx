@@ -119,14 +119,30 @@ export default function HomePage() {
       return;
     }
 
-    // Deduplikasi berdasarkan no_faktur (karena 1 nomor invoice bisa ada banyak baris item di Excel Oracle)
-    const uniqueMap = new Map<string, (typeof payload)[0]>();
+    // Deduplikasi berdasarkan no_faktur & gabungkan multiple SO jika 1 invoice punya lebih dari 1 SO
+    type PayloadItem = (typeof payload)[0] & { _soSet: Set<string> };
+    const uniqueMap = new Map<string, PayloadItem>();
+
     for (const item of payload) {
-      if (!uniqueMap.has(item.no_faktur)) {
-        uniqueMap.set(item.no_faktur, item);
+      const existing = uniqueMap.get(item.no_faktur);
+      if (!existing) {
+        const soSet = new Set<string>();
+        if (item.no_sales_order) soSet.add(item.no_sales_order);
+        uniqueMap.set(item.no_faktur, { ...item, _soSet: soSet });
+      } else {
+        if (item.no_sales_order) {
+          existing._soSet.add(item.no_sales_order);
+        }
       }
     }
-    const uniquePayload = Array.from(uniqueMap.values());
+
+    const uniquePayload = Array.from(uniqueMap.values()).map((item) => {
+      const { _soSet, ...rest } = item;
+      return {
+        ...rest,
+        no_sales_order: _soSet.size > 0 ? Array.from(_soSet).join(", ") : null,
+      };
+    });
 
     const batches = chunk(uniquePayload, 500);
     let importedCount = 0;
