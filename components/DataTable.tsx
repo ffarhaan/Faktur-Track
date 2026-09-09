@@ -5,6 +5,8 @@ import * as XLSX from "xlsx";
 import { supabase } from "@/lib/supabaseClient";
 import { FakturRecord, ItemDetail } from "@/lib/types";
 
+import { getKategori, getOrderType } from "@/lib/kategoriHelper";
+
 type Props = {
   records: FakturRecord[];
   onRecordUpdated: (updated: FakturRecord) => void;
@@ -20,23 +22,7 @@ export type OrderTypeFilter = "all" | "DOO" | "ORA";
 const PAGE_SIZE = 50;
 const NEW_THRESHOLD_MS = 24 * 60 * 60 * 1000;
 
-export function getOrderType(r: FakturRecord): "DOO" | "ORA" | "OTHER" {
-  if (r.extra?.order_type) {
-    const ot = String(r.extra.order_type).toUpperCase();
-    if (ot.includes("3RD") || ot.includes("DOO")) return "DOO";
-    if (ot.includes("PRIORITY") || ot.includes("ORA")) return "ORA";
-  }
-  if (!r.no_sales_order) return "OTHER";
-  // Alphanumeric SO (e.g. ZLGMXL-5393, KY74DY-8596) -> DOO (TRADE_3RD PARTY)
-  if (/[A-Za-z]/.test(r.no_sales_order)) {
-    return "DOO";
-  }
-  // Numeric SO (e.g. 9066, 9512, 9328) -> ORA (TRADE_PRIORITY)
-  if (/^\s*\d+[\d\s,]*$/.test(r.no_sales_order)) {
-    return "ORA";
-  }
-  return "OTHER";
-}
+export { getOrderType, getKategori };
 
 function isNew(importedAt: string) {
   return Date.now() - new Date(importedAt).getTime() < NEW_THRESHOLD_MS;
@@ -130,12 +116,14 @@ export default function DataTable({
           .join(" ")
           .toLowerCase();
         const orderType = getOrderType(r).toLowerCase();
+        const kategori = getKategori(r).toLowerCase();
 
         const matchesSearch =
           !q ||
           r.no_faktur?.toLowerCase().includes(q) ||
           r.no_sales_order?.toLowerCase().includes(q) ||
           orderType.includes(q) ||
+          kategori.includes(q) ||
           custName.includes(q) ||
           itemNames.includes(q);
 
@@ -246,10 +234,12 @@ export default function DataTable({
   function exportToExcel() {
     const rows = filtered.map((r) => {
       const oType = getOrderType(r);
+      const kat = getKategori(r);
       return {
         "Order Number (SO)": r.no_sales_order,
         "No Invoice AR": r.no_faktur,
         "Nama Pelanggan": r.extra?.nama_pelanggan ?? "",
+        "Kategori": kat,
         "Jenis Transaksi": oType === "DOO" ? "DOO (3rd Party)" : oType === "ORA" ? "ORA (Priority)" : "-",
         "Jumlah Item": r.extra?.items?.length ?? 0,
         "Status Cetak": r.status_cetak ? "Sudah Print" : "Belum Print",
@@ -400,6 +390,7 @@ export default function DataTable({
               const items = r.extra?.items || [];
               const custName = r.extra?.nama_pelanggan;
               const orderType = getOrderType(r);
+              const kategori = getKategori(r);
 
               return (
                 <Fragment key={r.id}>
@@ -492,24 +483,42 @@ export default function DataTable({
 
                     {/* 4. Jenis Transaksi */}
                     <td className="px-4 py-3">
-                      {orderType === "DOO" && (
+                      {kategori === "1P" && (
                         <span
-                          className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-black bg-purple-100 text-purple-800 border border-purple-300 shadow-sm"
-                          title="DOO (TRADE_3RD PARTY)"
+                          className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-black bg-blue-100 text-blue-800 border border-blue-300 shadow-sm"
+                          title="1P (Direct / Mandiri)"
                         >
-                          DOO
+                          1P
                         </span>
                       )}
-                      {orderType === "ORA" && (
+                      {kategori === "2P" && (
                         <span
                           className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-black bg-teal-100 text-teal-800 border border-teal-300 shadow-sm"
-                          title="ORA (TRADE_PRIORITY)"
+                          title="2P (ORA Priority)"
                         >
-                          ORA
+                          2P
                         </span>
                       )}
-                      {orderType === "OTHER" && (
-                        <span className="text-gray-400 text-xs">-</span>
+                      {kategori === "3P" && (
+                        <span
+                          className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-black bg-purple-100 text-purple-800 border border-purple-300 shadow-sm"
+                          title="3P (DOO 3rd Party)"
+                        >
+                          3P
+                        </span>
+                      )}
+                      {kategori === "OTHER" && (
+                        orderType === "DOO" ? (
+                          <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-black bg-purple-100 text-purple-800 border border-purple-300 shadow-sm">
+                            DOO
+                          </span>
+                        ) : orderType === "ORA" ? (
+                          <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-black bg-teal-100 text-teal-800 border border-teal-300 shadow-sm">
+                            ORA
+                          </span>
+                        ) : (
+                          <span className="text-gray-400 text-xs">-</span>
+                        )
                       )}
                     </td>
 
