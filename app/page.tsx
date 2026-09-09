@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { ColumnMapping, FakturRecord, ParsedExcelRow } from "@/lib/types";
+import { ColumnMapping, FakturRecord, ParsedExcelRow, REQUIRED_FIELDS } from "@/lib/types";
 import UploadExcel from "@/components/UploadExcel";
 import ColumnMapper from "@/components/ColumnMapper";
 import DataTable from "@/components/DataTable";
@@ -68,17 +68,46 @@ export default function HomePage() {
     };
   }, []);
 
+  function autoDetectMapping(hdrs: string[]): ColumnMapping | null {
+    const normalized = hdrs.map((h) => h.toLowerCase().replace(/[^a-z0-9]/g, ""));
+    const targets: Record<string, string[]> = {
+      no_faktur: ["noinvoicear", "invoicear", "invoiceno", "nofaktur", "faktur", "nomorfaktur", "invoicenumber", "invoice"],
+      no_delivery_order: ["nodo", "deliveryorder", "nodeliveryorder", "do", "deliverynumber", "suratjalan", "nosj"],
+      no_sales_order: ["ordernumber", "salesorder", "nosalesorder", "noso", "so", "orderno"],
+    };
+    const mapping: ColumnMapping = {};
+    for (const field of REQUIRED_FIELDS) {
+      const candidates = targets[field.key] ?? [];
+      for (const cand of candidates) {
+        const idx = normalized.findIndex((h) => h.includes(cand));
+        if (idx !== -1) {
+          mapping[field.key] = hdrs[idx];
+          break;
+        }
+      }
+    }
+    return mapping.no_faktur ? mapping : null;
+  }
+
   function handleParsed(hdrs: string[], rows: ParsedExcelRow[]) {
-    setHeaders(hdrs);
-    setParsedRows(rows);
-    setStage("mapping");
+    const autoMap = autoDetectMapping(hdrs);
+    if (autoMap) {
+      executeImport(autoMap, rows);
+    } else {
+      setHeaders(hdrs);
+      setParsedRows(rows);
+      setStage("mapping");
+    }
   }
 
   async function handleImport(mapping: ColumnMapping) {
+    executeImport(mapping, parsedRows);
+  }
+
+  async function executeImport(mapping: ColumnMapping, rowsToImport: ParsedExcelRow[]) {
     setStage("importing");
     setImportResult(null);
 
-    const mappedColumns = new Set(Object.values(mapping));
     const importedAt = new Date().toISOString();
 
     // Simpan set no_faktur yang sudah ada SEBELUM import untuk deteksi data baru
@@ -125,7 +154,7 @@ export default function HomePage() {
 
     const uniqueMap = new Map<string, AggregatedInvoice>();
 
-    for (const row of parsedRows) {
+    for (const row of rowsToImport) {
       const rawNoFaktur = row[mapping.no_faktur];
       if (!rawNoFaktur) continue; // skip baris tanpa no faktur
 
