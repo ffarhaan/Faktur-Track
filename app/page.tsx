@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { ColumnMapping, FakturRecord, ParsedExcelRow, REQUIRED_FIELDS } from "@/lib/types";
+import { FileType, FakturRecord, ParsedExcelRow } from "@/lib/types";
 import UploadExcel from "@/components/UploadExcel";
 import ColumnMapper from "@/components/ColumnMapper";
 import DataTable from "@/components/DataTable";
@@ -23,6 +23,41 @@ function chunk<T>(arr: T[], size: number): T[][] {
   return out;
 }
 
+// Normalisasi string header: lowercase, alphanumeric only
+function norm(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+// Cari nilai dari row berdasarkan pola regex
+function findRowVal(row: ParsedExcelRow, patterns: RegExp[]): string | number | null {
+  for (const pattern of patterns) {
+    for (const [key, val] of Object.entries(row)) {
+      if (pattern.test(key) && val !== null && val !== undefined && val !== "") {
+        return val;
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Deteksi tipe file berdasarkan header kolom.
+ * XXCUST  → ada "No Invoice AR"
+ * DOO/ORA → ada "Reference" + "Transaction Source" + "Bill-to Customer"
+ */
+function detectFileType(hdrs: string[]): FileType {
+  const normalized = hdrs.map(norm);
+  if (normalized.some((h) => h.includes("noinvoicear") || h.includes("invoicear"))) return "XXCUST";
+  if (
+    normalized.some((h) => h === "reference") &&
+    normalized.some((h) => h.includes("transactionsource")) &&
+    normalized.some((h) => h.includes("billtocustomer") || h.includes("billto"))
+  ) {
+    return "DOO"; // DOO dan ORA punya format yang sama
+  }
+  return "UNKNOWN";
+}
+
 export default function HomePage() {
   const [records, setRecords] = useState<FakturRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -31,7 +66,6 @@ export default function HomePage() {
   const [parsedRows, setParsedRows] = useState<ParsedExcelRow[]>([]);
   const [showUpload, setShowUpload] = useState(false);
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
-  // filter dari ImportSummary "Lihat data baru"
   const [highlightImportedAt, setHighlightImportedAt] = useState<string | null>(null);
 
   async function fetchRecords() {
@@ -51,158 +85,109 @@ export default function HomePage() {
   useEffect(() => {
     fetchRecords();
 
-    // Supabase Realtime: Otomatis sinkron data tanpa refresh manual saat ada perubahan
     const channel = supabase
       .channel("faktur-records-realtime")
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "faktur_records" },
-        () => {
-          fetchRecords();
-        }
+        () => { fetchRecords(); }
       )
       .subscribe();
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    return () => { supabase.removeChannel(channel); };
   }, []);
 
-  function autoDetectMapping(hdrs: string[]): ColumnMapping | null {
-    const normalized = hdrs.map((h) => h.toLowerCase().replace(/[^a-z0-9]/g, ""));
-    const targets: Record<string, string[]> = {
-      no_faktur: [
-        "noinvoicear",
-        "invoicear",
-        "invoiceno",
-        "nofaktur",
-        "faktur",
-        "nomorfaktur",
-        "invoicenumber",
-        "invoice",
-        // New patterns for the DOO/ORA style files
-        "reference",
-        "ref",
-        "transactionnumber",
-        "transaction number",
-        "transaction_no",
-        "transactionno",
-        "transnumber",
-        "tran_no",
-      ],
-      no_delivery_order: ["nodo", "deliveryorder", "nodeliveryorder", "do", "deliverynumber", "suratjalan", "nosj"],
-      no_sales_order: ["ordernumber", "salesorder", "nosalesorder", "noso", "so", "orderno", "reference"],
-    };
-    const mapping: ColumnMapping = {};
-    for (const field of REQUIRED_FIELDS) {
-      const candidates = targets[field.key] ?? [];
-      for (const cand of candidates) {
-        const idx = normalized.findIndex((h) => h.includes(cand));
-        if (idx !== -1) {
-          mapping[field.key] = hdrs[idx];
-          break;
-        }
-      }
-    }
-    return mapping.no_faktur ? mapping : null;
-  }
-
   function handleParsed(hdrs: string[], rows: ParsedExcelRow[]) {
-    const autoMap = autoDetectMapping(hdrs);
-    if (autoMap) {
-      executeImport(autoMap, rows);
+    const fileType = detectFileType(hdrs);
+    if (fileType === "XXCUST") {
+      executeImportXXCUST(rows);
+    } else if (fileType === "DOO") {
+      executeImportDOO(rows);
     } else {
+      // Tidak terdeteksi → tampilkan ColumnMapper manual
       setHeaders(hdrs);
       setParsedRows(rows);
       setStage("mapping");
     }
   }
 
-  async function handleImport(mapping: ColumnMapping) {
-    executeImport(mapping, parsedRows);
-  }
-
-  async function executeImport(mapping: ColumnMapping, rowsToImport: ParsedExcelRow[]) {
+  // ─────────────────────────────────────────────
+  // IMPORT XXCUST
+  // Kolom: No Invoice AR, Order Number, Nama Pelanggan,
+  //        Item Code, Item Description, Qty, UOM, LOT Number,
+  //        HNA, Diskon, Harga Jual, Total Harga, COGS/Unit, Profit
+  // ─────────────────────────────────────────────
+  async function executeImportXXCUST(rowsToImport: ParsedExcelRow[]) {
     setStage("importing");
     setImportResult(null);
-
     const importedAt = new Date().toISOString();
 
-    // Simpan set no_faktur yang sudah ada SEBELUM import untuk deteksi data baru
-    const existingNoFaktur = new Set(records.map((r) => r.no_faktur));
-    // Simpan map no_faktur -> status_cetak untuk deteksi "baru belum diprint"
-    const existingStatusMap = new Map(
-      records.map((r) => [r.no_faktur, r.status_cetak])
-    );
+    const existingNoFaktur = new Set(records.map((r) => r.no_faktur).filter(Boolean));
+    const existingStatusMap = new Map(records.map((r) => [r.no_faktur, r.status_cetak]));
 
-    // Helper mencari value dari kolom row dengan fuzzy key match
-    function findRowVal(row: ParsedExcelRow, patterns: RegExp[]): string | number | null {
-      for (const pattern of patterns) {
-        for (const [key, val] of Object.entries(row)) {
-          if (pattern.test(key) && val !== null && val !== undefined && val !== "") {
-            return val;
-          }
-        }
-      }
-      return null;
-    }
-
-    type AggregatedInvoice = {
+    type AggInvoice = {
       no_faktur: string;
-      no_delivery_order: string | null;
       no_sales_order: string | null;
+      no_delivery_order: string | null;
       imported_at: string;
+      source_file: string;
       extra: {
-        items: Array<{
-          item_code?: string | number | null;
-          item_description?: string | number | null;
-          qty?: string | number | null;
-          uom?: string | number | null;
-          lot_number?: string | number | null;
-          harga_jual?: string | number | null;
-          total_harga?: string | number | null;
-          nama_pelanggan?: string | number | null;
-          order_number?: string | number | null;
-        }>;
         nama_pelanggan?: string | null;
-        [key: string]: unknown;
+        jenis_transaksi?: string | null;
+        items: Array<Record<string, unknown>>;
       };
       _soSet: Set<string>;
     };
 
-    const uniqueMap = new Map<string, AggregatedInvoice>();
+    const uniqueMap = new Map<string, AggInvoice>();
 
     for (const row of rowsToImport) {
-      const rawNoFaktur = row[mapping.no_faktur];
-      if (!rawNoFaktur) continue; // skip baris tanpa no faktur
+      // Cari No Invoice AR
+      const rawFaktur =
+        findRowVal(row, [/no\s*invoice\s*ar/i, /invoice\s*ar/i]) ??
+        findRowVal(row, [/no\s*faktur/i, /nofaktur/i]);
+      if (!rawFaktur) continue;
 
-      const noFaktur = String(rawNoFaktur).trim();
-      const soVal = mapping.no_sales_order && row[mapping.no_sales_order]
-        ? String(row[mapping.no_sales_order]).trim()
-        : null;
-      const doVal = mapping.no_delivery_order && row[mapping.no_delivery_order]
-        ? String(row[mapping.no_delivery_order]).trim()
-        : null;
+      const noFaktur = String(rawFaktur).trim();
+      if (!noFaktur || noFaktur === "0") continue;
 
-      const custName = findRowVal(row, [/nama.*pelanggan/i, /customer/i, /pelanggan/i]);
-      const orderTypeVal = findRowVal(row, [/order.*type/i, /transaction.*type/i, /order.*source/i, /line.*type/i]);
-      const itemCode = findRowVal(row, [/item.*code/i, /kode.*barang/i, /item/i]);
-      const itemDesc = findRowVal(row, [/item.*desc/i, /nama.*barang/i, /description/i, /product/i]);
-      const qtyVal = findRowVal(row, [/^qty$/i, /quantity/i, /jumlah/i]);
-      const uomVal = findRowVal(row, [/^uom$/i, /satuan/i, /unit/i]);
-      const lotVal = findRowVal(row, [/lot/i, /batch/i]);
-      const hargaJual = findRowVal(row, [/harga.*jual/i, /unit.*price/i, /hna/i]);
-      const totalHarga = findRowVal(row, [/total.*harga/i, /amount/i, /total/i]);
+      // Cari Order Number (No SO)
+      const soRaw = findRowVal(row, [/^order\s*number$/i, /^no\s*so$/i, /^sales\s*order/i]);
+      const soVal = soRaw ? String(soRaw).trim() : null;
+
+      // Data barang
+      const itemCode   = findRowVal(row, [/^item\s*code$/i, /^kode\s*barang$/i]);
+      const itemDesc   = findRowVal(row, [/^item\s*description$/i, /^nama\s*barang$/i, /^description$/i]);
+      const qty        = findRowVal(row, [/^qty$/i, /^quantity$/i, /^jumlah$/i]);
+      const uom        = findRowVal(row, [/^uom$/i, /^satuan$/i]);
+      const lot        = findRowVal(row, [/^lot\s*number$/i, /^lot$/i, /^batch$/i]);
+      const hna        = findRowVal(row, [/^hna$/i, /^unit\s*price$/i]);
+      const diskon     = findRowVal(row, [/^diskon$/i, /^discount$/i]);
+      const hargaJual  = findRowVal(row, [/^harga\s*jual$/i, /^selling\s*price$/i]);
+      const totalHarga = findRowVal(row, [/^total\s*harga$/i, /^amount$/i, /^total$/i]);
+      const cogs       = findRowVal(row, [/^cogs\/unit$/i, /^cogs$/i]);
+      const profit     = findRowVal(row, [/^profit$/i]);
+      const kategori   = findRowVal(row, [/^nama\s*kategori/i, /^kategori/i]);
+      const principal  = findRowVal(row, [/^principal$/i]);
+      const brand      = findRowVal(row, [/^brand$/i]);
+      const custName   = findRowVal(row, [/^nama\s*pelanggan$/i, /^customer$/i, /^pelanggan$/i]);
+      const jenisTrans = findRowVal(row, [/^jenis\s*transaksi$/i, /^transaction\s*type$/i]);
 
       const itemObj = {
         item_code: itemCode,
         item_description: itemDesc,
-        qty: qtyVal,
-        uom: uomVal,
-        lot_number: lotVal,
+        qty,
+        uom,
+        lot_number: lot,
+        hna,
+        diskon,
         harga_jual: hargaJual,
         total_harga: totalHarga,
-        nama_pelanggan: custName,
+        cogs,
+        profit,
+        kategori,
+        principal,
+        brand,
         order_number: soVal,
       };
 
@@ -210,71 +195,172 @@ export default function HomePage() {
       if (!existing) {
         const soSet = new Set<string>();
         if (soVal) soSet.add(soVal);
-
         uniqueMap.set(noFaktur, {
           no_faktur: noFaktur,
-          no_delivery_order: doVal,
           no_sales_order: soVal,
+          no_delivery_order: null,
           imported_at: importedAt,
+          source_file: "XXCUST",
           extra: {
             nama_pelanggan: custName ? String(custName) : null,
-            order_type: orderTypeVal ? String(orderTypeVal) : null,
+            jenis_transaksi: jenisTrans ? String(jenisTrans) : null,
             items: (itemCode || itemDesc) ? [itemObj] : [],
           },
           _soSet: soSet,
         });
       } else {
         if (soVal) existing._soSet.add(soVal);
-        if (!existing.extra.nama_pelanggan && custName) {
-          existing.extra.nama_pelanggan = String(custName);
-        }
-        if (!existing.extra.order_type && orderTypeVal) {
-          existing.extra.order_type = String(orderTypeVal);
-        }
-        if (itemCode || itemDesc) {
-          existing.extra.items.push(itemObj);
-        }
+        if (!existing.extra.nama_pelanggan && custName) existing.extra.nama_pelanggan = String(custName);
+        if (!existing.extra.jenis_transaksi && jenisTrans) existing.extra.jenis_transaksi = String(jenisTrans);
+        if (itemCode || itemDesc) existing.extra.items.push(itemObj);
       }
     }
 
-    const uniquePayload = Array.from(uniqueMap.values()).map((item) => {
-      const { _soSet, ...rest } = item;
-      return {
-        ...rest,
-        no_sales_order: _soSet.size > 0 ? Array.from(_soSet).join(", ") : null,
-      };
-    });
+    const payload = Array.from(uniqueMap.values()).map(({ _soSet, ...rest }) => ({
+      ...rest,
+      no_sales_order: _soSet.size > 0 ? Array.from(_soSet).join(", ") : rest.no_sales_order,
+    }));
 
-    if (uniquePayload.length === 0) {
-      setStage("idle");
-      return;
-    }
+    if (payload.length === 0) { setStage("idle"); return; }
 
-    const batches = chunk(uniquePayload, 500);
-    let importedCount = 0;
-
-    for (const batch of batches) {
+    // Upsert by no_faktur
+    for (const batch of chunk(payload, 500)) {
       const { error } = await supabase
         .from("faktur_records")
         .upsert(batch, { onConflict: "no_faktur" });
-
-      if (error) {
-        alert("Gagal import: " + error.message);
-        setStage("idle");
-        return;
-      }
-      importedCount += batch.length;
+      if (error) { alert("Gagal import XXCUST: " + error.message); setStage("idle"); return; }
     }
 
-    // Hitung statistik: data baru & yang belum diprint
-    const newItems = uniquePayload.filter((p) => !existingNoFaktur.has(p.no_faktur));
-    const newCount = newItems.length;
-    // Data baru → belum diprint (status_cetak default false untuk yang baru)
-    const newUnprintedCount = newItems.filter(
-      (p) => !existingStatusMap.get(p.no_faktur)
-    ).length;
+    // Untuk setiap no_so dari XXCUST, update record DOO (yang no_faktur-nya null) agar dapat no_faktur
+    const soToFakturMap = new Map<string, string>();
+    for (const item of payload) {
+      if (item.no_sales_order) {
+        for (const so of item.no_sales_order.split(", ")) {
+          soToFakturMap.set(so.trim(), item.no_faktur);
+        }
+      }
+    }
+    // Update DOO records yang cocok
+    for (const [so, faktur] of soToFakturMap.entries()) {
+      await supabase
+        .from("faktur_records")
+        .update({ no_faktur: faktur, source_file: "XXCUST", imported_at: importedAt })
+        .eq("no_sales_order", so)
+        .is("no_faktur", null);
+    }
 
-    setImportResult({ totalImported: importedCount, newCount, newUnprintedCount, importedAt });
+    const newItems = payload.filter((p) => !existingNoFaktur.has(p.no_faktur));
+    const newCount = newItems.length;
+    const newUnprintedCount = newItems.filter((p) => !existingStatusMap.get(p.no_faktur)).length;
+
+    setImportResult({ totalImported: payload.length, newCount, newUnprintedCount, importedAt });
+    setStage("idle");
+    setShowUpload(false);
+    setParsedRows([]);
+    setHeaders([]);
+    await fetchRecords();
+  }
+
+  // ─────────────────────────────────────────────
+  // IMPORT DOO / ORA
+  // Kolom: Reference (No SO), Bill-to Customer, Transaction Source, Accounting Date
+  // ─────────────────────────────────────────────
+  async function executeImportDOO(rowsToImport: ParsedExcelRow[]) {
+    setStage("importing");
+    setImportResult(null);
+    const importedAt = new Date().toISOString();
+
+    const existingSO = new Set(records.map((r) => r.no_sales_order).filter(Boolean));
+
+    type DOORecord = {
+      no_faktur: null;
+      no_delivery_order: null;
+      no_sales_order: string;
+      imported_at: string;
+      source_file: string;
+      extra: {
+        nama_pelanggan?: string | null;
+        jenis_transaksi?: string | null;
+        items: [];
+      };
+    };
+
+    const uniqueMap = new Map<string, DOORecord>();
+
+    for (const row of rowsToImport) {
+      // Reference = No SO
+      const refRaw = findRowVal(row, [/^reference$/i]);
+      if (!refRaw) continue;
+      const soVal = String(refRaw).trim();
+      if (!soVal) continue;
+
+      const custName   = findRowVal(row, [/^bill.to\s*customer$/i, /^ship.to\s*customer$/i, /^customer$/i]);
+      const txSource   = findRowVal(row, [/^transaction\s*source$/i]);
+
+      if (!uniqueMap.has(soVal)) {
+        uniqueMap.set(soVal, {
+          no_faktur: null,
+          no_delivery_order: null,
+          no_sales_order: soVal,
+          imported_at: importedAt,
+          source_file: txSource ? String(txSource).includes("DOO") ? "DOO" : "ORA" : "DOO",
+          extra: {
+            nama_pelanggan: custName ? String(custName) : null,
+            jenis_transaksi: txSource ? String(txSource) : null,
+            items: [],
+          },
+        });
+      }
+    }
+
+    const payload = Array.from(uniqueMap.values());
+    if (payload.length === 0) { setStage("idle"); return; }
+
+    // Upsert by no_sales_order (hanya untuk record yang no_faktur-nya NULL)
+    let importedCount = 0;
+    for (const batch of chunk(payload, 500)) {
+      // Insert baru jika no_sales_order belum ada, skip jika sudah ada (termasuk yang sudah punya faktur)
+      const newRecords = batch.filter((r) => !existingSO.has(r.no_sales_order));
+      if (newRecords.length > 0) {
+        const { error } = await supabase
+          .from("faktur_records")
+          .insert(newRecords);
+        if (error) { alert("Gagal import DOO: " + error.message); setStage("idle"); return; }
+        importedCount += newRecords.length;
+      }
+    }
+
+    const newCount = importedCount;
+    setImportResult({ totalImported: payload.length, newCount, newUnprintedCount: 0, importedAt });
+    setStage("idle");
+    setShowUpload(false);
+    setParsedRows([]);
+    setHeaders([]);
+    await fetchRecords();
+  }
+
+  async function handleImport(mapping: Record<string, string>) {
+    // Fallback manual mapping (ColumnMapper)
+    setStage("importing");
+    const importedAt = new Date().toISOString();
+    const payload = parsedRows
+      .map((row) => ({
+        no_faktur: mapping.no_faktur ? String(row[mapping.no_faktur] ?? "").trim() : null,
+        no_sales_order: mapping.no_sales_order ? String(row[mapping.no_sales_order] ?? "").trim() || null : null,
+        no_delivery_order: null,
+        imported_at: importedAt,
+        source_file: "MANUAL",
+        extra: { items: [] },
+      }))
+      .filter((r) => r.no_faktur);
+
+    for (const batch of chunk(payload, 500)) {
+      const { error } = await supabase
+        .from("faktur_records")
+        .upsert(batch, { onConflict: "no_faktur" });
+      if (error) { alert("Gagal import: " + error.message); setStage("idle"); return; }
+    }
+    setImportResult({ totalImported: payload.length, newCount: payload.length, newUnprintedCount: payload.length, importedAt });
     setStage("idle");
     setShowUpload(false);
     setParsedRows([]);

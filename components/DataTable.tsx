@@ -42,7 +42,7 @@ function formatRp(val?: string | number | null) {
 }
 
 export type InvoiceSubGroup = {
-  no_faktur: string;
+  no_faktur: string | null;
   record: FakturRecord;
   items: ItemDetail[];
 };
@@ -51,7 +51,7 @@ export type GroupedOrder = {
   id: string;
   groupKey: string;
   no_sales_order: string | null;
-  no_fakturs: string[];
+  no_fakturs: (string | null)[];
   records: FakturRecord[];
   status_cetak: boolean;
   has_unprinted: boolean;
@@ -182,7 +182,7 @@ export default function DataTable({
           .toLowerCase();
         const orderType = getOrderType(g.representativeRecord).toLowerCase();
         const kategori = getKategori(g.representativeRecord).toLowerCase();
-        const fakturMatches = g.no_fakturs.some((f) => f.toLowerCase().includes(q));
+        const fakturMatches = g.no_fakturs.some((f) => f != null && f.toLowerCase().includes(q));
 
         const matchesSearch =
           !q ||
@@ -467,16 +467,18 @@ export default function DataTable({
                     {/* 2. Inv AR (Daftar Faktur yang Terpisah) */}
                     <td className="px-4 py-3">
                       <div className="flex flex-wrap items-center gap-1.5">
-                        {g.no_fakturs.map((inv) => (
+                        {g.no_fakturs.map((inv, idx) => (
                           <span
-                            key={inv}
+                            key={inv ?? `pending-${idx}`}
                             className={`px-2 py-1 rounded-lg font-mono font-black text-sm border shadow-sm ${
                               g.isSplit
                                 ? "bg-amber-100/80 text-amber-900 border-amber-300 ring-1 ring-amber-400"
+                                : inv == null
+                                ? "bg-gray-100 text-gray-400 border-gray-300 italic"
                                 : "bg-slate-100 text-slate-900 border-slate-300"
                             }`}
                           >
-                            #{inv}
+                            {inv != null ? `#${inv}` : "Pending"}
                           </span>
                         ))}
                         {isNew(g.imported_at) && (
@@ -619,7 +621,7 @@ export default function DataTable({
                                 )}
                               </div>
                               <p className="text-xs text-slate-600 mt-1">
-                                No Faktur: <span className="font-mono font-bold text-slate-900">{g.no_fakturs.map(f => `#${f}`).join(", ")}</span>
+                                No Faktur: <span className="font-mono font-bold text-slate-900">{g.no_fakturs.map(f => f ? `#${f}` : "Pending").join(", ")}</span>
                                 {custName && (
                                   <> | Pelanggan: <span className="font-bold text-blue-900">{String(custName)}</span></>
                                 )}
@@ -636,7 +638,7 @@ export default function DataTable({
                               {g.isSplit && (
                                 <div className="flex items-center gap-2 mb-2">
                                   <span className="px-2.5 py-1 rounded-lg text-xs font-black bg-blue-700 text-white font-mono shadow-sm">
-                                    📄 Faktur #{invGroup.no_faktur}
+                                    📄 Faktur {invGroup.no_faktur ? `#${invGroup.no_faktur}` : "Pending"}
                                   </span>
                                   <span className="text-xs text-slate-500 font-semibold">
                                     ({invGroup.items.length} Item Barang)
