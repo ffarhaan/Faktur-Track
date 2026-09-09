@@ -34,6 +34,23 @@ function parseFakturNum(val?: string | null): number {
   return isNaN(num) ? 0 : num;
 }
 
+function getDateScore(g: GroupedOrder): number {
+  const acc = (g.extra as Record<string, unknown>)?.accounting_date as string | undefined;
+  const ord = (g.extra as Record<string, unknown>)?.order_date as string | undefined;
+  const dStr = acc || ord;
+  if (dStr) {
+    if (/^\d{2}\/\d{2}\/\d{4}$/.test(dStr)) {
+      const [d, m, y] = dStr.split("/").map(Number);
+      return new Date(y, m - 1, d).getTime();
+    }
+    const parsed = Date.parse(dStr);
+    if (!isNaN(parsed)) return parsed;
+  }
+  const imp = Date.parse(g.imported_at);
+  if (!isNaN(imp)) return imp;
+  return 0;
+}
+
 function formatRp(val?: string | number | null) {
   if (val === null || val === undefined || val === "") return "-";
   const num = typeof val === "number" ? val : parseFloat(String(val).replace(/[^0-9.-]+/g, ""));
@@ -214,6 +231,11 @@ export default function DataTable({
         return matchesSearch && matchesTab && matchesDate && matchesHighlight;
       })
       .sort((a, b) => {
+        const dateA = getDateScore(a);
+        const dateB = getDateScore(b);
+        if (dateB !== dateA) {
+          return dateB - dateA;
+        }
         const numA = parseFakturNum(a.no_fakturs[0]);
         const numB = parseFakturNum(b.no_fakturs[0]);
         if (numA !== numB) {
@@ -415,6 +437,7 @@ export default function DataTable({
             <tr>
               <th className="text-left px-4 py-3 font-bold">Order Number</th>
               <th className="text-left px-4 py-3 font-bold">Inv AR</th>
+              <th className="text-left px-4 py-3 font-bold">Tanggal</th>
               <th className="text-left px-4 py-3 font-bold">Nama Pelanggan</th>
               <th className="text-left px-4 py-3 font-bold">Jenis Transaksi</th>
               <th className="text-left px-4 py-3 font-bold">Daftar Barang</th>
@@ -489,7 +512,34 @@ export default function DataTable({
                       </div>
                     </td>
 
-                    {/* 3. Nama Pelanggan */}
+                    {/* 3. Tanggal (Accounting Date / Order Date) */}
+                    <td className="px-4 py-3 whitespace-nowrap text-xs">
+                      <div>
+                        {(g.extra as Record<string, unknown>)?.accounting_date ? (
+                          <span className="font-semibold text-slate-800 font-mono">
+                            {String((g.extra as Record<string, unknown>).accounting_date)}
+                          </span>
+                        ) : (g.extra as Record<string, unknown>)?.order_date ? (
+                          <span className="text-slate-600 font-mono">
+                            {String((g.extra as Record<string, unknown>).order_date)}
+                          </span>
+                        ) : (
+                          <span className="text-gray-400 italic">-</span>
+                        )}
+                        {Boolean(
+                          (g.extra as Record<string, unknown>)?.order_date &&
+                            (g.extra as Record<string, unknown>)?.accounting_date &&
+                            (g.extra as Record<string, unknown>).order_date !==
+                              (g.extra as Record<string, unknown>).accounting_date
+                        ) && (
+                          <span className="block text-[10px] text-gray-400 font-mono">
+                            SO: {String((g.extra as Record<string, unknown>).order_date)}
+                          </span>
+                        )}
+                      </div>
+                    </td>
+
+                    {/* 4. Nama Pelanggan */}
                     <td className="px-4 py-3">
                       <span className="font-semibold text-slate-800 block max-w-[220px] truncate" title={String(custName || "-")}>
                         {custName ? String(custName) : <span className="text-gray-400 italic">-</span>}

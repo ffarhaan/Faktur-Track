@@ -17,7 +17,22 @@ export default function UploadExcel({ onParsed }: Props) {
     setError(null);
     try {
       const buffer = await file.arrayBuffer();
-      const workbook = XLSX.read(buffer, { type: "array" });
+      
+      // Deteksi apakah file adalah HTML table dari export Oracle
+      const textDecoder = new TextDecoder("utf-8");
+      const sampleText = textDecoder.decode(buffer.slice(0, 1024));
+      let workbook: XLSX.WorkBook;
+
+      if (sampleText.includes("<html") || sampleText.includes("<table") || sampleText.includes("xmlns:x=")) {
+        // File adalah HTML table format Oracle
+        const fullHtml = textDecoder.decode(buffer);
+        // Bersihkan tabel bersarang (nested table) di dalam cell yang memotong pembacaan SheetJS
+        const cleanedHtml = fullHtml.replace(/<td><table>[\s\S]*?<\/table><\/td>/gi, "<td></td>");
+        workbook = XLSX.read(cleanedHtml, { type: "string" });
+      } else {
+        workbook = XLSX.read(buffer, { type: "array" });
+      }
+
       const firstSheetName = workbook.SheetNames[0];
       const sheet = workbook.Sheets[firstSheetName];
 
@@ -41,7 +56,7 @@ export default function UploadExcel({ onParsed }: Props) {
         if (
           nonEmpties.length >= 3 &&
           rowCells.some((c) =>
-            /invoice|faktur|order|pelanggan|customer|item|entity/i.test(c)
+            /invoice|faktur|order|pelanggan|customer|item|entity|accounting\s*date|reference/i.test(c)
           )
         ) {
           headerRowIndex = i;
