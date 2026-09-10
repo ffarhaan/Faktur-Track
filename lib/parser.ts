@@ -124,7 +124,9 @@ function parseHTMLTable(html: string): FakturRecord[] {
       colMap["date"] = i;
     if (s === "reference") colMap["so"] = i;
     if (s.includes("transaction number")) colMap["inv"] = i;
-    if (s.includes("bill-to customer")) colMap["customer"] = i;
+    // Ship-to Customer = nama pelanggan (utama), Bill-to Customer = fallback
+    if (s.includes("ship-to customer")) colMap["customer"] = i;
+    if (s.includes("bill-to customer")) colMap["billTo"] = i;
     if (s.includes("transaction type")) colMap["jenis"] = i;
     if (s.includes("entered amount")) colMap["amount"] = i;
   });
@@ -136,18 +138,19 @@ function parseHTMLTable(html: string): FakturRecord[] {
 
     if (texts.length < 5) continue;
     if (texts[0] === "Context Value") continue;
+    // Skip rows where SO and Invoice are both empty
+    const soVal = texts[colMap["so"]] || "";
+    const invVal = texts[colMap["inv"]] || "";
+    if (!soVal && !invVal) continue;
 
-    const orderNumber = texts[colMap["so"]] || "";
-    const invoiceNumber = texts[colMap["inv"]] || "";
-    if (!orderNumber && !invoiceNumber) continue;
-
-    const customerName = texts[colMap["customer"]] || "";
+    // Ship-to Customer sebagai nama pelanggan, fallback ke Bill-to Customer
+    const customerName = texts[colMap["customer"]] || texts[colMap["billTo"]] || "";
     const jenisTransaksi = texts[colMap["jenis"]] || "";
 
     records.push({
       orderDate: texts[colMap["date"]] || "",
-      orderNumber,
-      invoiceNumber,
+      orderNumber: soVal,
+      invoiceNumber: invVal,
       jenisTransaksi,
       customerName,
       itemCode: "-",
