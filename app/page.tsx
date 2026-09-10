@@ -284,50 +284,30 @@ export default function Home() {
         </div>
       </header>
 
-      <div className="max-w-7xl mx-auto px-4 py-6">
-        {/* Upload area - always visible */}
-        <div className="mb-6">
-          <div
-            onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-            onDragLeave={() => setDragOver(false)}
-            onDrop={onDrop}
-            className={`border-2 border-dashed rounded-xl p-6 text-center transition-colors ${
-              dragOver ? "border-blue-500 bg-blue-50" : "border-gray-300 bg-white"
-            }`}
-          >
-            <p className="text-gray-600 mb-2 font-medium">Upload File Excel dari Oracle</p>
-            <p className="text-sm text-gray-400 mb-4">Drag &amp; drop di sini atau klik tombol di bawah. Format: .xlsx atau .xls</p>
-            <label className="inline-block bg-blue-600 text-white px-6 py-2.5 rounded-lg cursor-pointer hover:bg-blue-700 text-sm font-medium">
-              Pilih File Excel
-              <input type="file" accept=".xlsx,.xls" onChange={onFileInput} className="hidden" />
-            </label>
-          </div>
-          {error && (
-            <div className="mt-3 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
-              {error}
-            </div>
+      <div className="max-w-7xl mx-auto px-4 py-4">
+        {/* Upload bar - compact, always visible */}
+        <div
+          onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={onDrop}
+          className={`flex items-center gap-3 rounded-lg border p-2 mb-3 transition-colors ${
+            dragOver ? "border-blue-500 bg-blue-50" : "border-gray-300 bg-white"
+          }`}
+        >
+          <label className="bg-blue-600 text-white px-4 py-1.5 rounded-lg cursor-pointer hover:bg-blue-700 text-sm font-medium whitespace-nowrap">
+            Upload Excel
+            <input type="file" accept=".xlsx,.xls" onChange={onFileInput} className="hidden" />
+          </label>
+          {loading && <span className="text-sm text-gray-500">Membaca file...</span>}
+          {uploadedFiles.length > 0 && (
+            <span className="text-xs text-gray-400 truncate">
+              {uploadedFiles.length} file diupload · terakhir: {uploadedFiles[uploadedFiles.length - 1].name}
+            </span>
           )}
         </div>
-
-        {/* Loading */}
-        {loading && (
-          <div className="text-center py-6">
-            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mb-3"></div>
-            <p className="text-gray-500 text-sm">Membaca file...</p>
-          </div>
-        )}
-
-        {/* Upload history */}
-        {uploadedFiles.length > 0 && (
-          <div className="mb-4 bg-white rounded-lg border border-gray-200 p-3">
-            <p className="text-xs font-medium text-gray-500 mb-2">Riwayat Upload:</p>
-            <div className="flex flex-wrap gap-2">
-              {uploadedFiles.map((f, i) => (
-                <span key={i} className="inline-flex items-center gap-1 bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs">
-                  {f.name} ({f.count.toLocaleString("id-ID")} baris) — {f.time}
-                </span>
-              ))}
-            </div>
+        {error && (
+          <div className="mb-3 bg-red-50 border border-red-200 text-red-700 px-4 py-2 rounded-lg text-sm">
+            {error}
           </div>
         )}
 
