@@ -32,11 +32,17 @@ type SOGroup = {
   anyPrinted: boolean;
 };
 
+type UploadedFile = {
+  name: string;
+  count: number;
+  time: string;
+};
+
 export default function Home() {
   const [records, setRecords] = useState<FakturRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [fileName, setFileName] = useState("");
+  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [filter, setFilter] = useState<Filter>("all");
   const [katFilter, setKatFilter] = useState<KatFilter>("all");
   const [search, setSearch] = useState("");
@@ -45,11 +51,49 @@ export default function Home() {
   const [dragOver, setDragOver] = useState(false);
   const [expandedSOs, setExpandedSOs] = useState<Set<string>>(new Set());
 
+  // Load from localStorage on mount
   useEffect(() => {
     try {
-      const stored = localStorage.getItem("printedInvoices");
-      if (stored) setPrintedInvoices(new Set(JSON.parse(stored)));
+      const storedRecords = localStorage.getItem("records");
+      if (storedRecords) setRecords(JSON.parse(storedRecords));
+      const storedPrinted = localStorage.getItem("printedInvoices");
+      if (storedPrinted) setPrintedInvoices(new Set(JSON.parse(storedPrinted)));
+      const storedFiles = localStorage.getItem("uploadedFiles");
+      if (storedFiles) setUploadedFiles(JSON.parse(storedFiles));
     } catch {}
+  }, []);
+
+  // Save records to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem("records", JSON.stringify(records));
+    } catch {}
+  }, [records]);
+
+  // Save uploaded files to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem("uploadedFiles", JSON.stringify(uploadedFiles));
+    } catch {}
+  }, [uploadedFiles]);
+
+  // Auto-refresh: check version every 30s, reload if changed
+  useEffect(() => {
+    let currentVersion: string | null = null;
+    const checkVersion = async () => {
+      try {
+        const res = await fetch("/api/version", { cache: "no-store" });
+        const data = await res.json();
+        if (currentVersion === null) {
+          currentVersion = data.version;
+        } else if (currentVersion !== data.version) {
+          window.location.reload();
+        }
+      } catch {}
+    };
+    checkVersion();
+    const interval = setInterval(checkVersion, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   const savePrinted = useCallback((set: Set<string>) => {
@@ -68,15 +112,12 @@ export default function Home() {
     });
   }, []);
 
-  const togglePrintedSO = useCallback(
+  // Print: one-way lock. Once printed, cannot unmark.
+  const markPrinted = useCallback(
     (group: SOGroup) => {
+      if (group.allPrinted) return;
       const next = new Set(printedInvoices);
-      const allPrinted = group.invoiceNumbers.every((inv) => next.has(inv));
-      if (allPrinted) {
-        for (const inv of group.invoiceNumbers) next.delete(inv);
-      } else {
-        for (const inv of group.invoiceNumbers) next.add(inv);
-      }
+      for (const inv of group.invoiceNumbers) next.add(inv);
       savePrinted(next);
     },
     [printedInvoices, savePrinted]
@@ -88,22 +129,24 @@ export default function Home() {
     savePrinted(next);
   }, [records, printedInvoices, savePrinted]);
 
+  // Upload: append, don't replace
   const handleUpload = useCallback(async (file: File) => {
     setLoading(true);
     setError(null);
-    setFileName(file.name);
     try {
       const parsed = await parseExcelFile(file);
       if (parsed.length === 0) {
         setError("File berhasil dibaca tapi tidak ada data.");
       } else {
-        setRecords(parsed);
+        setRecords((prev) => [...prev, ...parsed]);
+        setUploadedFiles((prev) => [
+          ...prev,
+          { name: file.name, count: parsed.length, time: new Date().toLocaleString("id-ID") },
+        ]);
         setPage(0);
-        setExpandedSOs(new Set());
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Gagal membaca file.");
-      setRecords([]);
     } finally {
       setLoading(false);
     }
@@ -120,6 +163,23 @@ export default function Home() {
     setDragOver(false);
     const file = e.dataTransfer.files?.[0];
     if (file) handleUpload(file);
+  };
+
+  const clearAll = () => {
+    if (!confirm("Hapus SEMUA data dan riwayat? Print status juga reset.")) return;
+    setRecords([]);
+    setUploadedFiles([]);
+    setPrintedInvoices(new Set());
+    setExpandedSOs(new Set());
+    setFilter("all");
+    setKatFilter("all");
+    setSearch("");
+    setPage(0);
+    try {
+      localStorage.removeItem("records");
+      localStorage.removeItem("uploadedFiles");
+      localStorage.removeItem("printedInvoices");
+    } catch {}
   };
 
   // Group by SO
@@ -209,59 +269,64 @@ export default function Home() {
             </div>
           </div>
           {records.length > 0 && (
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-gray-500 hidden sm:inline">{fileName}</span>
-              <button
-                onClick={() => {
-                  setRecords([]);
-                  setFileName("");
-                  setFilter("all");
-                  setKatFilter("all");
-                  setSearch("");
-                }}
-                className="text-sm text-gray-600 hover:text-gray-900 px-3 py-1.5 rounded-lg hover:bg-gray-100"
-              >
-                Reset
-              </button>
-            </div>
+            <button
+              onClick={clearAll}
+              className="text-sm text-red-600 hover:text-red-700 px-3 py-1.5 rounded-lg hover:bg-red-50"
+            >
+              Hapus Semua Data
+            </button>
           )}
         </div>
       </header>
 
       <div className="max-w-7xl mx-auto px-4 py-6">
-        {records.length === 0 && !loading && (
-          <div className="mb-6">
-            <div
-              onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-              onDragLeave={() => setDragOver(false)}
-              onDrop={onDrop}
-              className={`border-2 border-dashed rounded-xl p-12 text-center transition-colors ${
-                dragOver ? "border-blue-500 bg-blue-50" : "border-gray-300 bg-white"
-              }`}
-            >
-              <div className="text-4xl mb-3">📁</div>
-              <p className="text-gray-600 mb-2">Drag &amp; drop file Excel di sini</p>
-              <p className="text-sm text-gray-400 mb-4">Format: .xlsx (XXCUST) atau .xls (export)</p>
-              <label className="inline-block bg-blue-600 text-white px-6 py-2.5 rounded-lg cursor-pointer hover:bg-blue-700 text-sm font-medium">
-                Pilih File
-                <input type="file" accept=".xlsx,.xls" onChange={onFileInput} className="hidden" />
-              </label>
-            </div>
-            {error && (
-              <div className="mt-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
-                {error}
-              </div>
-            )}
+        {/* Upload area - always visible */}
+        <div className="mb-6">
+          <div
+            onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={onDrop}
+            className={`border-2 border-dashed rounded-xl p-6 text-center transition-colors ${
+              dragOver ? "border-blue-500 bg-blue-50" : "border-gray-300 bg-white"
+            }`}
+          >
+            <p className="text-gray-600 mb-2 font-medium">Upload File Excel dari Oracle</p>
+            <p className="text-sm text-gray-400 mb-4">Drag &amp; drop di sini atau klik tombol di bawah. Format: .xlsx atau .xls</p>
+            <label className="inline-block bg-blue-600 text-white px-6 py-2.5 rounded-lg cursor-pointer hover:bg-blue-700 text-sm font-medium">
+              Pilih File Excel
+              <input type="file" accept=".xlsx,.xls" onChange={onFileInput} className="hidden" />
+            </label>
           </div>
-        )}
+          {error && (
+            <div className="mt-3 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+              {error}
+            </div>
+          )}
+        </div>
 
+        {/* Loading */}
         {loading && (
-          <div className="text-center py-12">
+          <div className="text-center py-6">
             <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mb-3"></div>
             <p className="text-gray-500 text-sm">Membaca file...</p>
           </div>
         )}
 
+        {/* Upload history */}
+        {uploadedFiles.length > 0 && (
+          <div className="mb-4 bg-white rounded-lg border border-gray-200 p-3">
+            <p className="text-xs font-medium text-gray-500 mb-2">Riwayat Upload:</p>
+            <div className="flex flex-wrap gap-2">
+              {uploadedFiles.map((f, i) => (
+                <span key={i} className="inline-flex items-center gap-1 bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs">
+                  {f.name} ({f.count.toLocaleString("id-ID")} baris) — {f.time}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Data loaded */}
         {records.length > 0 && (
           <>
             {/* Summary */}
@@ -338,15 +403,16 @@ export default function Home() {
                             </td>
                             <td className="px-2 py-2" onClick={(e) => e.stopPropagation()}>
                               <button
-                                onClick={() => togglePrintedSO(g)}
-                                className={`w-6 h-6 rounded flex items-center justify-center text-xs font-bold ${
+                                onClick={() => markPrinted(g)}
+                                disabled={g.allPrinted}
+                                className={`w-6 h-6 rounded flex items-center justify-center text-xs font-bold transition-colors ${
                                   g.allPrinted
-                                    ? "bg-green-500 text-white"
+                                    ? "bg-green-500 text-white cursor-not-allowed"
                                     : g.anyPrinted
-                                    ? "bg-yellow-400 text-white"
+                                    ? "bg-yellow-400 text-white hover:bg-yellow-500"
                                     : "bg-gray-200 text-gray-400 hover:bg-gray-300"
                                 }`}
-                                title={g.allPrinted ? "Sudah terprint" : g.anyPrinted ? "Sebagian terprint" : "Belum terprint"}
+                                title={g.allPrinted ? "Sudah terprint (terkunci)" : g.anyPrinted ? "Sebagian terprint" : "Belum terprint - klik untuk tandai"}
                               >
                                 {g.allPrinted ? "✓" : g.anyPrinted ? "◑" : "○"}
                               </button>
@@ -431,12 +497,6 @@ export default function Home() {
               </div>
             </div>
           </>
-        )}
-
-        {error && records.length === 0 && !loading && (
-          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
-            {error}
-          </div>
         )}
       </div>
     </main>
