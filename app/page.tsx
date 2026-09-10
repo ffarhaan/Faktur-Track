@@ -129,7 +129,8 @@ export default function Home() {
     savePrinted(next);
   }, [records, printedInvoices, savePrinted]);
 
-  // Upload: append, don't replace
+  // Upload: upsert. New SOs added, existing SOs updated with new data.
+  // Print status (localStorage) is never touched — only records change.
   const handleUpload = useCallback(async (file: File) => {
     setLoading(true);
     setError(null);
@@ -138,7 +139,11 @@ export default function Home() {
       if (parsed.length === 0) {
         setError("File berhasil dibaca tapi tidak ada data.");
       } else {
-        setRecords((prev) => [...prev, ...parsed]);
+        const newSOs = new Set(parsed.map((r) => r.orderNumber));
+        setRecords((prev) => {
+          const kept = prev.filter((r) => !newSOs.has(r.orderNumber));
+          return [...kept, ...parsed];
+        });
         setUploadedFiles((prev) => [
           ...prev,
           { name: file.name, count: parsed.length, time: new Date().toLocaleString("id-ID") },
