@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect, useCallback, Fragment } from "react";
+import * as XLSX from "xlsx";
 import { parseExcelFile, categorize } from "@/lib/parser";
 import { FakturRecord } from "@/lib/types";
 import { supabase } from "@/lib/supabaseClient";
@@ -592,9 +593,119 @@ export default function Home() {
     };
   }, [records, printedInvoices, grouped]);
 
+  const exportToExcel = useCallback(() => {
+    if (records.length === 0) {
+      alert("Tidak ada data untuk diekspor.");
+      return;
+    }
+
+    // Filter all records/groups that have valid invoice numbers
+    const validGroups = grouped.filter((g) =>
+      g.invoiceNumbers.length > 0 && g.invoiceNumbers.some((inv) => inv && inv !== "0" && inv !== "-")
+    );
+
+    if (validGroups.length === 0) {
+      alert("Tidak ada faktur dengan nomor invoice yang valid untuk diekspor.");
+      return;
+    }
+
+    // Sort strictly ASCENDING dari nomor faktur terkecil sampai terbesar
+    const sorted = [...validGroups].sort((a, b) => {
+      const invA = parseInvNum(a.invoiceNumbers);
+      const invB = parseInvNum(b.invoiceNumbers);
+      if (invA !== invB) return invA - invB;
+      return parseDateMs(a.orderDate) - parseDateMs(b.orderDate);
+    });
+
+    // Format Sheet 1: Rekap Faktur (Order Date - No SO - No Invoice - Pelanggan - Total Harga)
+    const rekapData = sorted.map((g, idx) => ({
+      "No": idx + 1,
+      "Order Date": g.orderDate || "-",
+      "No SO": g.so || "-",
+      "No Invoice": g.invoiceNumbers.join(", "),
+      "Pelanggan": g.customerName || "-",
+      "Total Harga": g.totalHarga,
+      "Jenis Transaksi": g.jenisTransaksi,
+      "Kategori": g.kategori,
+      "Status Print": g.allPrinted ? "Sudah Terprint" : "Belum Terprint",
+      "Waktu Done Print": g.allPrinted && g.printedAt ? formatPrintTime(g.printedAt) : "-",
+    }));
+
+    // Format Sheet 2: Detail Item (Ascending by invoice number)
+    const validItems = records.filter(
+      (r) => r.invoiceNumber && r.invoiceNumber !== "0" && r.invoiceNumber !== "-"
+    );
+    const sortedItems = [...validItems].sort((a, b) => {
+      const invA = parseInt(String(a.invoiceNumber || "").replace(/\D/g, ""), 10) || 0;
+      const invB = parseInt(String(b.invoiceNumber || "").replace(/\D/g, ""), 10) || 0;
+      if (invA !== invB) return invA - invB;
+      return parseDateMs(a.orderDate) - parseDateMs(b.orderDate);
+    });
+
+    const itemData = sortedItems.map((r, idx) => ({
+      "No": idx + 1,
+      "Order Date": r.orderDate || "-",
+      "No SO": r.orderNumber || "-",
+      "No Invoice": r.invoiceNumber || "-",
+      "Pelanggan": r.customerName || "-",
+      "Item Code": r.itemCode || "-",
+      "Item Description": r.itemDescription || "-",
+      "Qty": r.qty,
+      "UOM": r.uom || "-",
+      "Lot Number": r.lotNumber || "-",
+      "Total Harga": r.totalHarga,
+      "Kategori": r.kategori,
+      "Jenis Transaksi": r.jenisTransaksi,
+      "Status Print": printedInvoices.has(r.invoiceKey) ? "Sudah Terprint" : "Belum Terprint",
+    }));
+
+    const workbook = XLSX.utils.book_new();
+
+    // Sheet 1: Rekap Faktur
+    const wsRekap = XLSX.utils.json_to_sheet(rekapData);
+    wsRekap["!cols"] = [
+      { wch: 6 },  // No
+      { wch: 14 }, // Order Date
+      { wch: 18 }, // No SO
+      { wch: 16 }, // No Invoice
+      { wch: 35 }, // Pelanggan
+      { wch: 18 }, // Total Harga
+      { wch: 16 }, // Jenis Transaksi
+      { wch: 10 }, // Kategori
+      { wch: 16 }, // Status Print
+      { wch: 22 }, // Waktu Done Print
+    ];
+    XLSX.utils.book_append_sheet(workbook, wsRekap, "Rekap Faktur");
+
+    // Sheet 2: Detail Item
+    const wsItems = XLSX.utils.json_to_sheet(itemData);
+    wsItems["!cols"] = [
+      { wch: 6 },  // No
+      { wch: 14 }, // Order Date
+      { wch: 18 }, // No SO
+      { wch: 16 }, // No Invoice
+      { wch: 35 }, // Pelanggan
+      { wch: 18 }, // Item Code
+      { wch: 35 }, // Item Description
+      { wch: 8 },  // Qty
+      { wch: 8 },  // UOM
+      { wch: 16 }, // Lot Number
+      { wch: 18 }, // Total Harga
+      { wch: 10 }, // Kategori
+      { wch: 16 }, // Jenis Transaksi
+      { wch: 16 }, // Status Print
+    ];
+    XLSX.utils.book_append_sheet(workbook, wsItems, "Detail Item");
+
+    const now = new Date();
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const dateStr = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+    XLSX.writeFile(workbook, `Rekap_Faktur_Ascending_${dateStr}.xlsx`);
+  }, [records, grouped, printedInvoices]);
+
   return (
     <main className="min-h-screen bg-gray-50">
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-10">
+      <header className="bg-white border-b border-gray-200 sticky top-0 z-10 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold text-sm">
@@ -605,14 +716,26 @@ export default function Home() {
               <p className="text-xs text-gray-500">Tracking faktur dari Oracle export</p>
             </div>
           </div>
-          {records.length > 0 && (
-            <button
-              onClick={clearAll}
-              className="text-sm text-red-600 hover:text-red-700 px-3 py-1.5 rounded-lg hover:bg-red-50"
-            >
-              Hapus Semua Data
-            </button>
-          )}
+          <div className="flex items-center gap-2">
+            {records.length > 0 && (
+              <button
+                onClick={exportToExcel}
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 px-3.5 py-1.5 rounded-lg shadow-sm transition-colors"
+                title="Ekspor rekap faktur ascending (terkecil ke terbesar) ke Excel"
+              >
+                <span>📥</span>
+                <span>Ekspor Excel (Ascending)</span>
+              </button>
+            )}
+            {records.length > 0 && (
+              <button
+                onClick={clearAll}
+                className="text-xs text-red-600 hover:text-red-700 px-3 py-1.5 rounded-lg hover:bg-red-50 border border-transparent hover:border-red-200"
+              >
+                Hapus Semua Data
+              </button>
+            )}
+          </div>
         </div>
       </header>
 
@@ -687,6 +810,13 @@ export default function Home() {
                 onChange={(e) => setSearch(e.target.value)}
                 className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 w-full sm:w-64"
               />
+              <button
+                onClick={exportToExcel}
+                className="text-xs font-semibold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 px-3 py-1.5 rounded-lg border border-emerald-300 flex items-center gap-1.5 whitespace-nowrap shadow-sm"
+                title="Ekspor semua faktur yang ada nomor faktur/invoice (Ascending terkecil ke terbesar)"
+              >
+                <span>📥</span> Ekspor Excel (Ascending)
+              </button>
               <button
                 onClick={markAllAsPrinted}
                 className="text-xs text-green-700 bg-green-50 hover:bg-green-100 px-3 py-1.5 rounded-lg border border-green-200 whitespace-nowrap"
