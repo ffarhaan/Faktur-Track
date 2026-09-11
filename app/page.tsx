@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect, useCallback, Fragment } from "react";
-import { parseExcelFile } from "@/lib/parser";
+import { parseExcelFile, categorize } from "@/lib/parser";
 import { FakturRecord } from "@/lib/types";
 import { supabase } from "@/lib/supabaseClient";
 
@@ -77,9 +77,10 @@ function dbRowsToFakturRecords(rows: Array<Record<string, unknown>>): {
     const cust = String(extra.nama_pelanggan || "");
     const jenis = String(extra.jenis_transaksi || r.source_file || "");
     const date = String(extra.accounting_date || extra.order_date || r.imported_at || "");
-    const is1P = rawInv.endsWith("-1P") || String(r.source_file || "").toUpperCase() === "ORA" || jenis.includes("PRIORITY") || cust.toLowerCase().includes("helios");
-    const invKey = is1P ? `${cleanInv}-1P` : cleanInv;
-    const cleanJenis = is1P ? "ORA" : "DOO";
+    const isOra = rawInv.endsWith("-1P") || String(r.source_file || "").toUpperCase() === "ORA" || jenis.includes("PRIORITY") || cust.toLowerCase().includes("helios") || cust.toUpperCase().startsWith("HAK");
+    const invKey = isOra ? `${cleanInv}-1P` : cleanInv;
+    const cleanJenis: "DOO" | "ORA" = isOra ? "ORA" : "DOO";
+    const kategori = categorize(jenis, cust, r.source_file as string);
 
     if (r.status_cetak) {
       if (invKey) printedSet.add(invKey);
@@ -101,7 +102,7 @@ function dbRowsToFakturRecords(rows: Array<Record<string, unknown>>): {
           uom: String(it.uom || ""),
           lotNumber: String(it.lot_number || ""),
           totalHarga: typeof it.total_harga === "number" ? it.total_harga : parseFloat(String(it.total_harga || 0)) || 0,
-          kategori: is1P ? "1P" : "3P",
+          kategori,
           isDoubleInv: false,
           rowIndex: idx,
         });
@@ -120,7 +121,7 @@ function dbRowsToFakturRecords(rows: Array<Record<string, unknown>>): {
         uom: "-",
         lotNumber: "-",
         totalHarga: 0,
-        kategori: is1P ? "1P" : "3P",
+        kategori,
         isDoubleInv: false,
         rowIndex: 0,
       });

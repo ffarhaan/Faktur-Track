@@ -4,27 +4,53 @@ import masterApotek from "./masterApotek.json";
 
 const apotekMap = masterApotek as Record<string, string>;
 
-function categorize(jenisTransaksi: string, customerName: string): "1P" | "2P" | "3P" {
-  // PT Helios Alchemist Kesehatan / TRADE_PRIORITY = 1P
-  if (jenisTransaksi.includes("PRIORITY") || customerName.toLowerCase().includes("helios")) {
-    return "1P";
-  }
+function normalize(s: string): string {
+  return String(s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+}
 
-  // Check master apotek list
-  const cat = apotekMap[customerName.toLowerCase().trim()];
-  if (cat === "1P" || cat === "2P" || cat === "3P") return cat;
+const normMap: Record<string, string> = {};
+for (const [k, v] of Object.entries(apotekMap)) {
+  normMap[normalize(k)] = v;
+}
 
-  // Fallback: check by known 1P keywords
-  const upper = customerName.toUpperCase();
+export function categorize(jenisTransaksi: string, customerName: string, sourceFile?: string): "1P" | "2P" | "3P" {
+  const cust = String(customerName || "").trim();
+  const upper = cust.toUpperCase();
+  const rawJenis = String(jenisTransaksi || "").toUpperCase();
+  const rawSource = String(sourceFile || "").toUpperCase();
+
+  // 1P: ORA (HAK / Helios) or 1P DOO (Medika Prima / SBS / Pasti Hemat / Halomedika)
   if (
-    upper.includes("HALOMEDIKA") ||
+    rawSource.includes("ORA") ||
+    rawJenis.includes("PRIORITY") ||
     upper.includes("HELIOS") ||
-    upper.includes("SBS") ||
+    upper.startsWith("HAK") ||
+    upper.includes("HALOMEDIKA") ||
     upper.includes("MEDIKA PRIMA") ||
+    upper.includes("SBS") ||
     upper.includes("PASTI HEMAT") ||
     upper.includes("MEDIKA AKSES")
   ) {
     return "1P";
+  }
+
+  // Exact match from master apotek
+  const exact = apotekMap[cust.toLowerCase()];
+  if (exact === "1P" || exact === "2P" || exact === "3P") return exact;
+
+  // Normalized match (ignore spaces and punctuation)
+  const norm = normMap[normalize(cust)];
+  if (norm === "1P" || norm === "2P" || norm === "3P") return norm;
+
+  // Substring matching for 2P and 1P
+  const normCust = normalize(cust);
+  for (const [name, cat] of Object.entries(apotekMap)) {
+    if (cat === "2P" || cat === "1P") {
+      const normName = normalize(name);
+      if (normCust.includes(normName) || (normName.length > 5 && normName.includes(normCust))) {
+        return cat as "1P" | "2P";
+      }
+    }
   }
 
   return "3P";
