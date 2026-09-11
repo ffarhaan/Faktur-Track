@@ -40,6 +40,24 @@ function chunk<T>(arr: T[], size: number): T[][] {
   return out;
 }
 
+function formatPrintTime(dStr?: string | null): string {
+  if (!dStr) return "-";
+  try {
+    const d = new Date(dStr);
+    if (isNaN(d.getTime())) return dStr;
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const day = pad(d.getDate());
+    const month = pad(d.getMonth() + 1);
+    const year = d.getFullYear();
+    const hours = pad(d.getHours());
+    const minutes = pad(d.getMinutes());
+    const seconds = pad(d.getSeconds());
+    return `${day}/${month}/${year} ${hours}:${minutes}:${seconds}`;
+  } catch {
+    return dStr;
+  }
+}
+
 type SOGroup = {
   so: string;
   items: FakturRecord[];
@@ -54,6 +72,7 @@ type SOGroup = {
   totalItems: number;
   allPrinted: boolean;
   anyPrinted: boolean;
+  printedAt: string | null;
 };
 
 type UploadedFile = {
@@ -65,9 +84,11 @@ type UploadedFile = {
 function dbRowsToFakturRecords(rows: Array<Record<string, unknown>>): {
   records: FakturRecord[];
   printedSet: Set<string>;
+  printedAtMap: Record<string, string>;
 } {
   const records: FakturRecord[] = [];
   const printedSet = new Set<string>();
+  const printedAtMap: Record<string, string> = {};
 
   for (const r of rows) {
     const rawInv = String(r.no_faktur || "");
@@ -81,9 +102,13 @@ function dbRowsToFakturRecords(rows: Array<Record<string, unknown>>): {
     const invKey = isOra ? `${cleanInv}-1P` : cleanInv;
     const cleanJenis: "DOO" | "ORA" = isOra ? "ORA" : "DOO";
     const kategori = categorize(jenis, cust, r.source_file as string);
+    const pAt = (r.printed_at as string) || (extra.printed_at as string) || null;
 
     if (r.status_cetak) {
-      if (invKey) printedSet.add(invKey);
+      if (invKey) {
+        printedSet.add(invKey);
+        if (pAt) printedAtMap[invKey] = pAt;
+      }
     }
 
     if (items.length > 0) {
@@ -138,7 +163,7 @@ function dbRowsToFakturRecords(rows: Array<Record<string, unknown>>): {
     if (soInvMap[rec.orderNumber]?.size > 1) rec.isDoubleInv = true;
   }
 
-  return { records, printedSet };
+  return { records, printedSet, printedAtMap };
 }
 
 export default function Home() {
@@ -152,6 +177,7 @@ export default function Home() {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
   const [printedInvoices, setPrintedInvoices] = useState<Set<string>>(new Set());
+  const [printedAtMap, setPrintedAtMap] = useState<Record<string, string>>({});
   const [dragOver, setDragOver] = useState(false);
   const [expandedSOs, setExpandedSOs] = useState<Set<string>>(new Set());
 
@@ -176,12 +202,14 @@ export default function Home() {
       }
 
       if (allRows.length > 0) {
-        const { records: recs, printedSet } = dbRowsToFakturRecords(allRows);
+        const { records: recs, printedSet, printedAtMap: pMap } = dbRowsToFakturRecords(allRows);
         setRecords(recs);
         setPrintedInvoices(printedSet);
+        setPrintedAtMap(pMap);
         try {
           localStorage.setItem("records", JSON.stringify(recs));
           localStorage.setItem("printedInvoices", JSON.stringify([...printedSet]));
+          localStorage.setItem("printedAtMap", JSON.stringify(pMap));
         } catch {}
       }
     } catch (err) {
@@ -198,6 +226,8 @@ export default function Home() {
       if (storedRecords) setRecords(JSON.parse(storedRecords));
       const storedPrinted = localStorage.getItem("printedInvoices");
       if (storedPrinted) setPrintedInvoices(new Set(JSON.parse(storedPrinted)));
+      const storedPMap = localStorage.getItem("printedAtMap");
+      if (storedPMap) setPrintedAtMap(JSON.parse(storedPMap));
       const storedFiles = localStorage.getItem("uploadedFiles");
       if (storedFiles) setUploadedFiles(JSON.parse(storedFiles));
     } catch {}
@@ -244,6 +274,7 @@ export default function Home() {
   const togglePrint = useCallback(
     async (group: SOGroup) => {
       const willBePrinted = !group.allPrinted;
+      const nowIso = new Date().toISOString();
       const next = new Set(printedInvoices);
 
       const allKeys = new Set([
@@ -258,6 +289,17 @@ export default function Home() {
         else next.delete(key);
       }
       setPrintedInvoices(next);
+      setPrintedAtMap((prev) => {
+        const nextMap = { ...prev };
+        for (const key of allKeys) {
+          if (willBePrinted) nextMap[key] = nowIso;
+          else delete nextMap[key];
+        }
+        try {
+          localStorage.setItem("printedAtMap", JSON.stringify(nextMap));
+        } catch {}
+        return nextMap;
+      });
       try {
         localStorage.setItem("printedInvoices", JSON.stringify([...next]));
       } catch {}
@@ -267,7 +309,7 @@ export default function Home() {
         .from("faktur_records")
         .update({
           status_cetak: willBePrinted,
-          printed_at: willBePrinted ? new Date().toISOString() : null,
+          printed_at: willBePrinted ? nowIso : null,
         })
         .in("no_faktur", targets);
     },
@@ -276,29 +318,36 @@ export default function Home() {
 
   const markAllAsPrinted = useCallback(async () => {
     const next = new Set(printedInvoices);
+    const nowIso = new Date().toISOString();
     const allKeys: string[] = [];
+    const nextMap: Record<string, string> = { ...printedAtMap };
     for (const r of records) {
       next.add(r.invoiceKey);
       allKeys.push(r.invoiceKey);
+      nextMap[r.invoiceKey] = nowIso;
     }
     setPrintedInvoices(next);
+    setPrintedAtMap(nextMap);
     try {
       localStorage.setItem("printedInvoices", JSON.stringify([...next]));
+      localStorage.setItem("printedAtMap", JSON.stringify(nextMap));
     } catch {}
 
     for (const batch of chunk(allKeys, 500)) {
       await supabase
         .from("faktur_records")
-        .update({ status_cetak: true, printed_at: new Date().toISOString() })
+        .update({ status_cetak: true, printed_at: nowIso })
         .in("no_faktur", batch);
     }
-  }, [records, printedInvoices]);
+  }, [records, printedInvoices, printedAtMap]);
 
   const markAllAsUnprinted = useCallback(async () => {
     if (!confirm("Reset SEMUA faktur menjadi 'Belum Terprint'?")) return;
     setPrintedInvoices(new Set());
+    setPrintedAtMap({});
     try {
       localStorage.setItem("printedInvoices", JSON.stringify([]));
+      localStorage.setItem("printedAtMap", JSON.stringify({}));
     } catch {}
 
     const allKeys: string[] = [];
@@ -469,6 +518,7 @@ export default function Home() {
       .map(([so, items]) => {
         const invoiceNumbers = [...new Set(items.map((i) => i.invoiceNumber))];
         const invoiceKeys = [...new Set(items.map((i) => i.invoiceKey))];
+        const pAt = invoiceKeys.map((key) => printedAtMap[key]).find((t) => !!t) || null;
         return {
           so,
           items,
@@ -483,6 +533,7 @@ export default function Home() {
           totalItems: items.length,
           allPrinted: invoiceKeys.every((key) => printedInvoices.has(key)),
           anyPrinted: invoiceKeys.some((key) => printedInvoices.has(key)),
+          printedAt: pAt,
         };
       })
       .sort((a, b) => {
@@ -491,7 +542,7 @@ export default function Home() {
         const diff = invA !== invB ? invA - invB : parseDateMs(a.orderDate) - parseDateMs(b.orderDate);
         return sortOrder === "desc" ? -diff : diff;
       });
-  }, [records, printedInvoices, sortOrder]);
+  }, [records, printedInvoices, printedAtMap, sortOrder]);
 
   const filtered = useMemo(() => {
     let result = grouped;
@@ -651,13 +702,45 @@ export default function Home() {
             </div>
 
             {/* Table */}
-            <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+            <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm">
+              {/* Top Pagination & Summary Header */}
+              <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-200 flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-blue-100 text-blue-800">
+                    Hal {page + 1} / {totalPages || 1}
+                  </span>
+                  <p className="text-xs text-gray-600 font-medium">
+                    {filtered.length.toLocaleString("id-ID")} SO · {summary.totalInvoices.toLocaleString("id-ID")} invoice · {summary.totalItems.toLocaleString("id-ID")} item
+                  </p>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => setPage(Math.max(0, page - 1))}
+                    disabled={page === 0}
+                    className="px-2.5 py-1 text-xs font-medium rounded border border-gray-300 bg-white disabled:opacity-30 hover:bg-gray-100 transition-colors shadow-sm"
+                  >
+                    ← Prev
+                  </button>
+                  <span className="text-xs font-semibold text-gray-700 px-1">
+                    {page + 1} / {totalPages || 1}
+                  </span>
+                  <button
+                    onClick={() => setPage(Math.min(totalPages - 1, page + 1))}
+                    disabled={page >= totalPages - 1}
+                    className="px-2.5 py-1 text-xs font-medium rounded border border-gray-300 bg-white disabled:opacity-30 hover:bg-gray-100 transition-colors shadow-sm"
+                  >
+                    Next →
+                  </button>
+                </div>
+              </div>
+
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead className="bg-gray-50 border-b border-gray-200">
                     <tr>
                       <th className="px-2 py-2 w-8"></th>
                       <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 whitespace-nowrap">Print</th>
+                      <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 whitespace-nowrap">Done Print (Waktu)</th>
                       <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 whitespace-nowrap">Kat</th>
                       <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 whitespace-nowrap">Order Date</th>
                       <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 whitespace-nowrap">No SO</th>
@@ -713,6 +796,18 @@ export default function Home() {
                                 );
                               })()}
                             </td>
+                            <td className="px-2 py-2 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                              {g.allPrinted && g.printedAt ? (
+                                <span className="inline-flex items-center gap-1 text-[11px] font-mono font-medium text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200" title={`Selesai diprint pada: ${formatPrintTime(g.printedAt)}`}>
+                                  <span className="text-emerald-600 font-bold">⏱</span>
+                                  {formatPrintTime(g.printedAt)}
+                                </span>
+                              ) : g.anyPrinted ? (
+                                <span className="text-xs text-yellow-600 italic">Sebagian</span>
+                              ) : (
+                                <span className="text-xs text-gray-300">-</span>
+                              )}
+                            </td>
                             <td className="px-2 py-2">
                               <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${
                                 g.kategori === "1P" ? "bg-blue-100 text-blue-700"
@@ -751,10 +846,16 @@ export default function Home() {
                           </tr>
                           {expanded && (
                             <tr className="bg-gray-50">
-                              <td colSpan={10} className="px-4 py-3">
+                              <td colSpan={11} className="px-4 py-3">
                                 <div className="flex flex-wrap items-center justify-between pb-2 mb-2 border-b border-gray-200 gap-2">
                                   <div className="text-xs text-gray-600">
                                     <span className="font-semibold text-gray-900">SO: {g.so}</span> · Invoice: <span className="font-mono text-gray-900">{g.invoiceNumbers.join(", ")}</span> · Pelanggan: <span className="font-semibold text-gray-900">{g.customerName}</span>
+                                    {g.allPrinted && g.printedAt && (
+                                      <span className="ml-2 inline-flex items-center gap-1 font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                                        <span>⏱ Selesai Print:</span>
+                                        <span className="font-mono font-bold text-emerald-900">{formatPrintTime(g.printedAt)}</span>
+                                      </span>
+                                    )}
                                   </div>
                                   <div>
                                     {g.allPrinted ? (
