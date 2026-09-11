@@ -632,20 +632,35 @@ export default function Home() {
                               {expanded ? "▼" : "▶"}
                             </td>
                             <td className="px-2 py-2" onClick={(e) => e.stopPropagation()}>
-                              <button
-                                onClick={() => markPrinted(g)}
-                                disabled={g.allPrinted}
-                                className={`w-6 h-6 rounded flex items-center justify-center text-xs font-bold transition-colors ${
-                                  g.allPrinted
-                                    ? "bg-green-500 text-white cursor-not-allowed"
-                                    : g.anyPrinted
-                                    ? "bg-yellow-400 text-white hover:bg-yellow-500"
-                                    : "bg-gray-200 text-gray-400 hover:bg-gray-300"
-                                }`}
-                                title={g.allPrinted ? "Sudah terprint (terkunci)" : g.anyPrinted ? "Sebagian terprint" : "Belum terprint - klik untuk tandai"}
-                              >
-                                {g.allPrinted ? "✓" : g.anyPrinted ? "◑" : "○"}
-                              </button>
+                              {(() => {
+                                const hasInvoice = g.invoiceNumbers.length > 0 && g.invoiceNumbers.some((inv) => inv && inv !== "0" && inv !== "-");
+                                return (
+                                  <button
+                                    onClick={() => markPrinted(g)}
+                                    disabled={!hasInvoice || g.allPrinted}
+                                    className={`w-6 h-6 rounded flex items-center justify-center text-xs font-bold transition-colors ${
+                                      !hasInvoice
+                                        ? "bg-gray-100 text-gray-300 cursor-not-allowed"
+                                        : g.allPrinted
+                                        ? "bg-green-500 text-white cursor-not-allowed"
+                                        : g.anyPrinted
+                                        ? "bg-yellow-400 text-white hover:bg-yellow-500"
+                                        : "bg-gray-200 text-gray-500 hover:bg-gray-300"
+                                    }`}
+                                    title={
+                                      !hasInvoice
+                                        ? "Menunggu No Faktur (Belum bisa diprint)"
+                                        : g.allPrinted
+                                        ? "Sudah terprint (terkunci)"
+                                        : g.anyPrinted
+                                        ? "Sebagian terprint"
+                                        : "Belum terprint - klik untuk tandai"
+                                    }
+                                  >
+                                    {!hasInvoice ? "–" : g.allPrinted ? "✓" : g.anyPrinted ? "◑" : "○"}
+                                  </button>
+                                );
+                              })()}
                             </td>
                             <td className="px-2 py-2">
                               <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${
@@ -662,9 +677,11 @@ export default function Home() {
                               {g.isDoubleInv && <span className="ml-1 text-red-600 font-bold">⚠</span>}
                             </td>
                             <td className="px-2 py-2 font-mono text-xs text-gray-900 whitespace-nowrap">
-                              {g.invoiceNumbers.length > 1
-                                ? `${g.invoiceNumbers[0]} +${g.invoiceNumbers.length - 1}`
-                                : g.invoiceNumbers[0]}
+                              {g.invoiceNumbers.length > 0 && g.invoiceNumbers.some((inv) => inv && inv !== "0" && inv !== "-")
+                                ? g.invoiceNumbers.length > 1
+                                  ? `${g.invoiceNumbers[0]} +${g.invoiceNumbers.length - 1}`
+                                  : g.invoiceNumbers[0]
+                                : <span className="text-gray-400 italic text-xs">Menunggu Faktur</span>}
                             </td>
                             <td className="px-2 py-2 text-xs text-gray-600 whitespace-nowrap">{g.jenisTransaksi}</td>
                             <td className="px-2 py-2 text-gray-700 whitespace-nowrap max-w-xs truncate">{g.customerName}</td>

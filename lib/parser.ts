@@ -1,29 +1,20 @@
 import * as XLSX from "xlsx";
 import { FakturRecord } from "./types";
 import masterApotek from "./masterApotek.json";
-import invToName from "./invToName.json";
 
 const apotekMap = masterApotek as Record<string, string>;
-const invNameMap = invToName as Record<string, string>;
-
-// Replace "PT Helios Alchemist Kesehatan" with actual apotek name from Rekap Pengiriman
-function resolveCustomerName(rawName: string, invoiceNumber: string): string {
-  if (rawName === "PT Helios Alchemist Kesehatan") {
-    const real = invNameMap[invoiceNumber];
-    if (real) return real;
-  }
-  return rawName;
-}
 
 function categorize(jenisTransaksi: string, customerName: string): "1P" | "2P" | "3P" {
-  // PT Helios Alchemist Kesehatan = TRADE_PRIORITY = 1P (HAK)
-  if (jenisTransaksi === "TRADE_PRIORITY") return "1P";
+  // PT Helios Alchemist Kesehatan / TRADE_PRIORITY = 1P
+  if (jenisTransaksi.includes("PRIORITY") || customerName.toLowerCase().includes("helios")) {
+    return "1P";
+  }
 
   // Check master apotek list
   const cat = apotekMap[customerName.toLowerCase().trim()];
   if (cat === "1P" || cat === "2P" || cat === "3P") return cat;
 
-  // Fallback: check by name pattern
+  // Fallback: check by known 1P keywords
   const upper = customerName.toUpperCase();
   if (
     upper.includes("HALOMEDIKA") ||
@@ -84,8 +75,7 @@ function parseXXCUST(data: unknown[][], headerIdx: number): FakturRecord[] {
     if (!orderNumber && !invoiceNumber) continue;
 
     const jenisTransaksi = String(row[idx.jenisTransaksi] ?? "").trim();
-    const rawCustomerName = String(row[idx.customerName] ?? "").trim();
-    const customerName = resolveCustomerName(rawCustomerName, invoiceNumber);
+    const customerName = String(row[idx.customerName] ?? "").trim();
 
     records.push({
       orderDate: String(row[idx.orderDate] ?? "").trim(),
