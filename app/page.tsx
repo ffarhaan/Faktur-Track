@@ -33,10 +33,10 @@ function parseDateMs(dStr: string): number {
 }
 
 function formatRupiah(n: number): string {
-  return new Intl.NumberFormat("id-ID", {
-    style: "currency",
-    currency: "IDR",
+  if (typeof n !== "number" || isNaN(n)) return "0";
+  return new Intl.NumberFormat("en-US", {
     minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
   }).format(n);
 }
 
