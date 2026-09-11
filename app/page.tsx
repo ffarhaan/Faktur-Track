@@ -276,6 +276,18 @@ export default function Home() {
         }
 
         const importedAt = new Date().toISOString();
+
+        // Fetch existing print status from DB so we NEVER reset already printed invoices
+        const { data: existingDB } = await supabase.from("faktur_records").select("no_faktur, status_cetak, printed_at, extra");
+        const existingStatusMap = new Map<string, { status_cetak: boolean; printed_at: string | null; extra: Record<string, unknown> | null }>();
+        (existingDB ?? []).forEach((row: Record<string, unknown>) => {
+          existingStatusMap.set(String(row.no_faktur).trim(), {
+            status_cetak: Boolean(row.status_cetak),
+            printed_at: (row.printed_at as string) || null,
+            extra: (row.extra as Record<string, unknown>) || null,
+          });
+        });
+
         // Group parsed records by invoice to upsert to Supabase
         const invMap = new Map<string, Record<string, unknown>>();
         for (const r of parsed) {
@@ -283,20 +295,24 @@ export default function Home() {
           const noFaktur = is1P ? `${r.invoiceNumber}-1P` : r.invoiceNumber;
           if (!noFaktur || noFaktur === "0" || noFaktur === "-1P") continue;
 
+          const prevInfo = existingStatusMap.get(noFaktur);
+          const isPrinted = prevInfo ? prevInfo.status_cetak : false;
+          const printedAt = prevInfo ? prevInfo.printed_at : null;
+
           if (!invMap.has(noFaktur)) {
             invMap.set(noFaktur, {
               no_faktur: noFaktur,
               no_sales_order: r.orderNumber,
               no_delivery_order: null,
-              status_cetak: false,
-              printed_at: null,
+              status_cetak: isPrinted,
+              printed_at: printedAt,
               imported_at: importedAt,
               source_file: is1P ? "ORA" : "XXCUST",
               extra: {
-                nama_pelanggan: r.customerName,
-                jenis_transaksi: r.jenisTransaksi,
-                accounting_date: r.orderDate,
-                order_date: r.orderDate,
+                nama_pelanggan: r.customerName || (prevInfo?.extra?.nama_pelanggan as string) || null,
+                jenis_transaksi: r.jenisTransaksi || (prevInfo?.extra?.jenis_transaksi as string) || null,
+                accounting_date: r.orderDate || (prevInfo?.extra?.accounting_date as string) || null,
+                order_date: r.orderDate || (prevInfo?.extra?.order_date as string) || null,
                 items: [],
               },
               _soSet: new Set([r.orderNumber]),
