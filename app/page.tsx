@@ -3,6 +3,7 @@
 import { useState, useMemo, useEffect, useCallback, Fragment } from "react";
 import { parseExcelFile } from "@/lib/parser";
 import { FakturRecord } from "@/lib/types";
+import { supabase } from "@/lib/supabaseClient";
 
 type Filter = "all" | "belum" | "double";
 type KatFilter = "all" | "1P" | "2P" | "3P";
@@ -15,6 +16,12 @@ function formatRupiah(n: number): string {
     currency: "IDR",
     minimumFractionDigits: 0,
   }).format(n);
+}
+
+function chunk<T>(arr: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+  return out;
 }
 
 type SOGroup = {
@@ -38,6 +45,81 @@ type UploadedFile = {
   time: string;
 };
 
+function dbRowsToFakturRecords(rows: Array<Record<string, unknown>>): {
+  records: FakturRecord[];
+  printedSet: Set<string>;
+} {
+  const records: FakturRecord[] = [];
+  const printedSet = new Set<string>();
+
+  for (const r of rows) {
+    const rawInv = String(r.no_faktur || "");
+    const cleanInv = rawInv.replace(/-1P$/i, "");
+    if (r.status_cetak) {
+      if (cleanInv) printedSet.add(cleanInv);
+      if (rawInv) printedSet.add(rawInv);
+    }
+
+    const extra = (r.extra as Record<string, unknown>) || {};
+    const items = (extra.items as Array<Record<string, unknown>>) || [];
+    const cust = String(extra.nama_pelanggan || "");
+    const jenis = String(extra.jenis_transaksi || r.source_file || "");
+    const date = String(extra.accounting_date || extra.order_date || r.imported_at || "");
+    const is1P = jenis.includes("PRIORITY") || cust.toLowerCase().includes("helios") || cust.toLowerCase().includes("hak");
+
+    if (items.length > 0) {
+      for (let idx = 0; idx < items.length; idx++) {
+        const it = items[idx];
+        records.push({
+          orderDate: date,
+          orderNumber: String(it.order_number || r.no_sales_order || cleanInv),
+          invoiceNumber: cleanInv,
+          jenisTransaksi: jenis,
+          customerName: cust,
+          itemCode: String(it.item_code || ""),
+          itemDescription: String(it.item_description || ""),
+          qty: (it.qty as number | string) || 0,
+          uom: String(it.uom || ""),
+          lotNumber: String(it.lot_number || ""),
+          totalHarga: typeof it.total_harga === "number" ? it.total_harga : parseFloat(String(it.total_harga || 0)) || 0,
+          kategori: is1P ? "1P" : "3P",
+          isDoubleInv: false,
+          rowIndex: idx,
+        });
+      }
+    } else {
+      records.push({
+        orderDate: date,
+        orderNumber: String(r.no_sales_order || cleanInv),
+        invoiceNumber: cleanInv,
+        jenisTransaksi: jenis,
+        customerName: cust,
+        itemCode: "-",
+        itemDescription: "Data DOO",
+        qty: 1,
+        uom: "-",
+        lotNumber: "-",
+        totalHarga: 0,
+        kategori: is1P ? "1P" : "3P",
+        isDoubleInv: false,
+        rowIndex: 0,
+      });
+    }
+  }
+
+  // Detect double invoices
+  const soInvMap: Record<string, Set<string>> = {};
+  for (const rec of records) {
+    if (!soInvMap[rec.orderNumber]) soInvMap[rec.orderNumber] = new Set();
+    if (rec.invoiceNumber) soInvMap[rec.orderNumber].add(rec.invoiceNumber);
+  }
+  for (const rec of records) {
+    if (soInvMap[rec.orderNumber]?.size > 1) rec.isDoubleInv = true;
+  }
+
+  return { records, printedSet };
+}
+
 export default function Home() {
   const [records, setRecords] = useState<FakturRecord[]>([]);
   const [loading, setLoading] = useState(false);
@@ -51,7 +133,43 @@ export default function Home() {
   const [dragOver, setDragOver] = useState(false);
   const [expandedSOs, setExpandedSOs] = useState<Set<string>>(new Set());
 
-  // Load from localStorage on mount
+  // Fetch all records from Supabase
+  const fetchFromSupabase = useCallback(async (showLoading = false) => {
+    if (showLoading) setLoading(true);
+    try {
+      let allRows: Array<Record<string, unknown>> = [];
+      let from = 0;
+      const step = 1000;
+      while (true) {
+        const { data, error: sbErr } = await supabase
+          .from("faktur_records")
+          .select("*")
+          .order("created_at", { ascending: false })
+          .range(from, from + step - 1);
+
+        if (sbErr || !data || data.length === 0) break;
+        allRows = allRows.concat(data as Array<Record<string, unknown>>);
+        if (data.length < step) break;
+        from += step;
+      }
+
+      if (allRows.length > 0) {
+        const { records: recs, printedSet } = dbRowsToFakturRecords(allRows);
+        setRecords(recs);
+        setPrintedInvoices(printedSet);
+        try {
+          localStorage.setItem("records", JSON.stringify(recs));
+          localStorage.setItem("printedInvoices", JSON.stringify([...printedSet]));
+        } catch {}
+      }
+    } catch (err) {
+      console.error("Supabase sync error:", err);
+    } finally {
+      if (showLoading) setLoading(false);
+    }
+  }, []);
+
+  // Load on mount: fast cache first, then sync with Supabase
   useEffect(() => {
     try {
       const storedRecords = localStorage.getItem("records");
@@ -61,23 +179,18 @@ export default function Home() {
       const storedFiles = localStorage.getItem("uploadedFiles");
       if (storedFiles) setUploadedFiles(JSON.parse(storedFiles));
     } catch {}
-  }, []);
 
-  // Save records to localStorage
-  useEffect(() => {
-    try {
-      localStorage.setItem("records", JSON.stringify(records));
-    } catch {}
-  }, [records]);
+    fetchFromSupabase(true);
 
-  // Save uploaded files to localStorage
-  useEffect(() => {
-    try {
-      localStorage.setItem("uploadedFiles", JSON.stringify(uploadedFiles));
-    } catch {}
-  }, [uploadedFiles]);
+    // Sync from Supabase every 15s so all devices stay updated
+    const syncInterval = setInterval(() => {
+      fetchFromSupabase(false);
+    }, 15000);
 
-  // Auto-refresh: check version every 30s, reload if changed
+    return () => clearInterval(syncInterval);
+  }, [fetchFromSupabase]);
+
+  // Auto-refresh on new deploy version
   useEffect(() => {
     let currentVersion: string | null = null;
     const checkVersion = async () => {
@@ -96,13 +209,6 @@ export default function Home() {
     return () => clearInterval(interval);
   }, []);
 
-  const savePrinted = useCallback((set: Set<string>) => {
-    setPrintedInvoices(set);
-    try {
-      localStorage.setItem("printedInvoices", JSON.stringify([...set]));
-    } catch {}
-  }, []);
-
   const toggleExpand = useCallback((so: string) => {
     setExpandedSOs((prev) => {
       const next = new Set(prev);
@@ -112,50 +218,132 @@ export default function Home() {
     });
   }, []);
 
-  // Print: one-way lock. Once printed, cannot unmark.
+  // Print: update local state AND sync to Supabase so all devices see it
   const markPrinted = useCallback(
-    (group: SOGroup) => {
+    async (group: SOGroup) => {
       if (group.allPrinted) return;
       const next = new Set(printedInvoices);
-      for (const inv of group.invoiceNumbers) next.add(inv);
-      savePrinted(next);
+      for (const inv of group.invoiceNumbers) {
+        next.add(inv);
+        next.add(`${inv}-1P`);
+      }
+      setPrintedInvoices(next);
+      try {
+        localStorage.setItem("printedInvoices", JSON.stringify([...next]));
+      } catch {}
+
+      const targets = [...group.invoiceNumbers, ...group.invoiceNumbers.map((i) => `${i}-1P`)];
+      await supabase
+        .from("faktur_records")
+        .update({ status_cetak: true, printed_at: new Date().toISOString() })
+        .in("no_faktur", targets);
     },
-    [printedInvoices, savePrinted]
+    [printedInvoices]
   );
 
-  const markAllAsPrinted = useCallback(() => {
+  const markAllAsPrinted = useCallback(async () => {
     const next = new Set(printedInvoices);
-    for (const r of records) next.add(r.invoiceNumber);
-    savePrinted(next);
-  }, [records, printedInvoices, savePrinted]);
-
-  // Upload: upsert. New SOs added, existing SOs updated with new data.
-  // Print status (localStorage) is never touched — only records change.
-  const handleUpload = useCallback(async (file: File) => {
-    setLoading(true);
-    setError(null);
+    const allInvs: string[] = [];
+    for (const r of records) {
+      next.add(r.invoiceNumber);
+      allInvs.push(r.invoiceNumber);
+      allInvs.push(`${r.invoiceNumber}-1P`);
+    }
+    setPrintedInvoices(next);
     try {
-      const parsed = await parseExcelFile(file);
-      if (parsed.length === 0) {
-        setError("File berhasil dibaca tapi tidak ada data.");
-      } else {
-        const newSOs = new Set(parsed.map((r) => r.orderNumber));
-        setRecords((prev) => {
-          const kept = prev.filter((r) => !newSOs.has(r.orderNumber));
-          return [...kept, ...parsed];
-        });
+      localStorage.setItem("printedInvoices", JSON.stringify([...next]));
+    } catch {}
+
+    for (const batch of chunk(allInvs, 500)) {
+      await supabase
+        .from("faktur_records")
+        .update({ status_cetak: true, printed_at: new Date().toISOString() })
+        .in("no_faktur", batch);
+    }
+  }, [records, printedInvoices]);
+
+  // Upload: Parse & Save directly to Supabase cloud DB so all devices see it
+  const handleUpload = useCallback(
+    async (file: File) => {
+      setLoading(true);
+      setError(null);
+      try {
+        const parsed = await parseExcelFile(file);
+        if (parsed.length === 0) {
+          setError("File berhasil dibaca tapi tidak ada data.");
+          setLoading(false);
+          return;
+        }
+
+        const importedAt = new Date().toISOString();
+        // Group parsed records by invoice to upsert to Supabase
+        const invMap = new Map<string, Record<string, unknown>>();
+        for (const r of parsed) {
+          const is1P = r.kategori === "1P" || r.jenisTransaksi.includes("PRIORITY") || r.customerName.toLowerCase().includes("helios");
+          const noFaktur = is1P ? `${r.invoiceNumber}-1P` : r.invoiceNumber;
+          if (!noFaktur || noFaktur === "0" || noFaktur === "-1P") continue;
+
+          if (!invMap.has(noFaktur)) {
+            invMap.set(noFaktur, {
+              no_faktur: noFaktur,
+              no_sales_order: r.orderNumber,
+              no_delivery_order: null,
+              status_cetak: false,
+              printed_at: null,
+              imported_at: importedAt,
+              source_file: is1P ? "ORA" : "XXCUST",
+              extra: {
+                nama_pelanggan: r.customerName,
+                jenis_transaksi: r.jenisTransaksi,
+                accounting_date: r.orderDate,
+                order_date: r.orderDate,
+                items: [],
+              },
+              _soSet: new Set([r.orderNumber]),
+            });
+          }
+
+          const existing = invMap.get(noFaktur)!;
+          (existing._soSet as Set<string>).add(r.orderNumber);
+          const itList = (existing.extra as Record<string, unknown>).items as Array<Record<string, unknown>>;
+          itList.push({
+            item_code: r.itemCode,
+            item_description: r.itemDescription,
+            qty: r.qty,
+            uom: r.uom,
+            lot_number: r.lotNumber,
+            total_harga: r.totalHarga,
+            order_number: r.orderNumber,
+          });
+        }
+
+        const payload = Array.from(invMap.values()).map(({ _soSet, ...rest }) => ({
+          ...rest,
+          no_sales_order: (_soSet as Set<string>).size > 0 ? Array.from(_soSet as Set<string>).join(", ") : rest.no_sales_order,
+        }));
+
+        for (const batch of chunk(payload, 500)) {
+          const { error: sbErr } = await supabase
+            .from("faktur_records")
+            .upsert(batch, { onConflict: "no_faktur" });
+          if (sbErr) console.error("Upload upsert error:", sbErr.message);
+        }
+
         setUploadedFiles((prev) => [
           ...prev,
           { name: file.name, count: parsed.length, time: new Date().toLocaleString("id-ID") },
         ]);
         setPage(0);
+
+        await fetchFromSupabase(false);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Gagal membaca file.");
+      } finally {
+        setLoading(false);
       }
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Gagal membaca file.");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+    },
+    [fetchFromSupabase]
+  );
 
   const onFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -170,8 +358,9 @@ export default function Home() {
     if (file) handleUpload(file);
   };
 
-  const clearAll = () => {
-    if (!confirm("Hapus SEMUA data dan riwayat? Print status juga reset.")) return;
+  const clearAll = async () => {
+    if (!confirm("Hapus SEMUA data di cloud database dan riwayat?")) return;
+    setLoading(true);
     setRecords([]);
     setUploadedFiles([]);
     setPrintedInvoices(new Set());
@@ -185,6 +374,9 @@ export default function Home() {
       localStorage.removeItem("uploadedFiles");
       localStorage.removeItem("printedInvoices");
     } catch {}
+
+    await supabase.from("faktur_records").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+    setLoading(false);
   };
 
   // Group by SO
