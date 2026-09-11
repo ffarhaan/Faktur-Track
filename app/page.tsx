@@ -369,7 +369,7 @@ export default function Home() {
               status_cetak: isPrinted,
               printed_at: printedAt,
               imported_at: importedAt,
-              source_file: is1P ? "ORA" : "XXCUST",
+              source_file: is1P ? "ORA" : "DOO",
               extra: {
                 nama_pelanggan: r.customerName || (prevInfo?.extra?.nama_pelanggan as string) || null,
                 jenis_transaksi: r.jenisTransaksi || (prevInfo?.extra?.jenis_transaksi as string) || null,
