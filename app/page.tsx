@@ -5,10 +5,26 @@ import { parseExcelFile } from "@/lib/parser";
 import { FakturRecord } from "@/lib/types";
 import { supabase } from "@/lib/supabaseClient";
 
-type Filter = "all" | "belum" | "double";
+type Filter = "all" | "belum" | "sudah" | "double";
 type KatFilter = "all" | "1P" | "2P" | "3P";
 
 const ROWS_PER_PAGE = 50;
+
+function parseInvNum(invs: string[]): number {
+  if (!invs || invs.length === 0) return 0;
+  const n = parseInt(invs[0].replace(/\D/g, ""), 10);
+  return isNaN(n) ? 0 : n;
+}
+
+function parseDateMs(dStr: string): number {
+  if (!dStr) return 0;
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(dStr)) {
+    const [d, m, y] = dStr.split("/").map(Number);
+    return new Date(y, m - 1, d).getTime();
+  }
+  const t = Date.parse(dStr);
+  return isNaN(t) ? 0 : t;
+}
 
 function formatRupiah(n: number): string {
   return new Intl.NumberFormat("id-ID", {
@@ -125,7 +141,7 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
-  const [filter, setFilter] = useState<Filter>("all");
+  const [filter, setFilter] = useState<Filter>("belum");
   const [katFilter, setKatFilter] = useState<KatFilter>("all");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
@@ -277,10 +293,22 @@ export default function Home() {
 
         const importedAt = new Date().toISOString();
 
-        // Fetch existing print status from DB so we NEVER reset already printed invoices
-        const { data: existingDB } = await supabase.from("faktur_records").select("no_faktur, status_cetak, printed_at, extra");
+        // Fetch ALL existing print status from DB (paginated) so we NEVER reset already printed invoices
+        let existingDB: Array<Record<string, unknown>> = [];
+        let fromIdx = 0;
+        while (true) {
+          const { data: pageData, error: pageErr } = await supabase
+            .from("faktur_records")
+            .select("no_faktur, status_cetak, printed_at, extra")
+            .range(fromIdx, fromIdx + 999);
+          if (pageErr || !pageData || pageData.length === 0) break;
+          existingDB = existingDB.concat(pageData as Array<Record<string, unknown>>);
+          if (pageData.length < 1000) break;
+          fromIdx += 1000;
+        }
+
         const existingStatusMap = new Map<string, { status_cetak: boolean; printed_at: string | null; extra: Record<string, unknown> | null }>();
-        (existingDB ?? []).forEach((row: Record<string, unknown>) => {
+        existingDB.forEach((row: Record<string, unknown>) => {
           existingStatusMap.set(String(row.no_faktur).trim(), {
             status_cetak: Boolean(row.status_cetak),
             printed_at: (row.printed_at as string) || null,
@@ -395,35 +423,43 @@ export default function Home() {
     setLoading(false);
   };
 
-  // Group by SO
+  // Group by SO and sort Ascending by Invoice Number and Order Date
   const grouped = useMemo<SOGroup[]>(() => {
     const map: Record<string, FakturRecord[]> = {};
     for (const r of records) {
       if (!map[r.orderNumber]) map[r.orderNumber] = [];
       map[r.orderNumber].push(r);
     }
-    return Object.entries(map).map(([so, items]) => {
-      const invoiceNumbers = [...new Set(items.map((i) => i.invoiceNumber))];
-      return {
-        so,
-        items,
-        orderDate: items[0].orderDate,
-        invoiceNumbers,
-        jenisTransaksi: items[0].jenisTransaksi,
-        customerName: items[0].customerName,
-        kategori: items[0].kategori,
-        isDoubleInv: items.some((i) => i.isDoubleInv),
-        totalHarga: items.reduce((sum, i) => sum + i.totalHarga, 0),
-        totalItems: items.length,
-        allPrinted: invoiceNumbers.every((inv) => printedInvoices.has(inv)),
-        anyPrinted: invoiceNumbers.some((inv) => printedInvoices.has(inv)),
-      };
-    });
+    return Object.entries(map)
+      .map(([so, items]) => {
+        const invoiceNumbers = [...new Set(items.map((i) => i.invoiceNumber))];
+        return {
+          so,
+          items,
+          orderDate: items[0].orderDate,
+          invoiceNumbers,
+          jenisTransaksi: items[0].jenisTransaksi,
+          customerName: items[0].customerName,
+          kategori: items[0].kategori,
+          isDoubleInv: items.some((i) => i.isDoubleInv),
+          totalHarga: items.reduce((sum, i) => sum + i.totalHarga, 0),
+          totalItems: items.length,
+          allPrinted: invoiceNumbers.every((inv) => printedInvoices.has(inv)),
+          anyPrinted: invoiceNumbers.some((inv) => printedInvoices.has(inv)),
+        };
+      })
+      .sort((a, b) => {
+        const invA = parseInvNum(a.invoiceNumbers);
+        const invB = parseInvNum(b.invoiceNumbers);
+        if (invA !== invB) return invA - invB;
+        return parseDateMs(a.orderDate) - parseDateMs(b.orderDate);
+      });
   }, [records, printedInvoices]);
 
   const filtered = useMemo(() => {
     let result = grouped;
     if (filter === "belum") result = result.filter((g) => !g.allPrinted);
+    else if (filter === "sudah") result = result.filter((g) => g.allPrinted);
     else if (filter === "double") result = result.filter((g) => g.isDoubleInv);
     if (katFilter !== "all") result = result.filter((g) => g.kategori === katFilter);
     if (search) {
@@ -535,8 +571,9 @@ export default function Home() {
             {/* Filters */}
             <div className="bg-white rounded-lg border border-gray-200 p-3 mb-4 flex flex-wrap items-center gap-2">
               <div className="flex gap-1">
-                <FBtn active={filter === "all"} onClick={() => setFilter("all")}>Semua</FBtn>
                 <FBtn active={filter === "belum"} onClick={() => setFilter("belum")} color="orange">Belum Terprint</FBtn>
+                <FBtn active={filter === "sudah"} onClick={() => setFilter("sudah")} color="green">Sudah Terprint</FBtn>
+                <FBtn active={filter === "all"} onClick={() => setFilter("all")}>Semua</FBtn>
                 <FBtn active={filter === "double"} onClick={() => setFilter("double")} color="red">Double INV</FBtn>
               </div>
               <div className="h-6 w-px bg-gray-200 mx-1" />
