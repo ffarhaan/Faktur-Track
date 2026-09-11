@@ -146,6 +146,7 @@ export default function Home() {
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [filter, setFilter] = useState<Filter>("belum");
   const [katFilter, setKatFilter] = useState<KatFilter>("all");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
   const [printedInvoices, setPrintedInvoices] = useState<Set<string>>(new Set());
@@ -476,10 +477,10 @@ export default function Home() {
       .sort((a, b) => {
         const invA = parseInvNum(a.invoiceNumbers);
         const invB = parseInvNum(b.invoiceNumbers);
-        if (invA !== invB) return invA - invB;
-        return parseDateMs(a.orderDate) - parseDateMs(b.orderDate);
+        const diff = invA !== invB ? invA - invB : parseDateMs(a.orderDate) - parseDateMs(b.orderDate);
+        return sortOrder === "desc" ? -diff : diff;
       });
-  }, [records, printedInvoices]);
+  }, [records, printedInvoices, sortOrder]);
 
   const filtered = useMemo(() => {
     let result = grouped;
@@ -509,7 +510,7 @@ export default function Home() {
 
   useEffect(() => {
     setPage(0);
-  }, [filter, katFilter, search]);
+  }, [filter, katFilter, search, sortOrder]);
 
   const summary = useMemo(() => {
     const uniqueInvoices = new Set(records.map((r) => r.invoiceKey));
@@ -608,6 +609,14 @@ export default function Home() {
                 <FBtn active={katFilter === "2P"} onClick={() => setKatFilter("2P")} color="green">2P</FBtn>
                 <FBtn active={katFilter === "3P"} onClick={() => setKatFilter("3P")} color="purple">3P</FBtn>
               </div>
+              <div className="h-6 w-px bg-gray-200 mx-1" />
+              <button
+                onClick={() => setSortOrder((prev) => (prev === "desc" ? "asc" : "desc"))}
+                className="px-2.5 py-1.5 text-xs font-medium rounded-lg border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 flex items-center gap-1 whitespace-nowrap"
+                title="Ganti urutan faktur"
+              >
+                {sortOrder === "desc" ? "⬇ Terbaru di Atas" : "⬆ Terlama di Atas"}
+              </button>
               <div className="flex-1" />
               <input
                 type="text"
