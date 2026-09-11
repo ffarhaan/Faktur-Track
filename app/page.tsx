@@ -45,6 +45,7 @@ type SOGroup = {
   items: FakturRecord[];
   orderDate: string;
   invoiceNumbers: string[];
+  invoiceKeys: string[];
   jenisTransaksi: string;
   customerName: string;
   kategori: "1P" | "2P" | "3P";
@@ -71,17 +72,17 @@ function dbRowsToFakturRecords(rows: Array<Record<string, unknown>>): {
   for (const r of rows) {
     const rawInv = String(r.no_faktur || "");
     const cleanInv = rawInv.replace(/-1P$/i, "");
-    if (r.status_cetak) {
-      if (cleanInv) printedSet.add(cleanInv);
-      if (rawInv) printedSet.add(rawInv);
-    }
-
     const extra = (r.extra as Record<string, unknown>) || {};
     const items = (extra.items as Array<Record<string, unknown>>) || [];
     const cust = String(extra.nama_pelanggan || "");
     const jenis = String(extra.jenis_transaksi || r.source_file || "");
     const date = String(extra.accounting_date || extra.order_date || r.imported_at || "");
-    const is1P = jenis.includes("PRIORITY") || cust.toLowerCase().includes("helios") || cust.toLowerCase().includes("hak");
+    const is1P = rawInv.endsWith("-1P") || String(r.source_file || "").toUpperCase() === "ORA" || jenis.includes("PRIORITY") || cust.toLowerCase().includes("helios");
+    const invKey = is1P ? `${cleanInv}-1P` : cleanInv;
+
+    if (r.status_cetak) {
+      if (invKey) printedSet.add(invKey);
+    }
 
     if (items.length > 0) {
       for (let idx = 0; idx < items.length; idx++) {
@@ -90,6 +91,7 @@ function dbRowsToFakturRecords(rows: Array<Record<string, unknown>>): {
           orderDate: date,
           orderNumber: String(it.order_number || r.no_sales_order || cleanInv),
           invoiceNumber: cleanInv,
+          invoiceKey: invKey,
           jenisTransaksi: jenis,
           customerName: cust,
           itemCode: String(it.item_code || ""),
@@ -108,6 +110,7 @@ function dbRowsToFakturRecords(rows: Array<Record<string, unknown>>): {
         orderDate: date,
         orderNumber: String(r.no_sales_order || cleanInv),
         invoiceNumber: cleanInv,
+        invoiceKey: invKey,
         jenisTransaksi: jenis,
         customerName: cust,
         itemCode: "-",
@@ -239,46 +242,39 @@ export default function Home() {
     async (group: SOGroup) => {
       const willBePrinted = !group.allPrinted;
       const next = new Set(printedInvoices);
-      for (const inv of group.invoiceNumbers) {
-        if (willBePrinted) {
-          next.add(inv);
-          next.add(`${inv}-1P`);
-        } else {
-          next.delete(inv);
-          next.delete(`${inv}-1P`);
-        }
+      for (const key of group.invoiceKeys) {
+        if (willBePrinted) next.add(key);
+        else next.delete(key);
       }
       setPrintedInvoices(next);
       try {
         localStorage.setItem("printedInvoices", JSON.stringify([...next]));
       } catch {}
 
-      const targets = [...group.invoiceNumbers, ...group.invoiceNumbers.map((i) => `${i}-1P`)];
       await supabase
         .from("faktur_records")
         .update({
           status_cetak: willBePrinted,
           printed_at: willBePrinted ? new Date().toISOString() : null,
         })
-        .in("no_faktur", targets);
+        .in("no_faktur", group.invoiceKeys);
     },
     [printedInvoices]
   );
 
   const markAllAsPrinted = useCallback(async () => {
     const next = new Set(printedInvoices);
-    const allInvs: string[] = [];
+    const allKeys: string[] = [];
     for (const r of records) {
-      next.add(r.invoiceNumber);
-      allInvs.push(r.invoiceNumber);
-      allInvs.push(`${r.invoiceNumber}-1P`);
+      next.add(r.invoiceKey);
+      allKeys.push(r.invoiceKey);
     }
     setPrintedInvoices(next);
     try {
       localStorage.setItem("printedInvoices", JSON.stringify([...next]));
     } catch {}
 
-    for (const batch of chunk(allInvs, 500)) {
+    for (const batch of chunk(allKeys, 500)) {
       await supabase
         .from("faktur_records")
         .update({ status_cetak: true, printed_at: new Date().toISOString() })
@@ -293,12 +289,11 @@ export default function Home() {
       localStorage.setItem("printedInvoices", JSON.stringify([]));
     } catch {}
 
-    const allInvs: string[] = [];
+    const allKeys: string[] = [];
     for (const r of records) {
-      allInvs.push(r.invoiceNumber);
-      allInvs.push(`${r.invoiceNumber}-1P`);
+      allKeys.push(r.invoiceKey);
     }
-    for (const batch of chunk(allInvs, 500)) {
+    for (const batch of chunk(allKeys, 500)) {
       await supabase
         .from("faktur_records")
         .update({ status_cetak: false, printed_at: null })
@@ -461,19 +456,21 @@ export default function Home() {
     return Object.entries(map)
       .map(([so, items]) => {
         const invoiceNumbers = [...new Set(items.map((i) => i.invoiceNumber))];
+        const invoiceKeys = [...new Set(items.map((i) => i.invoiceKey))];
         return {
           so,
           items,
           orderDate: items[0].orderDate,
           invoiceNumbers,
+          invoiceKeys,
           jenisTransaksi: items[0].jenisTransaksi,
           customerName: items[0].customerName,
           kategori: items[0].kategori,
           isDoubleInv: items.some((i) => i.isDoubleInv),
           totalHarga: items.reduce((sum, i) => sum + i.totalHarga, 0),
           totalItems: items.length,
-          allPrinted: invoiceNumbers.every((inv) => printedInvoices.has(inv)),
-          anyPrinted: invoiceNumbers.some((inv) => printedInvoices.has(inv)),
+          allPrinted: invoiceKeys.every((key) => printedInvoices.has(key)),
+          anyPrinted: invoiceKeys.some((key) => printedInvoices.has(key)),
         };
       })
       .sort((a, b) => {
@@ -515,10 +512,10 @@ export default function Home() {
   }, [filter, katFilter, search]);
 
   const summary = useMemo(() => {
-    const uniqueInvoices = new Set(records.map((r) => r.invoiceNumber));
+    const uniqueInvoices = new Set(records.map((r) => r.invoiceKey));
     const uniqueSO = new Set(records.map((r) => r.orderNumber));
     const belumTerprint = [...uniqueInvoices].filter(
-      (inv) => !printedInvoices.has(inv)
+      (key) => !printedInvoices.has(key)
     ).length;
     const doubleInv = grouped.filter((g) => g.isDoubleInv).length;
     const totalHarga = records.reduce((sum, r) => sum + r.totalHarga, 0);

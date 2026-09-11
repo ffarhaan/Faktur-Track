@@ -77,10 +77,14 @@ function parseXXCUST(data: unknown[][], headerIdx: number): FakturRecord[] {
     const jenisTransaksi = String(row[idx.jenisTransaksi] ?? "").trim();
     const customerName = String(row[idx.customerName] ?? "").trim();
 
+    const kategori = categorize(jenisTransaksi, customerName);
+    const invoiceKey = kategori === "1P" ? `${invoiceNumber}-1P` : invoiceNumber;
+
     records.push({
       orderDate: String(row[idx.orderDate] ?? "").trim(),
       orderNumber,
       invoiceNumber,
+      invoiceKey,
       jenisTransaksi,
       customerName,
       itemCode: String(row[idx.itemCode] ?? "").trim(),
@@ -89,7 +93,7 @@ function parseXXCUST(data: unknown[][], headerIdx: number): FakturRecord[] {
       uom: String(row[idx.uom] ?? "").trim(),
       lotNumber: String(row[idx.lotNumber] ?? "").trim(),
       totalHarga: Number(row[idx.totalHarga] ?? 0),
-      kategori: categorize(jenisTransaksi, customerName),
+      kategori,
       isDoubleInv: false,
       rowIndex: i,
     });
@@ -148,11 +152,14 @@ function parseHTMLTable(html: string): FakturRecord[] {
     // Ship-to Customer sebagai nama pelanggan, fallback ke Bill-to Customer
     const customerName = texts[colMap["customer"]] || texts[colMap["billTo"]] || "";
     const jenisTransaksi = texts[colMap["jenis"]] || "";
+    const kategori = categorize(jenisTransaksi, customerName);
+    const invoiceKey = kategori === "1P" ? `${invVal}-1P` : invVal;
 
     records.push({
       orderDate: texts[colMap["date"]] || "",
       orderNumber: soVal,
       invoiceNumber: invVal,
+      invoiceKey,
       jenisTransaksi,
       customerName,
       itemCode: "-",
@@ -161,7 +168,7 @@ function parseHTMLTable(html: string): FakturRecord[] {
       uom: "-",
       lotNumber: "-",
       totalHarga: Number(texts[colMap["amount"]]?.replace(/[^0-9.-]/g, "") || 0),
-      kategori: categorize(jenisTransaksi, customerName),
+      kategori,
       isDoubleInv: false,
       rowIndex: i,
     });

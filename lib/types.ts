@@ -2,6 +2,7 @@ export type FakturRecord = {
   orderDate: string;
   orderNumber: string;
   invoiceNumber: string;
+  invoiceKey: string;
   jenisTransaksi: string;
   customerName: string;
   itemCode: string;
