@@ -133,6 +133,7 @@ function parseHTMLTable(html: string): FakturRecord[] {
     // Ship-to Customer = nama pelanggan (utama), Bill-to Customer = fallback
     if (s.includes("ship-to customer")) colMap["customer"] = i;
     if (s.includes("bill-to customer")) colMap["billTo"] = i;
+    if (s.includes("transaction source")) colMap["source"] = i;
     if (s.includes("transaction type")) colMap["jenis"] = i;
     if (s.includes("entered amount")) colMap["amount"] = i;
   });
@@ -151,8 +152,12 @@ function parseHTMLTable(html: string): FakturRecord[] {
 
     // Ship-to Customer sebagai nama pelanggan, fallback ke Bill-to Customer
     const customerName = texts[colMap["customer"]] || texts[colMap["billTo"]] || "";
-    const jenisTransaksi = texts[colMap["jenis"]] || "";
-    const kategori = categorize(jenisTransaksi, customerName);
+    const rawJenis = texts[colMap["jenis"]] || "";
+    const rawSource = texts[colMap["source"]] || "";
+    const isOra = rawSource.toUpperCase().includes("ORA") || rawJenis.toUpperCase().includes("PRIORITY") || customerName.toLowerCase().includes("helios");
+    const jenisTransaksi = isOra ? "ORA" : "DOO";
+
+    const kategori = isOra ? "1P" : categorize(rawJenis, customerName);
     const invoiceKey = kategori === "1P" ? `${invVal}-1P` : invVal;
 
     records.push({

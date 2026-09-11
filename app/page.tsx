@@ -79,6 +79,7 @@ function dbRowsToFakturRecords(rows: Array<Record<string, unknown>>): {
     const date = String(extra.accounting_date || extra.order_date || r.imported_at || "");
     const is1P = rawInv.endsWith("-1P") || String(r.source_file || "").toUpperCase() === "ORA" || jenis.includes("PRIORITY") || cust.toLowerCase().includes("helios");
     const invKey = is1P ? `${cleanInv}-1P` : cleanInv;
+    const cleanJenis = is1P ? "ORA" : "DOO";
 
     if (r.status_cetak) {
       if (invKey) printedSet.add(invKey);
@@ -92,7 +93,7 @@ function dbRowsToFakturRecords(rows: Array<Record<string, unknown>>): {
           orderNumber: String(it.order_number || r.no_sales_order || cleanInv),
           invoiceNumber: cleanInv,
           invoiceKey: invKey,
-          jenisTransaksi: jenis,
+          jenisTransaksi: cleanJenis,
           customerName: cust,
           itemCode: String(it.item_code || ""),
           itemDescription: String(it.item_description || ""),
@@ -111,7 +112,7 @@ function dbRowsToFakturRecords(rows: Array<Record<string, unknown>>): {
         orderNumber: String(r.no_sales_order || cleanInv),
         invoiceNumber: cleanInv,
         invoiceKey: invKey,
-        jenisTransaksi: jenis,
+        jenisTransaksi: cleanJenis,
         customerName: cust,
         itemCode: "-",
         itemDescription: "Data DOO",
@@ -723,7 +724,15 @@ export default function Home() {
                                   : g.invoiceNumbers[0]
                                 : <span className="text-gray-400 italic text-xs">Menunggu Faktur</span>}
                             </td>
-                            <td className="px-2 py-2 text-xs text-gray-600 whitespace-nowrap">{g.jenisTransaksi}</td>
+                            <td className="px-2 py-2 whitespace-nowrap">
+                              <span className={`inline-block px-2 py-0.5 rounded text-xs font-bold ${
+                                g.jenisTransaksi === "ORA"
+                                  ? "bg-blue-100 text-blue-800"
+                                  : "bg-emerald-100 text-emerald-800"
+                              }`}>
+                                {g.jenisTransaksi}
+                              </span>
+                            </td>
                             <td className="px-2 py-2 text-gray-700 whitespace-nowrap max-w-xs truncate">{g.customerName}</td>
                             <td className="px-2 py-2 text-center text-gray-600 text-xs">{g.totalItems}</td>
                             <td className="px-2 py-2 text-right text-gray-900 whitespace-nowrap font-medium text-xs">
