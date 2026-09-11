@@ -239,12 +239,20 @@ export default function Home() {
     });
   }, []);
 
-  // Print: toggle local state AND sync to Supabase so all devices see it
+  // Print / Unprint: toggle local state AND sync to Supabase so all devices see it
   const togglePrint = useCallback(
     async (group: SOGroup) => {
       const willBePrinted = !group.allPrinted;
       const next = new Set(printedInvoices);
-      for (const key of group.invoiceKeys) {
+
+      const allKeys = new Set([
+        ...group.invoiceKeys,
+        ...group.invoiceNumbers,
+        ...group.invoiceNumbers.map((i) => `${i}-1P`),
+        ...group.invoiceNumbers.map((i) => i.replace(/-1P$/i, "")),
+      ]);
+
+      for (const key of allKeys) {
         if (willBePrinted) next.add(key);
         else next.delete(key);
       }
@@ -253,13 +261,14 @@ export default function Home() {
         localStorage.setItem("printedInvoices", JSON.stringify([...next]));
       } catch {}
 
+      const targets = Array.from(allKeys);
       await supabase
         .from("faktur_records")
         .update({
           status_cetak: willBePrinted,
           printed_at: willBePrinted ? new Date().toISOString() : null,
         })
-        .in("no_faktur", group.invoiceKeys);
+        .in("no_faktur", targets);
     },
     [printedInvoices]
   );
@@ -679,23 +688,23 @@ export default function Home() {
                                   <button
                                     onClick={() => togglePrint(g)}
                                     disabled={!hasInvoice}
-                                    className={`w-6 h-6 rounded flex items-center justify-center text-xs font-bold transition-colors ${
+                                    className={`w-6 h-6 rounded flex items-center justify-center text-xs font-bold transition-all shadow-sm ${
                                       !hasInvoice
                                         ? "bg-gray-100 text-gray-300 cursor-not-allowed"
                                         : g.allPrinted
-                                        ? "bg-green-500 text-white hover:bg-green-600"
+                                        ? "bg-green-500 text-white hover:bg-orange-500 hover:rotate-180"
                                         : g.anyPrinted
                                         ? "bg-yellow-400 text-white hover:bg-yellow-500"
-                                        : "bg-gray-200 text-gray-500 hover:bg-gray-300"
+                                        : "bg-gray-200 text-gray-600 hover:bg-green-500 hover:text-white"
                                     }`}
                                     title={
                                       !hasInvoice
                                         ? "Menunggu No Faktur (Belum bisa diprint)"
                                         : g.allPrinted
-                                        ? "Sudah terprint - klik untuk batal tandai"
+                                        ? "Sudah Terprint · Klik untuk UNPRINT (Batal Cetak)"
                                         : g.anyPrinted
-                                        ? "Sebagian terprint"
-                                        : "Belum terprint - klik untuk tandai"
+                                        ? "Sebagian terprint · Klik untuk tandai"
+                                        : "Belum terprint · Klik untuk tandai SUDAH PRINT"
                                     }
                                   >
                                     {!hasInvoice ? "–" : g.allPrinted ? "✓" : g.anyPrinted ? "◑" : "○"}
@@ -742,6 +751,28 @@ export default function Home() {
                           {expanded && (
                             <tr className="bg-gray-50">
                               <td colSpan={10} className="px-4 py-3">
+                                <div className="flex flex-wrap items-center justify-between pb-2 mb-2 border-b border-gray-200 gap-2">
+                                  <div className="text-xs text-gray-600">
+                                    <span className="font-semibold text-gray-900">SO: {g.so}</span> · Invoice: <span className="font-mono text-gray-900">{g.invoiceNumbers.join(", ")}</span> · Pelanggan: <span className="font-semibold text-gray-900">{g.customerName}</span>
+                                  </div>
+                                  <div>
+                                    {g.allPrinted ? (
+                                      <button
+                                        onClick={(e) => { e.stopPropagation(); togglePrint(g); }}
+                                        className="px-3 py-1 bg-orange-100 text-orange-800 border border-orange-300 rounded-lg text-xs font-bold hover:bg-orange-200 transition-colors flex items-center gap-1.5 shadow-sm"
+                                      >
+                                        <span>↩</span> Unprint Faktur Ini
+                                      </button>
+                                    ) : (
+                                      <button
+                                        onClick={(e) => { e.stopPropagation(); togglePrint(g); }}
+                                        className="px-3 py-1 bg-green-600 text-white rounded-lg text-xs font-bold hover:bg-green-700 transition-colors flex items-center gap-1.5 shadow-sm"
+                                      >
+                                        <span>✓</span> Tandai Sudah Terprint
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
                                 <table className="w-full text-xs">
                                   <thead>
                                     <tr className="border-b border-gray-200">
