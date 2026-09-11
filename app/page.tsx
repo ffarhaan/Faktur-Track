@@ -234,14 +234,19 @@ export default function Home() {
     });
   }, []);
 
-  // Print: update local state AND sync to Supabase so all devices see it
-  const markPrinted = useCallback(
+  // Print: toggle local state AND sync to Supabase so all devices see it
+  const togglePrint = useCallback(
     async (group: SOGroup) => {
-      if (group.allPrinted) return;
+      const willBePrinted = !group.allPrinted;
       const next = new Set(printedInvoices);
       for (const inv of group.invoiceNumbers) {
-        next.add(inv);
-        next.add(`${inv}-1P`);
+        if (willBePrinted) {
+          next.add(inv);
+          next.add(`${inv}-1P`);
+        } else {
+          next.delete(inv);
+          next.delete(`${inv}-1P`);
+        }
       }
       setPrintedInvoices(next);
       try {
@@ -251,7 +256,10 @@ export default function Home() {
       const targets = [...group.invoiceNumbers, ...group.invoiceNumbers.map((i) => `${i}-1P`)];
       await supabase
         .from("faktur_records")
-        .update({ status_cetak: true, printed_at: new Date().toISOString() })
+        .update({
+          status_cetak: willBePrinted,
+          printed_at: willBePrinted ? new Date().toISOString() : null,
+        })
         .in("no_faktur", targets);
     },
     [printedInvoices]
@@ -277,6 +285,26 @@ export default function Home() {
         .in("no_faktur", batch);
     }
   }, [records, printedInvoices]);
+
+  const markAllAsUnprinted = useCallback(async () => {
+    if (!confirm("Reset SEMUA faktur menjadi 'Belum Terprint'?")) return;
+    setPrintedInvoices(new Set());
+    try {
+      localStorage.setItem("printedInvoices", JSON.stringify([]));
+    } catch {}
+
+    const allInvs: string[] = [];
+    for (const r of records) {
+      allInvs.push(r.invoiceNumber);
+      allInvs.push(`${r.invoiceNumber}-1P`);
+    }
+    for (const batch of chunk(allInvs, 500)) {
+      await supabase
+        .from("faktur_records")
+        .update({ status_cetak: false, printed_at: null })
+        .in("no_faktur", batch);
+    }
+  }, [records]);
 
   // Upload: Parse & Save directly to Supabase cloud DB so all devices see it
   const handleUpload = useCallback(
@@ -593,9 +621,15 @@ export default function Home() {
               />
               <button
                 onClick={markAllAsPrinted}
-                className="text-xs text-gray-600 hover:text-gray-900 px-3 py-1.5 rounded-lg hover:bg-gray-100 whitespace-nowrap"
+                className="text-xs text-green-700 bg-green-50 hover:bg-green-100 px-3 py-1.5 rounded-lg border border-green-200 whitespace-nowrap"
               >
                 Tandai Semua Printed
+              </button>
+              <button
+                onClick={markAllAsUnprinted}
+                className="text-xs text-orange-700 bg-orange-50 hover:bg-orange-100 px-3 py-1.5 rounded-lg border border-orange-200 whitespace-nowrap"
+              >
+                Reset ke Belum Terprint
               </button>
             </div>
 
@@ -636,13 +670,13 @@ export default function Home() {
                                 const hasInvoice = g.invoiceNumbers.length > 0 && g.invoiceNumbers.some((inv) => inv && inv !== "0" && inv !== "-");
                                 return (
                                   <button
-                                    onClick={() => markPrinted(g)}
-                                    disabled={!hasInvoice || g.allPrinted}
+                                    onClick={() => togglePrint(g)}
+                                    disabled={!hasInvoice}
                                     className={`w-6 h-6 rounded flex items-center justify-center text-xs font-bold transition-colors ${
                                       !hasInvoice
                                         ? "bg-gray-100 text-gray-300 cursor-not-allowed"
                                         : g.allPrinted
-                                        ? "bg-green-500 text-white cursor-not-allowed"
+                                        ? "bg-green-500 text-white hover:bg-green-600"
                                         : g.anyPrinted
                                         ? "bg-yellow-400 text-white hover:bg-yellow-500"
                                         : "bg-gray-200 text-gray-500 hover:bg-gray-300"
@@ -651,7 +685,7 @@ export default function Home() {
                                       !hasInvoice
                                         ? "Menunggu No Faktur (Belum bisa diprint)"
                                         : g.allPrinted
-                                        ? "Sudah terprint (terkunci)"
+                                        ? "Sudah terprint - klik untuk batal tandai"
                                         : g.anyPrinted
                                         ? "Sebagian terprint"
                                         : "Belum terprint - klik untuk tandai"
