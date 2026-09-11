@@ -11,9 +11,14 @@ type KatFilter = "all" | "1P" | "2P" | "3P";
 
 const ROWS_PER_PAGE = 50;
 
-function parseInvNum(invs: string[]): number {
-  if (!invs || invs.length === 0) return 0;
-  const n = parseInt(invs[0].replace(/\D/g, ""), 10);
+function parseInvNum(invs: string[] | string): number {
+  if (!invs) return 0;
+  if (Array.isArray(invs)) {
+    if (invs.length === 0) return 0;
+    const n = parseInt(invs[0].replace(/\D/g, ""), 10);
+    return isNaN(n) ? 0 : n;
+  }
+  const n = parseInt(String(invs).replace(/\D/g, ""), 10);
   return isNaN(n) ? 0 : n;
 }
 
@@ -59,12 +64,13 @@ function formatPrintTime(dStr?: string | null): string {
   }
 }
 
-type SOGroup = {
+type FakturGroup = {
+  key: string;
+  invoiceNumber: string;
+  invoiceKey: string;
   so: string;
   items: FakturRecord[];
   orderDate: string;
-  invoiceNumbers: string[];
-  invoiceKeys: string[];
   jenisTransaksi: string;
   customerName: string;
   kategori: "1P" | "2P" | "3P";
@@ -180,7 +186,7 @@ export default function Home() {
   const [printedInvoices, setPrintedInvoices] = useState<Set<string>>(new Set());
   const [printedAtMap, setPrintedAtMap] = useState<Record<string, string>>({});
   const [dragOver, setDragOver] = useState(false);
-  const [expandedSOs, setExpandedSOs] = useState<Set<string>>(new Set());
+  const [expandedInvoices, setExpandedInvoices] = useState<Set<string>>(new Set());
 
   // Fetch all records from Supabase
   const fetchFromSupabase = useCallback(async (showLoading = false) => {
@@ -262,27 +268,27 @@ export default function Home() {
     return () => clearInterval(interval);
   }, []);
 
-  const toggleExpand = useCallback((so: string) => {
-    setExpandedSOs((prev) => {
+  const toggleExpand = useCallback((key: string) => {
+    setExpandedInvoices((prev) => {
       const next = new Set(prev);
-      if (next.has(so)) next.delete(so);
-      else next.add(so);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
       return next;
     });
   }, []);
 
   // Print / Unprint: toggle local state AND sync to Supabase so all devices see it
   const togglePrint = useCallback(
-    async (group: SOGroup) => {
+    async (group: FakturGroup) => {
       const willBePrinted = !group.allPrinted;
       const nowIso = new Date().toISOString();
       const next = new Set(printedInvoices);
 
       const allKeys = new Set([
-        ...group.invoiceKeys,
-        ...group.invoiceNumbers,
-        ...group.invoiceNumbers.map((i) => `${i}-1P`),
-        ...group.invoiceNumbers.map((i) => i.replace(/-1P$/i, "")),
+        group.invoiceKey,
+        group.invoiceNumber,
+        `${group.invoiceNumber}-1P`,
+        group.invoiceNumber.replace(/-1P$/i, ""),
       ]);
 
       for (const key of allKeys) {
@@ -474,26 +480,33 @@ export default function Home() {
     [fetchFromSupabase]
   );
 
-  const onFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) handleUpload(file);
-    e.target.value = "";
-  };
+  const onDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      setDragOver(false);
+      const file = e.dataTransfer.files[0];
+      if (file) handleUpload(file);
+    },
+    [handleUpload]
+  );
 
-  const onDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setDragOver(false);
-    const file = e.dataTransfer.files?.[0];
-    if (file) handleUpload(file);
-  };
+  const onFileInput = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (file) handleUpload(file);
+      e.target.value = "";
+    },
+    [handleUpload]
+  );
 
   const clearAll = async () => {
-    if (!confirm("Hapus SEMUA data di cloud database dan riwayat?")) return;
+    if (!confirm("Yakin ingin menghapus semua data? Data di database cloud juga akan terhapus.")) return;
     setLoading(true);
     setRecords([]);
     setUploadedFiles([]);
     setPrintedInvoices(new Set());
-    setExpandedSOs(new Set());
+    setExpandedInvoices(new Set());
+    setPrintedAtMap({});
     setFilter("all");
     setKatFilter("all");
     setSearch("");
@@ -502,44 +515,62 @@ export default function Home() {
       localStorage.removeItem("records");
       localStorage.removeItem("uploadedFiles");
       localStorage.removeItem("printedInvoices");
+      localStorage.removeItem("printedAtMap");
     } catch {}
 
     await supabase.from("faktur_records").delete().neq("id", "00000000-0000-0000-0000-000000000000");
     setLoading(false);
   };
 
-  // Group by SO and sort Ascending by Invoice Number and Order Date
-  const grouped = useMemo<SOGroup[]>(() => {
+  // Group strictly by Invoice Key so every individual faktur/invoice is isolated with exact total harga
+  const grouped = useMemo<FakturGroup[]>(() => {
     const map: Record<string, FakturRecord[]> = {};
     for (const r of records) {
-      if (!map[r.orderNumber]) map[r.orderNumber] = [];
-      map[r.orderNumber].push(r);
+      const gKey = r.invoiceKey || r.invoiceNumber;
+      if (!map[gKey]) map[gKey] = [];
+      map[gKey].push(r);
     }
+
+    // Detect double invoices per SO
+    const soInvMap: Record<string, Set<string>> = {};
+    for (const r of records) {
+      if (!soInvMap[r.orderNumber]) soInvMap[r.orderNumber] = new Set();
+      if (r.invoiceNumber && r.invoiceNumber !== "0" && r.invoiceNumber !== "-") {
+        soInvMap[r.orderNumber].add(r.invoiceNumber);
+      }
+    }
+
     return Object.entries(map)
-      .map(([so, items]) => {
-        const invoiceNumbers = [...new Set(items.map((i) => i.invoiceNumber))];
-        const invoiceKeys = [...new Set(items.map((i) => i.invoiceKey))];
-        const pAt = invoiceKeys.map((key) => printedAtMap[key]).find((t) => !!t) || null;
+      .map(([key, items]) => {
+        const invNum = items[0].invoiceNumber;
+        const invKey = items[0].invoiceKey;
+        const soList = [...new Set(items.map((i) => i.orderNumber).filter(Boolean))];
+        const soStr = soList.join(", ");
+        const isDouble = soList.some((s) => (soInvMap[s]?.size || 0) > 1);
+        const pAt = printedAtMap[invKey] || null;
+        const isPrinted = printedInvoices.has(invKey);
+
         return {
-          so,
+          key,
+          invoiceNumber: invNum,
+          invoiceKey: invKey,
+          so: soStr || items[0].orderNumber,
           items,
           orderDate: items[0].orderDate,
-          invoiceNumbers,
-          invoiceKeys,
           jenisTransaksi: items[0].jenisTransaksi,
           customerName: items[0].customerName,
           kategori: items[0].kategori,
-          isDoubleInv: items.some((i) => i.isDoubleInv),
+          isDoubleInv: isDouble,
           totalHarga: items.reduce((sum, i) => sum + i.totalHarga, 0),
           totalItems: items.length,
-          allPrinted: invoiceKeys.every((key) => printedInvoices.has(key)),
-          anyPrinted: invoiceKeys.some((key) => printedInvoices.has(key)),
+          allPrinted: isPrinted,
+          anyPrinted: isPrinted,
           printedAt: pAt,
         };
       })
       .sort((a, b) => {
-        const invA = parseInvNum(a.invoiceNumbers);
-        const invB = parseInvNum(b.invoiceNumbers);
+        const invA = parseInvNum(a.invoiceNumber);
+        const invB = parseInvNum(b.invoiceNumber);
         const diff = invA !== invB ? invA - invB : parseDateMs(a.orderDate) - parseDateMs(b.orderDate);
         return sortOrder === "desc" ? -diff : diff;
       });
@@ -556,7 +587,7 @@ export default function Home() {
       result = result.filter(
         (g) =>
           g.so.toLowerCase().includes(s) ||
-          g.invoiceNumbers.some((inv) => inv.toLowerCase().includes(s)) ||
+          g.invoiceNumber.toLowerCase().includes(s) ||
           g.customerName.toLowerCase().includes(s) ||
           g.items.some(
             (i) =>
@@ -582,7 +613,7 @@ export default function Home() {
       (key) => !printedInvoices.has(key)
     ).length;
     const doubleInv = grouped.filter((g) => g.isDoubleInv).length;
-    const totalHarga = records.reduce((sum, r) => sum + r.totalHarga, 0);
+    const totalHarga = grouped.reduce((sum, g) => sum + g.totalHarga, 0);
     return {
       totalSO: uniqueSO.size,
       totalInvoices: uniqueInvoices.size,
@@ -599,9 +630,9 @@ export default function Home() {
       return;
     }
 
-    // Filter all records/groups that have valid invoice numbers
+    // Filter all groups that have valid invoice numbers
     const validGroups = grouped.filter((g) =>
-      g.invoiceNumbers.length > 0 && g.invoiceNumbers.some((inv) => inv && inv !== "0" && inv !== "-")
+      g.invoiceNumber && g.invoiceNumber !== "0" && g.invoiceNumber !== "-"
     );
 
     if (validGroups.length === 0) {
@@ -611,8 +642,8 @@ export default function Home() {
 
     // Sort strictly ASCENDING dari nomor faktur terkecil sampai terbesar
     const sorted = [...validGroups].sort((a, b) => {
-      const invA = parseInvNum(a.invoiceNumbers);
-      const invB = parseInvNum(b.invoiceNumbers);
+      const invA = parseInvNum(a.invoiceNumber);
+      const invB = parseInvNum(b.invoiceNumber);
       if (invA !== invB) return invA - invB;
       return parseDateMs(a.orderDate) - parseDateMs(b.orderDate);
     });
@@ -622,7 +653,7 @@ export default function Home() {
       "No": idx + 1,
       "Order Date": g.orderDate || "-",
       "No SO": g.so || "-",
-      "No Invoice": g.invoiceNumbers.join(", "),
+      "No Invoice": g.invoiceNumber,
       "Pelanggan": g.customerName || "-",
       "Total Harga": g.totalHarga,
       "Jenis Transaksi": g.jenisTransaksi,
@@ -636,8 +667,8 @@ export default function Home() {
       (r) => r.invoiceNumber && r.invoiceNumber !== "0" && r.invoiceNumber !== "-"
     );
     const sortedItems = [...validItems].sort((a, b) => {
-      const invA = parseInt(String(a.invoiceNumber || "").replace(/\D/g, ""), 10) || 0;
-      const invB = parseInt(String(b.invoiceNumber || "").replace(/\D/g, ""), 10) || 0;
+      const invA = parseInvNum(a.invoiceNumber);
+      const invB = parseInvNum(b.invoiceNumber);
       if (invA !== invB) return invA - invB;
       return parseDateMs(a.orderDate) - parseDateMs(b.orderDate);
     });
@@ -646,7 +677,7 @@ export default function Home() {
       "No": idx + 1,
       "Order Date": r.orderDate || "-",
       "No SO": r.orderNumber || "-",
-      "No Invoice": r.invoiceNumber || "-",
+      "No Invoice": r.invoiceNumber,
       "Pelanggan": r.customerName || "-",
       "Item Code": r.itemCode || "-",
       "Item Description": r.itemDescription || "-",
@@ -883,11 +914,12 @@ export default function Home() {
                   </thead>
                   <tbody className="divide-y divide-gray-100">
                     {pageData.map((g) => {
-                      const expanded = expandedSOs.has(g.so);
+                      const expanded = expandedInvoices.has(g.key);
+                      const hasInvoice = !!g.invoiceNumber && g.invoiceNumber !== "0" && g.invoiceNumber !== "-";
                       return (
-                        <Fragment key={g.so}>
+                        <Fragment key={g.key}>
                           <tr
-                            onClick={() => toggleExpand(g.so)}
+                            onClick={() => toggleExpand(g.key)}
                             className={`cursor-pointer hover:bg-gray-50 ${
                               g.isDoubleInv ? "bg-red-50" : g.allPrinted ? "bg-green-50" : ""
                             }`}
@@ -896,35 +928,30 @@ export default function Home() {
                               {expanded ? "▼" : "▶"}
                             </td>
                             <td className="px-2 py-2" onClick={(e) => e.stopPropagation()}>
-                              {(() => {
-                                const hasInvoice = g.invoiceNumbers.length > 0 && g.invoiceNumbers.some((inv) => inv && inv !== "0" && inv !== "-");
-                                return (
-                                  <button
-                                    onClick={() => togglePrint(g)}
-                                    disabled={!hasInvoice}
-                                    className={`w-6 h-6 rounded flex items-center justify-center text-xs font-bold transition-all shadow-sm ${
-                                      !hasInvoice
-                                        ? "bg-gray-100 text-gray-300 cursor-not-allowed"
-                                        : g.allPrinted
-                                        ? "bg-green-500 text-white hover:bg-orange-500 hover:rotate-180"
-                                        : g.anyPrinted
-                                        ? "bg-yellow-400 text-white hover:bg-yellow-500"
-                                        : "bg-gray-200 text-gray-600 hover:bg-green-500 hover:text-white"
-                                    }`}
-                                    title={
-                                      !hasInvoice
-                                        ? "Menunggu No Faktur (Belum bisa diprint)"
-                                        : g.allPrinted
-                                        ? "Sudah Terprint · Klik untuk UNPRINT (Batal Cetak)"
-                                        : g.anyPrinted
-                                        ? "Sebagian terprint · Klik untuk tandai"
-                                        : "Belum terprint · Klik untuk tandai SUDAH PRINT"
-                                    }
-                                  >
-                                    {!hasInvoice ? "–" : g.allPrinted ? "✓" : g.anyPrinted ? "◑" : "○"}
-                                  </button>
-                                );
-                              })()}
+                              <button
+                                onClick={() => togglePrint(g)}
+                                disabled={!hasInvoice}
+                                className={`w-6 h-6 rounded flex items-center justify-center text-xs font-bold transition-all shadow-sm ${
+                                  !hasInvoice
+                                    ? "bg-gray-100 text-gray-300 cursor-not-allowed"
+                                    : g.allPrinted
+                                    ? "bg-green-500 text-white hover:bg-orange-500 hover:rotate-180"
+                                    : g.anyPrinted
+                                    ? "bg-yellow-400 text-white hover:bg-yellow-500"
+                                    : "bg-gray-200 text-gray-600 hover:bg-green-500 hover:text-white"
+                                }`}
+                                title={
+                                  !hasInvoice
+                                    ? "Menunggu No Faktur (Belum bisa diprint)"
+                                    : g.allPrinted
+                                    ? "Sudah Terprint · Klik untuk UNPRINT (Batal Cetak)"
+                                    : g.anyPrinted
+                                    ? "Sebagian terprint · Klik untuk tandai"
+                                    : "Belum terprint · Klik untuk tandai SUDAH PRINT"
+                                }
+                              >
+                                {!hasInvoice ? "–" : g.allPrinted ? "✓" : g.anyPrinted ? "◑" : "○"}
+                              </button>
                             </td>
                             <td className="px-2 py-2 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                               {g.allPrinted && g.printedAt ? (
@@ -950,14 +977,14 @@ export default function Home() {
                             <td className="px-2 py-2 text-gray-600 whitespace-nowrap text-xs">{g.orderDate}</td>
                             <td className="px-2 py-2 font-mono text-xs text-gray-900 whitespace-nowrap">
                               {g.so}
-                              {g.isDoubleInv && <span className="ml-1 text-red-600 font-bold">⚠</span>}
+                              {g.isDoubleInv && <span className="ml-1 text-red-600 font-bold" title="SO ini memiliki lebih dari 1 faktur">⚠</span>}
                             </td>
-                            <td className="px-2 py-2 font-mono text-xs text-gray-900 whitespace-nowrap">
-                              {g.invoiceNumbers.length > 0 && g.invoiceNumbers.some((inv) => inv && inv !== "0" && inv !== "-")
-                                ? g.invoiceNumbers.length > 1
-                                  ? `${g.invoiceNumbers[0]} +${g.invoiceNumbers.length - 1}`
-                                  : g.invoiceNumbers[0]
-                                : <span className="text-gray-400 italic text-xs">Menunggu Faktur</span>}
+                            <td className="px-2 py-2 font-mono text-xs text-gray-900 whitespace-nowrap font-medium">
+                              {hasInvoice ? (
+                                g.invoiceNumber
+                              ) : (
+                                <span className="text-gray-400 italic text-xs">Menunggu Faktur</span>
+                              )}
                             </td>
                             <td className="px-2 py-2 whitespace-nowrap">
                               <span className={`inline-block px-2 py-0.5 rounded text-xs font-bold ${
@@ -979,7 +1006,7 @@ export default function Home() {
                               <td colSpan={11} className="px-4 py-3">
                                 <div className="flex flex-wrap items-center justify-between pb-2 mb-2 border-b border-gray-200 gap-2">
                                   <div className="text-xs text-gray-600">
-                                    <span className="font-semibold text-gray-900">SO: {g.so}</span> · Invoice: <span className="font-mono text-gray-900">{g.invoiceNumbers.join(", ")}</span> · Pelanggan: <span className="font-semibold text-gray-900">{g.customerName}</span>
+                                    <span className="font-semibold text-gray-900">Invoice: <span className="font-mono text-blue-700 font-bold">{g.invoiceNumber}</span></span> · SO: <span className="font-semibold text-gray-900">{g.so}</span> · Pelanggan: <span className="font-semibold text-gray-900">{g.customerName}</span>
                                     {g.allPrinted && g.printedAt && (
                                       <span className="ml-2 inline-flex items-center gap-1 font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
                                         <span>⏱ Selesai Print:</span>
