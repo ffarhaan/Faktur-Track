@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect, useCallback, Fragment } from "react";
 import * as XLSX from "xlsx";
-import { parseExcelFile, categorize } from "@/lib/parser";
+import { parseExcelFile, categorize, isOraCustomer } from "@/lib/parser";
 import { FakturRecord } from "@/lib/types";
 import { supabase } from "@/lib/supabaseClient";
 
@@ -105,8 +105,7 @@ function dbRowsToFakturRecords(rows: Array<Record<string, unknown>>): {
     const items = (extra.items as Array<Record<string, unknown>>) || [];
     const cust = String(extra.nama_pelanggan || "");
     const date = String(extra.accounting_date || extra.order_date || r.imported_at || "");
-    const upperCust = cust.toUpperCase();
-    const isOra = upperCust.includes("HELIOS") || upperCust.startsWith("HAK");
+    const isOra = isOraCustomer(cust, r.source_file as string);
     const invKey = isOra ? `${cleanInv}-1P` : cleanInv;
     const cleanJenis: "DOO" | "ORA" = isOra ? "ORA" : "DOO";
     const kategori = categorize(cleanJenis, cust, isOra ? "ORA" : "DOO");
@@ -412,8 +411,7 @@ export default function Home() {
         // Group parsed records by invoice to upsert to Supabase
         const invMap = new Map<string, Record<string, unknown>>();
         for (const r of parsed) {
-          const upperCust = (r.customerName || "").toUpperCase();
-          const isOra = r.jenisTransaksi === "ORA" || upperCust.includes("HELIOS") || upperCust.startsWith("HAK");
+          const isOra = isOraCustomer(r.customerName, r.jenisTransaksi);
           const noFaktur = isOra ? `${r.invoiceNumber}-1P` : r.invoiceNumber;
           if (!noFaktur || noFaktur === "0" || noFaktur === "-1P") continue;
 

@@ -13,16 +13,37 @@ for (const [k, v] of Object.entries(apotekMap)) {
   normMap[normalize(k)] = v;
 }
 
+/**
+ * ATURAN BAKU KLASIFIKASI TRANSAKSI (LOCKED):
+ * - ORA: HANYA untuk PT Helios Alchemist Kesehatan / HAK.
+ * - DOO: Semua transaksi reguler DOO (termasuk Apotek Medika Prima, SBS, Pasti Hemat, Halomedika, 2P, 3P).
+ */
+export function isOraCustomer(customerName?: string, sourceFile?: string): boolean {
+  const upperCust = String(customerName || "").toUpperCase().trim();
+  const upperSrc = String(sourceFile || "").toUpperCase().trim();
+  return (
+    upperCust.includes("HELIOS") ||
+    upperCust.startsWith("HAK") ||
+    (upperSrc === "ORA" && (upperCust.includes("HELIOS") || upperCust.startsWith("HAK") || !upperCust))
+  );
+}
+
+/**
+ * ATURAN BAKU KATEGORI PRIORITAS (LOCKED):
+ * - 1P: PT Helios (ORA) + Apotek Prioritas 1 DOO (Medika Prima, SBS, Pasti Hemat, Halomedika, Medika Akses) + Master Apotek 1P.
+ * - 2P: Apotek Prioritas 2 (dari masterApotek.json).
+ * - 3P: Apotek Reguler lainnya.
+ */
 export function categorize(jenisTransaksi: string, customerName: string, sourceFile?: string): "1P" | "2P" | "3P" {
   const cust = String(customerName || "").trim();
   const upper = cust.toUpperCase();
   const rawJenis = String(jenisTransaksi || "").toUpperCase();
   const rawSource = String(sourceFile || "").toUpperCase();
 
-  // 1P: ORA (HAK / Helios) or 1P DOO (Medika Prima / SBS / Pasti Hemat / Halomedika)
+  // 1P: Helios (ORA) atau Apotek DOO 1P (Halomedika, Medika Prima, SBS, Pasti Hemat, Medika Akses)
   if (
-    rawSource.includes("ORA") ||
-    rawJenis.includes("PRIORITY") ||
+    rawSource === "ORA" ||
+    rawJenis === "ORA" ||
     upper.includes("HELIOS") ||
     upper.startsWith("HAK") ||
     upper.includes("HALOMEDIKA") ||
@@ -101,8 +122,7 @@ function parseXXCUST(data: unknown[][], headerIdx: number): FakturRecord[] {
     if (!orderNumber && !invoiceNumber) continue;
 
     const customerName = String(row[idx.customerName] ?? "").trim();
-    const upperCust = customerName.toUpperCase();
-    const isOra = upperCust.includes("HELIOS") || upperCust.startsWith("HAK");
+    const isOra = isOraCustomer(customerName);
     const jenisTransaksi: "ORA" | "DOO" = isOra ? "ORA" : "DOO";
     const kategori = categorize(jenisTransaksi, customerName, jenisTransaksi);
     const invoiceKey = isOra ? `${invoiceNumber}-1P` : invoiceNumber;
@@ -179,10 +199,8 @@ function parseHTMLTable(html: string): FakturRecord[] {
 
     // Ship-to Customer sebagai nama pelanggan, fallback ke Bill-to Customer
     const customerName = texts[colMap["customer"]] || texts[colMap["billTo"]] || "";
-    const rawJenis = texts[colMap["jenis"]] || "";
     const rawSource = texts[colMap["source"]] || "";
-    const upperCust = customerName.toUpperCase();
-    const isOra = upperCust.includes("HELIOS") || upperCust.startsWith("HAK") || rawSource.toUpperCase().includes("ORA");
+    const isOra = isOraCustomer(customerName, rawSource);
     const jenisTransaksi: "ORA" | "DOO" = isOra ? "ORA" : "DOO";
 
     const kategori = isOra ? "1P" : categorize(jenisTransaksi, customerName, jenisTransaksi);
