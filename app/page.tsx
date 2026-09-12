@@ -8,6 +8,7 @@ import { supabase } from "@/lib/supabaseClient";
 
 type Filter = "all" | "belum" | "sudah" | "double";
 type KatFilter = "all" | "1P" | "2P" | "3P";
+type JenisFilter = "all" | "ORA" | "DOO";
 
 const ROWS_PER_PAGE = 50;
 
@@ -180,6 +181,7 @@ export default function Home() {
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [filter, setFilter] = useState<Filter>("belum");
   const [katFilter, setKatFilter] = useState<KatFilter>("all");
+  const [jenisFilter, setJenisFilter] = useState<JenisFilter>("all");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
@@ -509,6 +511,7 @@ export default function Home() {
     setPrintedAtMap({});
     setFilter("all");
     setKatFilter("all");
+    setJenisFilter("all");
     setSearch("");
     setPage(0);
     try {
@@ -582,6 +585,7 @@ export default function Home() {
     else if (filter === "sudah") result = result.filter((g) => g.allPrinted);
     else if (filter === "double") result = result.filter((g) => g.isDoubleInv);
     if (katFilter !== "all") result = result.filter((g) => g.kategori === katFilter);
+    if (jenisFilter !== "all") result = result.filter((g) => g.jenisTransaksi === jenisFilter);
     if (search) {
       const s = search.toLowerCase();
       result = result.filter(
@@ -597,14 +601,14 @@ export default function Home() {
       );
     }
     return result;
-  }, [grouped, filter, katFilter, search]);
+  }, [grouped, filter, katFilter, jenisFilter, search]);
 
   const totalPages = Math.ceil(filtered.length / ROWS_PER_PAGE);
   const pageData = filtered.slice(page * ROWS_PER_PAGE, (page + 1) * ROWS_PER_PAGE);
 
   useEffect(() => {
     setPage(0);
-  }, [filter, katFilter, search, sortOrder]);
+  }, [filter, katFilter, jenisFilter, search, sortOrder]);
 
   const summary = useMemo(() => {
     const uniqueInvoices = new Set(records.map((r) => r.invoiceKey));
@@ -824,6 +828,12 @@ export default function Home() {
                 <FBtn active={katFilter === "1P"} onClick={() => setKatFilter("1P")} color="blue">1P</FBtn>
                 <FBtn active={katFilter === "2P"} onClick={() => setKatFilter("2P")} color="green">2P</FBtn>
                 <FBtn active={katFilter === "3P"} onClick={() => setKatFilter("3P")} color="purple">3P</FBtn>
+              </div>
+              <div className="h-6 w-px bg-gray-200 mx-1" />
+              <div className="flex gap-1">
+                <FBtn active={jenisFilter === "all"} onClick={() => setJenisFilter("all")}>All Jenis</FBtn>
+                <FBtn active={jenisFilter === "ORA"} onClick={() => setJenisFilter("ORA")} color="blue">ORA</FBtn>
+                <FBtn active={jenisFilter === "DOO"} onClick={() => setJenisFilter("DOO")} color="emerald">DOO</FBtn>
               </div>
               <div className="h-6 w-px bg-gray-200 mx-1" />
               <button
@@ -1101,7 +1111,7 @@ function Card({ label, value, color, small }: { label: string; value: string; co
 
 function FBtn({ active, onClick, children, color = "gray" }: {
   active: boolean; onClick: () => void; children: React.ReactNode;
-  color?: "gray" | "orange" | "red" | "blue" | "green" | "purple";
+  color?: "gray" | "orange" | "red" | "blue" | "green" | "purple" | "emerald";
 }) {
   const colors: Record<string, string> = {
     gray: active ? "bg-gray-800 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200",
@@ -1110,6 +1120,7 @@ function FBtn({ active, onClick, children, color = "gray" }: {
     blue: active ? "bg-blue-600 text-white" : "bg-blue-100 text-blue-700 hover:bg-blue-200",
     green: active ? "bg-green-600 text-white" : "bg-green-100 text-green-700 hover:bg-green-200",
     purple: active ? "bg-purple-600 text-white" : "bg-purple-100 text-purple-700 hover:bg-purple-200",
+    emerald: active ? "bg-emerald-600 text-white" : "bg-emerald-100 text-emerald-700 hover:bg-emerald-200",
   };
   return (
     <button onClick={onClick} className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${colors[color]}`}>
