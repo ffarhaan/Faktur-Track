@@ -34,7 +34,7 @@ function parseDateMs(dStr: string): number {
 
 function formatRupiah(n: number): string {
   if (typeof n !== "number" || isNaN(n)) return "0";
-  return new Intl.NumberFormat("en-US", {
+  return new Intl.NumberFormat("id-ID", {
     minimumFractionDigits: 0,
     maximumFractionDigits: 2,
   }).format(n);
