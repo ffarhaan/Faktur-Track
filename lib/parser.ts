@@ -100,11 +100,12 @@ function parseXXCUST(data: unknown[][], headerIdx: number): FakturRecord[] {
     const invoiceNumber = String(row[idx.invoiceNumber] ?? "").trim();
     if (!orderNumber && !invoiceNumber) continue;
 
-    const jenisTransaksi = String(row[idx.jenisTransaksi] ?? "").trim();
     const customerName = String(row[idx.customerName] ?? "").trim();
-
-    const kategori = categorize(jenisTransaksi, customerName);
-    const invoiceKey = kategori === "1P" ? `${invoiceNumber}-1P` : invoiceNumber;
+    const upperCust = customerName.toUpperCase();
+    const isOra = upperCust.includes("HELIOS") || upperCust.startsWith("HAK");
+    const jenisTransaksi: "ORA" | "DOO" = isOra ? "ORA" : "DOO";
+    const kategori = categorize(jenisTransaksi, customerName, jenisTransaksi);
+    const invoiceKey = isOra ? `${invoiceNumber}-1P` : invoiceNumber;
 
     records.push({
       orderDate: String(row[idx.orderDate] ?? "").trim(),
@@ -180,11 +181,12 @@ function parseHTMLTable(html: string): FakturRecord[] {
     const customerName = texts[colMap["customer"]] || texts[colMap["billTo"]] || "";
     const rawJenis = texts[colMap["jenis"]] || "";
     const rawSource = texts[colMap["source"]] || "";
-    const isOra = rawSource.toUpperCase().includes("ORA") || rawJenis.toUpperCase().includes("PRIORITY") || customerName.toLowerCase().includes("helios");
-    const jenisTransaksi = isOra ? "ORA" : "DOO";
+    const upperCust = customerName.toUpperCase();
+    const isOra = upperCust.includes("HELIOS") || upperCust.startsWith("HAK") || rawSource.toUpperCase().includes("ORA");
+    const jenisTransaksi: "ORA" | "DOO" = isOra ? "ORA" : "DOO";
 
-    const kategori = isOra ? "1P" : categorize(rawJenis, customerName);
-    const invoiceKey = kategori === "1P" ? `${invVal}-1P` : invVal;
+    const kategori = isOra ? "1P" : categorize(jenisTransaksi, customerName, jenisTransaksi);
+    const invoiceKey = isOra ? `${invVal}-1P` : invVal;
 
     records.push({
       orderDate: texts[colMap["date"]] || "",

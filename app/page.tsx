@@ -104,12 +104,12 @@ function dbRowsToFakturRecords(rows: Array<Record<string, unknown>>): {
     const extra = (r.extra as Record<string, unknown>) || {};
     const items = (extra.items as Array<Record<string, unknown>>) || [];
     const cust = String(extra.nama_pelanggan || "");
-    const jenis = String(extra.jenis_transaksi || r.source_file || "");
     const date = String(extra.accounting_date || extra.order_date || r.imported_at || "");
-    const isOra = rawInv.endsWith("-1P") || String(r.source_file || "").toUpperCase() === "ORA" || jenis.includes("PRIORITY") || cust.toLowerCase().includes("helios") || cust.toUpperCase().startsWith("HAK");
+    const upperCust = cust.toUpperCase();
+    const isOra = upperCust.includes("HELIOS") || upperCust.startsWith("HAK");
     const invKey = isOra ? `${cleanInv}-1P` : cleanInv;
     const cleanJenis: "DOO" | "ORA" = isOra ? "ORA" : "DOO";
-    const kategori = categorize(jenis, cust, r.source_file as string);
+    const kategori = categorize(cleanJenis, cust, isOra ? "ORA" : "DOO");
     const pAt = (r.printed_at as string) || (extra.printed_at as string) || null;
 
     if (r.status_cetak) {
@@ -412,11 +412,12 @@ export default function Home() {
         // Group parsed records by invoice to upsert to Supabase
         const invMap = new Map<string, Record<string, unknown>>();
         for (const r of parsed) {
-          const is1P = r.kategori === "1P" || r.jenisTransaksi.includes("PRIORITY") || r.customerName.toLowerCase().includes("helios");
-          const noFaktur = is1P ? `${r.invoiceNumber}-1P` : r.invoiceNumber;
+          const upperCust = (r.customerName || "").toUpperCase();
+          const isOra = r.jenisTransaksi === "ORA" || upperCust.includes("HELIOS") || upperCust.startsWith("HAK");
+          const noFaktur = isOra ? `${r.invoiceNumber}-1P` : r.invoiceNumber;
           if (!noFaktur || noFaktur === "0" || noFaktur === "-1P") continue;
 
-          const prevInfo = existingStatusMap.get(noFaktur);
+          const prevInfo = existingStatusMap.get(noFaktur) || existingStatusMap.get(r.invoiceNumber) || existingStatusMap.get(`${r.invoiceNumber}-1P`);
           const isPrinted = prevInfo ? prevInfo.status_cetak : false;
           const printedAt = prevInfo ? prevInfo.printed_at : null;
 
@@ -428,10 +429,10 @@ export default function Home() {
               status_cetak: isPrinted,
               printed_at: printedAt,
               imported_at: importedAt,
-              source_file: is1P ? "ORA" : "DOO",
+              source_file: isOra ? "ORA" : "DOO",
               extra: {
                 nama_pelanggan: r.customerName || (prevInfo?.extra?.nama_pelanggan as string) || null,
-                jenis_transaksi: r.jenisTransaksi || (prevInfo?.extra?.jenis_transaksi as string) || null,
+                jenis_transaksi: isOra ? "ORA" : "DOO",
                 accounting_date: r.orderDate || (prevInfo?.extra?.accounting_date as string) || null,
                 order_date: r.orderDate || (prevInfo?.extra?.order_date as string) || null,
                 items: [],
