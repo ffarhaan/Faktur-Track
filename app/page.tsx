@@ -415,7 +415,7 @@ export default function Home() {
           const noFaktur = isOra ? `${r.invoiceNumber}-1P` : r.invoiceNumber;
           if (!noFaktur || noFaktur === "0" || noFaktur === "-1P") continue;
 
-          const prevInfo = existingStatusMap.get(noFaktur) || existingStatusMap.get(r.invoiceNumber) || existingStatusMap.get(`${r.invoiceNumber}-1P`);
+          const prevInfo = existingStatusMap.get(noFaktur);
           const isPrinted = prevInfo ? prevInfo.status_cetak : false;
           const printedAt = prevInfo ? prevInfo.printed_at : null;
 
