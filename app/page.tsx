@@ -653,7 +653,7 @@ export default function Home() {
       return parseDateMs(a.orderDate) - parseDateMs(b.orderDate);
     });
 
-    // Format Sheet 1: Rekap Faktur (Order Date - No SO - No Invoice - Pelanggan - Total Harga)
+    // Format 1 Sheet: Rekap Faktur (No, Order Date, No SO, No Invoice, Pelanggan, Total Harga)
     const rekapData = sorted.map((g, idx) => ({
       "No": idx + 1,
       "Order Date": g.orderDate || "-",
@@ -661,43 +661,10 @@ export default function Home() {
       "No Invoice": g.invoiceNumber,
       "Pelanggan": g.customerName || "-",
       "Total Harga": g.totalHarga,
-      "Jenis Transaksi": g.jenisTransaksi,
-      "Kategori": g.kategori,
-      "Status Print": g.allPrinted ? "Sudah Terprint" : "Belum Terprint",
-      "Waktu Done Print": g.allPrinted && g.printedAt ? formatPrintTime(g.printedAt) : "-",
-    }));
-
-    // Format Sheet 2: Detail Item (Ascending by invoice number)
-    const validItems = records.filter(
-      (r) => r.invoiceNumber && r.invoiceNumber !== "0" && r.invoiceNumber !== "-"
-    );
-    const sortedItems = [...validItems].sort((a, b) => {
-      const invA = parseInvNum(a.invoiceNumber);
-      const invB = parseInvNum(b.invoiceNumber);
-      if (invA !== invB) return invA - invB;
-      return parseDateMs(a.orderDate) - parseDateMs(b.orderDate);
-    });
-
-    const itemData = sortedItems.map((r, idx) => ({
-      "No": idx + 1,
-      "Order Date": r.orderDate || "-",
-      "No SO": r.orderNumber || "-",
-      "No Invoice": r.invoiceNumber,
-      "Pelanggan": r.customerName || "-",
-      "Item Code": r.itemCode || "-",
-      "Item Description": r.itemDescription || "-",
-      "Qty": r.qty,
-      "UOM": r.uom || "-",
-      "Lot Number": r.lotNumber || "-",
-      "Total Harga": r.totalHarga,
-      "Kategori": r.kategori,
-      "Jenis Transaksi": r.jenisTransaksi,
-      "Status Print": printedInvoices.has(r.invoiceKey) ? "Sudah Terprint" : "Belum Terprint",
     }));
 
     const workbook = XLSX.utils.book_new();
 
-    // Sheet 1: Rekap Faktur
     const wsRekap = XLSX.utils.json_to_sheet(rekapData);
     wsRekap["!cols"] = [
       { wch: 6 },  // No
@@ -706,38 +673,14 @@ export default function Home() {
       { wch: 16 }, // No Invoice
       { wch: 35 }, // Pelanggan
       { wch: 18 }, // Total Harga
-      { wch: 16 }, // Jenis Transaksi
-      { wch: 10 }, // Kategori
-      { wch: 16 }, // Status Print
-      { wch: 22 }, // Waktu Done Print
     ];
     XLSX.utils.book_append_sheet(workbook, wsRekap, "Rekap Faktur");
-
-    // Sheet 2: Detail Item
-    const wsItems = XLSX.utils.json_to_sheet(itemData);
-    wsItems["!cols"] = [
-      { wch: 6 },  // No
-      { wch: 14 }, // Order Date
-      { wch: 18 }, // No SO
-      { wch: 16 }, // No Invoice
-      { wch: 35 }, // Pelanggan
-      { wch: 18 }, // Item Code
-      { wch: 35 }, // Item Description
-      { wch: 8 },  // Qty
-      { wch: 8 },  // UOM
-      { wch: 16 }, // Lot Number
-      { wch: 18 }, // Total Harga
-      { wch: 10 }, // Kategori
-      { wch: 16 }, // Jenis Transaksi
-      { wch: 16 }, // Status Print
-    ];
-    XLSX.utils.book_append_sheet(workbook, wsItems, "Detail Item");
 
     const now = new Date();
     const pad = (n: number) => String(n).padStart(2, "0");
     const dateStr = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
     XLSX.writeFile(workbook, `Rekap_Faktur_Ascending_${dateStr}.xlsx`);
-  }, [records, grouped, printedInvoices]);
+  }, [records, grouped]);
 
   return (
     <main className="min-h-screen bg-gray-50">
