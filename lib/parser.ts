@@ -229,6 +229,97 @@ function parseHTMLTable(html: string): FakturRecord[] {
   return records;
 }
 
+function formatExcelDate(v: unknown): string {
+  if (typeof v === "number") {
+    const d = new Date(Math.round((v - 25569) * 86400 * 1000));
+    if (!isNaN(d.getTime())) {
+      const pad = (n: number) => String(n).padStart(2, "0");
+      return `${pad(d.getUTCDate())}/${pad(d.getUTCMonth() + 1)}/${d.getUTCFullYear()}`;
+    }
+  }
+  return String(v || "").trim();
+}
+
+function parseExportArray(data: unknown[][], headerIdx: number = -1): FakturRecord[] {
+  let colMap: Record<string, number> = {};
+  let startIdx = 0;
+
+  if (headerIdx !== -1) {
+    const header = data[headerIdx] as string[];
+    header.forEach((h, i) => {
+      const s = String(h || "").toLowerCase();
+      if (s.includes("accounting date") || s.includes("transaction date")) colMap["date"] = i;
+      if (s === "reference" || s.includes("reference")) colMap["so"] = i;
+      if (s.includes("transaction number")) colMap["inv"] = i;
+      if (s.includes("ship-to customer") || s.includes("customer")) colMap["customer"] = i;
+      if (s.includes("bill-to customer")) colMap["billTo"] = i;
+      if (s.includes("transaction source")) colMap["source"] = i;
+      if (s.includes("transaction type")) colMap["jenis"] = i;
+      if (s.includes("entered amount") || s.includes("amount")) colMap["amount"] = i;
+    });
+    startIdx = headerIdx + 1;
+  } else {
+    colMap = {
+      date: 0,
+      so: 1,
+      inv: 2,
+      customer: 3,
+      source: 4,
+      jenis: 6,
+      amount: 11,
+    };
+    startIdx = 0;
+  }
+
+  const records: FakturRecord[] = [];
+  for (let i = startIdx; i < data.length; i++) {
+    const row = data[i];
+    if (!row || row.length < 3) continue;
+
+    const soVal = String(row[colMap["so"] ?? 1] ?? "").trim();
+    const invVal = String(row[colMap["inv"] ?? 2] ?? "").trim();
+    if (!soVal && !invVal) continue;
+    if (soVal.toLowerCase() === "reference" || invVal.toLowerCase().includes("transaction")) continue;
+
+    const customerName = String(
+      (colMap["customer"] !== undefined ? row[colMap["customer"]] : "") ||
+      (colMap["billTo"] !== undefined ? row[colMap["billTo"]] : "") ||
+      row[3] || ""
+    ).trim();
+
+    const rawSource = String((colMap["source"] !== undefined ? row[colMap["source"]] : row[4]) || "").trim();
+    const isOra = isOraCustomer(customerName, rawSource);
+    const jenisTransaksi: "ORA" | "DOO" = isOra ? "ORA" : "DOO";
+
+    const kategori = isOra ? "1P" : categorize(jenisTransaksi, customerName, jenisTransaksi);
+    const invoiceKey = isOra ? `${invVal}-1P` : invVal;
+
+    const rawAmount = row[colMap["amount"] ?? 11];
+    const totalHarga = typeof rawAmount === "number" ? rawAmount : Number(String(rawAmount || "").replace(/[^0-9.-]/g, "") || 0);
+
+    records.push({
+      orderDate: formatExcelDate(row[colMap["date"] ?? 0]),
+      orderNumber: soVal,
+      invoiceNumber: invVal,
+      invoiceKey,
+      jenisTransaksi,
+      customerName,
+      itemCode: "-",
+      itemDescription: "-",
+      qty: "-",
+      uom: "-",
+      lotNumber: "-",
+      totalHarga,
+      kategori,
+      isDoubleInv: false,
+      rowIndex: i,
+    });
+  }
+
+  detectDoubleInvoices(records);
+  return records;
+}
+
 export async function parseExcelFile(file: File): Promise<FakturRecord[]> {
   const buffer = await file.arrayBuffer();
 
@@ -238,7 +329,7 @@ export async function parseExcelFile(file: File): Promise<FakturRecord[]> {
     const ws = wb.Sheets[wb.SheetNames[0]];
     const data = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true }) as unknown[][];
 
-    // Find header row with "Jenis Transaksi" or "Order Number"
+    // Find header row with "Jenis Transaksi" or "Order Number" (XXCUST format)
     const headerIdx = data.findIndex(
       (row) =>
         row &&
@@ -252,18 +343,28 @@ export async function parseExcelFile(file: File): Promise<FakturRecord[]> {
       return parseXXCUST(data, headerIdx);
     }
 
-    // Check for export format headers
+    // Check for export format headers with "reference" or "transaction number"
     const exportIdx = data.findIndex(
       (row) =>
         row &&
         row.some((cell) => {
           const s = String(cell || "").toLowerCase();
-          return s.includes("reference");
+          return s.includes("reference") || s.includes("transaction number");
         })
     );
 
     if (exportIdx !== -1) {
-      // xlsx might not parse HTML well, fall through to HTML
+      return parseExportArray(data, exportIdx);
+    }
+
+    // If data has at least 5 columns and looks like Oracle export (col 1 is SO code, col 4 is DOO/ORA)
+    if (data.length > 0 && data[0] && data[0].length >= 5) {
+      const sample = data[0];
+      const s1 = String(sample[1] || "");
+      const s4 = String(sample[4] || "");
+      if (s4.includes("Distributed Order") || s4.includes("ORA_") || s1.includes("-") || /^\d{4,}/.test(s1)) {
+        return parseExportArray(data, -1);
+      }
     }
   } catch {
     // Not xlsx, try HTML
