@@ -214,11 +214,6 @@ export default function Home() {
         setRecords(recs);
         setPrintedInvoices(printedSet);
         setPrintedAtMap(pMap);
-        try {
-          localStorage.setItem("records", JSON.stringify(recs));
-          localStorage.setItem("printedInvoices", JSON.stringify([...printedSet]));
-          localStorage.setItem("printedAtMap", JSON.stringify(pMap));
-        } catch {}
       }
     } catch (err) {
       console.error("Supabase sync error:", err);
@@ -227,19 +222,8 @@ export default function Home() {
     }
   }, []);
 
-  // Load on mount: fast cache first, then sync with Supabase
+  // Load on mount: fetch directly from Supabase (Source of Truth)
   useEffect(() => {
-    try {
-      const storedRecords = localStorage.getItem("records");
-      if (storedRecords) setRecords(JSON.parse(storedRecords));
-      const storedPrinted = localStorage.getItem("printedInvoices");
-      if (storedPrinted) setPrintedInvoices(new Set(JSON.parse(storedPrinted)));
-      const storedPMap = localStorage.getItem("printedAtMap");
-      if (storedPMap) setPrintedAtMap(JSON.parse(storedPMap));
-      const storedFiles = localStorage.getItem("uploadedFiles");
-      if (storedFiles) setUploadedFiles(JSON.parse(storedFiles));
-    } catch {}
-
     fetchFromSupabase(true);
 
     // Sync from Supabase every 15s so all devices stay updated
