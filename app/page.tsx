@@ -189,7 +189,7 @@ export default function Home() {
   const [dragOver, setDragOver] = useState(false);
   const [expandedInvoices, setExpandedInvoices] = useState<Set<string>>(new Set());
   const [selectedRowIndex, setSelectedRowIndex] = useState(0);
-  const [selectedColIdx, setSelectedColIdx] = useState(6); // Default: No Invoice
+  const [selectedColIdx, setSelectedColIdx] = useState(4); // Default: No Invoice
   const [copyToast, setCopyToast] = useState<string | null>(null);
 
   const isFetchingRef = useRef(false);
@@ -695,41 +695,41 @@ export default function Home() {
               case 0: // Expand / Whole row
                 textToCopy = [
                   currentGroup.allPrinted ? "✓" : "○",
-                  currentGroup.printedAt ? formatPrintTime(currentGroup.printedAt) : "-",
-                  currentGroup.kategori,
                   currentGroup.orderDate,
                   currentGroup.so,
                   currentGroup.invoiceNumber,
                   currentGroup.jenisTransaksi,
                   currentGroup.customerName,
+                  currentGroup.kategori,
+                  currentGroup.printedAt ? formatPrintTime(currentGroup.printedAt) : "-",
                   currentGroup.totalHarga,
                 ].join("\t");
                 break;
-              case 1:
+              case 1: // Print status
                 textToCopy = currentGroup.allPrinted ? "Sudah Terprint" : "Belum Terprint";
                 break;
-              case 2:
-                textToCopy = currentGroup.printedAt ? formatPrintTime(currentGroup.printedAt) : "-";
-                break;
-              case 3:
-                textToCopy = currentGroup.kategori;
-                break;
-              case 4:
+              case 2: // Order Date
                 textToCopy = currentGroup.orderDate;
                 break;
-              case 5:
+              case 3: // No SO
                 textToCopy = currentGroup.so;
                 break;
-              case 6:
+              case 4: // No Invoice
                 textToCopy = currentGroup.invoiceNumber;
                 break;
-              case 7:
+              case 5: // Jenis Transaksi
                 textToCopy = currentGroup.jenisTransaksi;
                 break;
-              case 8:
+              case 6: // Pelanggan
                 textToCopy = currentGroup.customerName;
                 break;
-              case 9:
+              case 7: // Kategori
+                textToCopy = currentGroup.kategori;
+                break;
+              case 8: // Done Print
+                textToCopy = currentGroup.printedAt ? formatPrintTime(currentGroup.printedAt) : "-";
+                break;
+              case 9: // Total Harga
                 textToCopy = String(currentGroup.totalHarga);
                 break;
               default:
@@ -1035,13 +1035,13 @@ export default function Home() {
                     <tr>
                       <th className="px-2 py-2 w-8 text-center text-xs font-medium text-gray-500">#</th>
                       <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 whitespace-nowrap">Print</th>
-                      <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 whitespace-nowrap">Done Print (Waktu)</th>
-                      <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 whitespace-nowrap">Kat</th>
                       <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 whitespace-nowrap">Order Date</th>
                       <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 whitespace-nowrap">No SO</th>
                       <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 whitespace-nowrap">No Invoice</th>
                       <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 whitespace-nowrap">Jenis Transaksi</th>
                       <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 whitespace-nowrap">Pelanggan</th>
+                      <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 whitespace-nowrap">Kat</th>
+                      <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 whitespace-nowrap">Done Print (Waktu)</th>
                       <th className="px-2 py-2 text-right text-xs font-medium text-gray-500 whitespace-nowrap">Total Harga</th>
                     </tr>
                   </thead>
@@ -1123,14 +1123,103 @@ export default function Home() {
                               </button>
                             </td>
 
-                            {/* Col 2: Done Print Time */}
+                            {/* Col 2: Order Date */}
                             <td
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setSelectedRowIndex(rowIdx);
                                 setSelectedColIdx(2);
                               }}
-                              className={`px-2 py-2 whitespace-nowrap ${getCellCls(2)}`}
+                              className={`px-2 py-2 text-gray-600 whitespace-nowrap text-xs ${getCellCls(2)}`}
+                            >
+                              {g.orderDate}
+                            </td>
+
+                            {/* Col 3: No SO */}
+                            <td
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedRowIndex(rowIdx);
+                                setSelectedColIdx(3);
+                              }}
+                              className={`px-2 py-2 font-mono text-xs text-gray-900 whitespace-nowrap ${getCellCls(3)}`}
+                            >
+                              {g.so}
+                              {g.isDoubleInv && <span className="ml-1 text-red-600 font-bold" title="SO ini memiliki lebih dari 1 faktur">⚠</span>}
+                            </td>
+
+                            {/* Col 4: No Invoice */}
+                            <td
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedRowIndex(rowIdx);
+                                setSelectedColIdx(4);
+                              }}
+                              className={`px-2 py-2 font-mono text-xs text-gray-900 whitespace-nowrap font-medium ${getCellCls(4)}`}
+                            >
+                              {hasInvoice ? (
+                                g.invoiceNumber
+                              ) : (
+                                <span className="text-gray-400 italic text-xs">Menunggu Faktur</span>
+                              )}
+                            </td>
+
+                            {/* Col 5: Jenis Transaksi */}
+                            <td
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedRowIndex(rowIdx);
+                                setSelectedColIdx(5);
+                              }}
+                              className={`px-2 py-2 whitespace-nowrap ${getCellCls(5)}`}
+                            >
+                              <span className={`inline-block px-2 py-0.5 rounded text-xs font-bold ${
+                                g.jenisTransaksi === "ORA"
+                                  ? "bg-blue-100 text-blue-800"
+                                  : "bg-emerald-100 text-emerald-800"
+                              }`}>
+                                {g.jenisTransaksi}
+                              </span>
+                            </td>
+
+                            {/* Col 6: Pelanggan */}
+                            <td
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedRowIndex(rowIdx);
+                                setSelectedColIdx(6);
+                              }}
+                              className={`px-2 py-2 text-gray-700 whitespace-nowrap max-w-xs truncate ${getCellCls(6)}`}
+                            >
+                              {g.customerName}
+                            </td>
+
+                            {/* Col 7: Kategori */}
+                            <td
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedRowIndex(rowIdx);
+                                setSelectedColIdx(7);
+                              }}
+                              className={`px-2 py-2 ${getCellCls(7)}`}
+                            >
+                              <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${
+                                g.kategori === "1P" ? "bg-blue-100 text-blue-700"
+                                : g.kategori === "2P" ? "bg-green-100 text-green-700"
+                                : "bg-purple-100 text-purple-700"
+                              }`}>
+                                {g.kategori}
+                              </span>
+                            </td>
+
+                            {/* Col 8: Done Print Time */}
+                            <td
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedRowIndex(rowIdx);
+                                setSelectedColIdx(8);
+                              }}
+                              className={`px-2 py-2 whitespace-nowrap ${getCellCls(8)}`}
                             >
                               {g.allPrinted && g.printedAt ? (
                                 <span className="inline-flex items-center gap-1 text-[11px] font-mono font-medium text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200" title={`Selesai diprint pada: ${formatPrintTime(g.printedAt)}`}>
@@ -1142,95 +1231,6 @@ export default function Home() {
                               ) : (
                                 <span className="text-xs text-gray-300">-</span>
                               )}
-                            </td>
-
-                            {/* Col 3: Kategori */}
-                            <td
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSelectedRowIndex(rowIdx);
-                                setSelectedColIdx(3);
-                              }}
-                              className={`px-2 py-2 ${getCellCls(3)}`}
-                            >
-                              <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${
-                                g.kategori === "1P" ? "bg-blue-100 text-blue-700"
-                                : g.kategori === "2P" ? "bg-green-100 text-green-700"
-                                : "bg-purple-100 text-purple-700"
-                              }`}>
-                                {g.kategori}
-                              </span>
-                            </td>
-
-                            {/* Col 4: Order Date */}
-                            <td
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSelectedRowIndex(rowIdx);
-                                setSelectedColIdx(4);
-                              }}
-                              className={`px-2 py-2 text-gray-600 whitespace-nowrap text-xs ${getCellCls(4)}`}
-                            >
-                              {g.orderDate}
-                            </td>
-
-                            {/* Col 5: No SO */}
-                            <td
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSelectedRowIndex(rowIdx);
-                                setSelectedColIdx(5);
-                              }}
-                              className={`px-2 py-2 font-mono text-xs text-gray-900 whitespace-nowrap ${getCellCls(5)}`}
-                            >
-                              {g.so}
-                              {g.isDoubleInv && <span className="ml-1 text-red-600 font-bold" title="SO ini memiliki lebih dari 1 faktur">⚠</span>}
-                            </td>
-
-                            {/* Col 6: No Invoice */}
-                            <td
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSelectedRowIndex(rowIdx);
-                                setSelectedColIdx(6);
-                              }}
-                              className={`px-2 py-2 font-mono text-xs text-gray-900 whitespace-nowrap font-medium ${getCellCls(6)}`}
-                            >
-                              {hasInvoice ? (
-                                g.invoiceNumber
-                              ) : (
-                                <span className="text-gray-400 italic text-xs">Menunggu Faktur</span>
-                              )}
-                            </td>
-
-                            {/* Col 7: Jenis Transaksi */}
-                            <td
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSelectedRowIndex(rowIdx);
-                                setSelectedColIdx(7);
-                              }}
-                              className={`px-2 py-2 whitespace-nowrap ${getCellCls(7)}`}
-                            >
-                              <span className={`inline-block px-2 py-0.5 rounded text-xs font-bold ${
-                                g.jenisTransaksi === "ORA"
-                                  ? "bg-blue-100 text-blue-800"
-                                  : "bg-emerald-100 text-emerald-800"
-                              }`}>
-                                {g.jenisTransaksi}
-                              </span>
-                            </td>
-
-                            {/* Col 8: Pelanggan */}
-                            <td
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSelectedRowIndex(rowIdx);
-                                setSelectedColIdx(8);
-                              }}
-                              className={`px-2 py-2 text-gray-700 whitespace-nowrap max-w-xs truncate ${getCellCls(8)}`}
-                            >
-                              {g.customerName}
                             </td>
 
                             {/* Col 9: Total Harga */}
