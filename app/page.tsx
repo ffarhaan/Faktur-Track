@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect, useCallback, Fragment } from "react";
+import { useState, useMemo, useEffect, useCallback, useRef, Fragment } from "react";
 import * as XLSX from "xlsx";
 import { parseExcelFile, categorize, isOraCustomer } from "@/lib/parser";
 import { FakturRecord } from "@/lib/types";
@@ -189,8 +189,12 @@ export default function Home() {
   const [dragOver, setDragOver] = useState(false);
   const [expandedInvoices, setExpandedInvoices] = useState<Set<string>>(new Set());
 
-  // Fetch all records from Supabase
+  const isFetchingRef = useRef(false);
+
+  // Fetch all records from Supabase (Deterministic & Locked)
   const fetchFromSupabase = useCallback(async (showLoading = false) => {
+    if (isFetchingRef.current) return;
+    isFetchingRef.current = true;
     if (showLoading) setLoading(true);
     try {
       let allRows: Array<Record<string, unknown>> = [];
@@ -210,14 +214,28 @@ export default function Home() {
       }
 
       if (allRows.length > 0) {
-        const { records: recs, printedSet, printedAtMap: pMap } = dbRowsToFakturRecords(allRows);
+        // Guaranteed Unique Deduplication by ID
+        const seenIds = new Set<string>();
+        const uniqueRows = allRows.filter((r) => {
+          const key = String(r.id || r.no_faktur);
+          if (seenIds.has(key)) return false;
+          seenIds.add(key);
+          return true;
+        });
+
+        const { records: recs, printedSet, printedAtMap: pMap } = dbRowsToFakturRecords(uniqueRows);
         setRecords(recs);
         setPrintedInvoices(printedSet);
         setPrintedAtMap(pMap);
+      } else {
+        setRecords([]);
+        setPrintedInvoices(new Set());
+        setPrintedAtMap({});
       }
     } catch (err) {
       console.error("Supabase sync error:", err);
     } finally {
+      isFetchingRef.current = false;
       if (showLoading) setLoading(false);
     }
   }, []);
