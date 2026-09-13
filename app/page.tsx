@@ -327,11 +327,9 @@ export default function Home() {
   const markAllAsPrinted = useCallback(async () => {
     const next = new Set(printedInvoices);
     const nowIso = new Date().toISOString();
-    const allKeys: string[] = [];
     const nextMap: Record<string, string> = { ...printedAtMap };
     for (const r of records) {
       next.add(r.invoiceKey);
-      allKeys.push(r.invoiceKey);
       nextMap[r.invoiceKey] = nowIso;
     }
     setPrintedInvoices(next);
@@ -341,12 +339,10 @@ export default function Home() {
       localStorage.setItem("printedAtMap", JSON.stringify(nextMap));
     } catch {}
 
-    for (const batch of chunk(allKeys, 500)) {
-      await supabase
-        .from("faktur_records")
-        .update({ status_cetak: true, printed_at: nowIso })
-        .in("no_faktur", batch);
-    }
+    await supabase
+      .from("faktur_records")
+      .update({ status_cetak: true, printed_at: nowIso })
+      .neq("id", "00000000-0000-0000-0000-000000000000");
   }, [records, printedInvoices, printedAtMap]);
 
   const markAllAsUnprinted = useCallback(async () => {
@@ -358,17 +354,11 @@ export default function Home() {
       localStorage.setItem("printedAtMap", JSON.stringify({}));
     } catch {}
 
-    const allKeys: string[] = [];
-    for (const r of records) {
-      allKeys.push(r.invoiceKey);
-    }
-    for (const batch of chunk(allKeys, 500)) {
-      await supabase
-        .from("faktur_records")
-        .update({ status_cetak: false, printed_at: null })
-        .in("no_faktur", batch);
-    }
-  }, [records]);
+    await supabase
+      .from("faktur_records")
+      .update({ status_cetak: false, printed_at: null })
+      .neq("id", "00000000-0000-0000-0000-000000000000");
+  }, []);
 
   // Upload: Parse & Save directly to Supabase cloud DB so all devices see it
   const handleUpload = useCallback(
