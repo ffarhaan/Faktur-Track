@@ -188,6 +188,9 @@ export default function Home() {
   const [printedAtMap, setPrintedAtMap] = useState<Record<string, string>>({});
   const [dragOver, setDragOver] = useState(false);
   const [expandedInvoices, setExpandedInvoices] = useState<Set<string>>(new Set());
+  const [selectedRowIndex, setSelectedRowIndex] = useState(0);
+  const [selectedColIdx, setSelectedColIdx] = useState(6); // Default: No Invoice
+  const [copyToast, setCopyToast] = useState<string | null>(null);
 
   const isFetchingRef = useRef(false);
 
@@ -600,7 +603,153 @@ export default function Home() {
 
   useEffect(() => {
     setPage(0);
+    setSelectedRowIndex(0);
   }, [filter, katFilter, jenisFilter, search, sortOrder]);
+
+  // Clamp selection on page change
+  useEffect(() => {
+    setSelectedRowIndex((prev) => Math.min(Math.max(0, prev), Math.max(0, pageData.length - 1)));
+  }, [page, pageData.length]);
+
+  // Auto-scroll active row into view smoothly
+  useEffect(() => {
+    if (pageData.length === 0) return;
+    const rowEl = document.getElementById(`faktur-row-${selectedRowIndex}`);
+    if (rowEl) {
+      rowEl.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }
+  }, [selectedRowIndex, pageData.length]);
+
+  // Keyboard navigation listener (Spreadsheet-like)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+
+      if (pageData.length === 0) return;
+
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setSelectedRowIndex((prev) => {
+          if (prev < pageData.length - 1) return prev + 1;
+          if (page < totalPages - 1) {
+            setPage((p) => p + 1);
+            return 0;
+          }
+          return prev;
+        });
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setSelectedRowIndex((prev) => {
+          if (prev > 0) return prev - 1;
+          if (page > 0) {
+            setPage((p) => p - 1);
+            return ROWS_PER_PAGE - 1;
+          }
+          return prev;
+        });
+      } else if (e.key === "ArrowRight") {
+        e.preventDefault();
+        setSelectedColIdx((prev) => Math.min(9, prev + 1));
+      } else if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        setSelectedColIdx((prev) => Math.max(0, prev - 1));
+      } else if (e.key === " " || e.code === "Space") {
+        e.preventDefault();
+        const currentGroup = pageData[selectedRowIndex];
+        if (
+          currentGroup &&
+          currentGroup.invoiceNumber &&
+          currentGroup.invoiceNumber !== "0" &&
+          currentGroup.invoiceNumber !== "-"
+        ) {
+          togglePrint(currentGroup);
+        }
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        const currentGroup = pageData[selectedRowIndex];
+        if (currentGroup) {
+          toggleExpand(currentGroup.key);
+        }
+      } else if (e.key === "PageDown" || e.key === "]") {
+        e.preventDefault();
+        setPage((p) => Math.min(totalPages - 1, p + 1));
+      } else if (e.key === "PageUp" || e.key === "[") {
+        e.preventDefault();
+        setPage((p) => Math.max(0, p - 1));
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "c") {
+        const selection = window.getSelection()?.toString();
+        if (!selection) {
+          e.preventDefault();
+          const currentGroup = pageData[selectedRowIndex];
+          if (currentGroup) {
+            let textToCopy = "";
+            switch (selectedColIdx) {
+              case 0: // Expand / Whole row
+                textToCopy = [
+                  currentGroup.allPrinted ? "✓" : "○",
+                  currentGroup.printedAt ? formatPrintTime(currentGroup.printedAt) : "-",
+                  currentGroup.kategori,
+                  currentGroup.orderDate,
+                  currentGroup.so,
+                  currentGroup.invoiceNumber,
+                  currentGroup.jenisTransaksi,
+                  currentGroup.customerName,
+                  currentGroup.totalHarga,
+                ].join("\t");
+                break;
+              case 1:
+                textToCopy = currentGroup.allPrinted ? "Sudah Terprint" : "Belum Terprint";
+                break;
+              case 2:
+                textToCopy = currentGroup.printedAt ? formatPrintTime(currentGroup.printedAt) : "-";
+                break;
+              case 3:
+                textToCopy = currentGroup.kategori;
+                break;
+              case 4:
+                textToCopy = currentGroup.orderDate;
+                break;
+              case 5:
+                textToCopy = currentGroup.so;
+                break;
+              case 6:
+                textToCopy = currentGroup.invoiceNumber;
+                break;
+              case 7:
+                textToCopy = currentGroup.jenisTransaksi;
+                break;
+              case 8:
+                textToCopy = currentGroup.customerName;
+                break;
+              case 9:
+                textToCopy = String(currentGroup.totalHarga);
+                break;
+              default:
+                textToCopy = currentGroup.invoiceNumber || currentGroup.so;
+            }
+
+            if (textToCopy) {
+              navigator.clipboard.writeText(textToCopy);
+              const preview = textToCopy.length > 35 ? textToCopy.slice(0, 35) + "..." : textToCopy;
+              setCopyToast(`📋 Disalin: ${preview}`);
+              setTimeout(() => setCopyToast(null), 2500);
+            }
+          }
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [pageData, selectedRowIndex, selectedColIdx, page, totalPages, togglePrint, toggleExpand]);
 
   const summary = useMemo(() => {
     const uniqueInvoices = new Set(records.map((r) => r.invoiceKey));
@@ -806,6 +955,47 @@ export default function Home() {
               </button>
             </div>
 
+            {/* Keyboard Shortcuts Helper Bar */}
+            <div className="bg-slate-900 text-slate-100 px-3.5 py-2 rounded-lg mb-3 text-xs flex flex-wrap items-center justify-between gap-2 shadow-sm border border-slate-700">
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                <span className="font-bold text-amber-300 flex items-center gap-1">
+                  <span>⌨️</span> Navigasi Keyboard:
+                </span>
+                <span className="flex items-center gap-1 text-slate-300">
+                  <kbd className="px-1.5 py-0.5 bg-slate-800 rounded text-[11px] font-mono border border-slate-600 text-amber-200">↑</kbd>
+                  <kbd className="px-1.5 py-0.5 bg-slate-800 rounded text-[11px] font-mono border border-slate-600 text-amber-200">↓</kbd>
+                  <span>Baris</span>
+                </span>
+                <span className="flex items-center gap-1 text-slate-300">
+                  <kbd className="px-1.5 py-0.5 bg-slate-800 rounded text-[11px] font-mono border border-slate-600 text-amber-200">←</kbd>
+                  <kbd className="px-1.5 py-0.5 bg-slate-800 rounded text-[11px] font-mono border border-slate-600 text-amber-200">→</kbd>
+                  <span>Sel Kolom</span>
+                </span>
+                <span className="flex items-center gap-1 text-slate-300">
+                  <kbd className="px-1.5 py-0.5 bg-slate-800 rounded text-[11px] font-mono border border-slate-600 text-amber-200">Space</kbd>
+                  <span>Cetak (✓/○)</span>
+                </span>
+                <span className="flex items-center gap-1 text-slate-300">
+                  <kbd className="px-1.5 py-0.5 bg-slate-800 rounded text-[11px] font-mono border border-slate-600 text-amber-200">Ctrl+C</kbd>
+                  <span>Salin Sel/Baris</span>
+                </span>
+                <span className="flex items-center gap-1 text-slate-300">
+                  <kbd className="px-1.5 py-0.5 bg-slate-800 rounded text-[11px] font-mono border border-slate-600 text-amber-200">Enter</kbd>
+                  <span>Rincian</span>
+                </span>
+                <span className="flex items-center gap-1 text-slate-300">
+                  <kbd className="px-1.5 py-0.5 bg-slate-800 rounded text-[11px] font-mono border border-slate-600 text-amber-200">PgUp</kbd>
+                  <kbd className="px-1.5 py-0.5 bg-slate-800 rounded text-[11px] font-mono border border-slate-600 text-amber-200">PgDn</kbd>
+                  <span>Halaman</span>
+                </span>
+              </div>
+              {copyToast && (
+                <div className="bg-emerald-600 text-white font-bold px-2.5 py-0.5 rounded shadow text-[11px] animate-pulse">
+                  {copyToast}
+                </div>
+              )}
+            </div>
+
             {/* Table */}
             <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm">
               {/* Top Pagination & Summary Header */}
@@ -840,10 +1030,10 @@ export default function Home() {
               </div>
 
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="bg-gray-50 border-b border-gray-200">
+                <table className="w-full text-sm select-text">
+                  <thead className="bg-gray-50 border-b border-gray-200 select-none">
                     <tr>
-                      <th className="px-2 py-2 w-8"></th>
+                      <th className="px-2 py-2 w-8 text-center text-xs font-medium text-gray-500">#</th>
                       <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 whitespace-nowrap">Print</th>
                       <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 whitespace-nowrap">Done Print (Waktu)</th>
                       <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 whitespace-nowrap">Kat</th>
@@ -856,21 +1046,57 @@ export default function Home() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
-                    {pageData.map((g) => {
+                    {pageData.map((g, rowIdx) => {
                       const expanded = expandedInvoices.has(g.key);
                       const hasInvoice = !!g.invoiceNumber && g.invoiceNumber !== "0" && g.invoiceNumber !== "-";
+                      const isRowSelected = selectedRowIndex === rowIdx;
+
+                      const getCellCls = (colIdx: number) => {
+                        if (isRowSelected && selectedColIdx === colIdx) {
+                          return "ring-2 ring-blue-600 ring-inset bg-blue-100/90 font-semibold relative z-10";
+                        }
+                        return "";
+                      };
+
                       return (
                         <Fragment key={g.key}>
                           <tr
-                            onClick={() => toggleExpand(g.key)}
-                            className={`cursor-pointer hover:bg-gray-50 ${
-                              g.isDoubleInv ? "bg-red-50" : g.allPrinted ? "bg-green-50" : ""
+                            id={`faktur-row-${rowIdx}`}
+                            onClick={() => setSelectedRowIndex(rowIdx)}
+                            onDoubleClick={() => toggleExpand(g.key)}
+                            className={`cursor-pointer transition-colors ${
+                              isRowSelected
+                                ? "bg-blue-50/70 border-l-4 border-l-blue-600 shadow-sm"
+                                : g.isDoubleInv
+                                ? "bg-red-50 hover:bg-red-100/70"
+                                : g.allPrinted
+                                ? "bg-green-50/50 hover:bg-green-100/50"
+                                : "hover:bg-gray-50"
                             }`}
                           >
-                            <td className="px-2 py-2 text-center text-gray-400 text-xs">
+                            {/* Col 0: Expand */}
+                            <td
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedRowIndex(rowIdx);
+                                setSelectedColIdx(0);
+                                toggleExpand(g.key);
+                              }}
+                              className={`px-2 py-2 text-center text-gray-400 text-xs ${getCellCls(0)}`}
+                              title="Klik atau tekan Enter untuk buka rincian"
+                            >
                               {expanded ? "▼" : "▶"}
                             </td>
-                            <td className="px-2 py-2" onClick={(e) => e.stopPropagation()}>
+
+                            {/* Col 1: Print Status */}
+                            <td
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedRowIndex(rowIdx);
+                                setSelectedColIdx(1);
+                              }}
+                              className={`px-2 py-2 ${getCellCls(1)}`}
+                            >
                               <button
                                 onClick={() => togglePrint(g)}
                                 disabled={!hasInvoice}
@@ -890,13 +1116,22 @@ export default function Home() {
                                     ? "Sudah Terprint · Klik untuk UNPRINT (Batal Cetak)"
                                     : g.anyPrinted
                                     ? "Sebagian terprint · Klik untuk tandai"
-                                    : "Belum terprint · Klik untuk tandai SUDAH PRINT"
+                                    : "Belum terprint · Klik atau tekan Space untuk SUDAH PRINT"
                                 }
                               >
                                 {!hasInvoice ? "–" : g.allPrinted ? "✓" : g.anyPrinted ? "◑" : "○"}
                               </button>
                             </td>
-                            <td className="px-2 py-2 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+
+                            {/* Col 2: Done Print Time */}
+                            <td
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedRowIndex(rowIdx);
+                                setSelectedColIdx(2);
+                              }}
+                              className={`px-2 py-2 whitespace-nowrap ${getCellCls(2)}`}
+                            >
                               {g.allPrinted && g.printedAt ? (
                                 <span className="inline-flex items-center gap-1 text-[11px] font-mono font-medium text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200" title={`Selesai diprint pada: ${formatPrintTime(g.printedAt)}`}>
                                   <span className="text-emerald-600 font-bold">⏱</span>
@@ -908,7 +1143,16 @@ export default function Home() {
                                 <span className="text-xs text-gray-300">-</span>
                               )}
                             </td>
-                            <td className="px-2 py-2">
+
+                            {/* Col 3: Kategori */}
+                            <td
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedRowIndex(rowIdx);
+                                setSelectedColIdx(3);
+                              }}
+                              className={`px-2 py-2 ${getCellCls(3)}`}
+                            >
                               <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${
                                 g.kategori === "1P" ? "bg-blue-100 text-blue-700"
                                 : g.kategori === "2P" ? "bg-green-100 text-green-700"
@@ -917,19 +1161,57 @@ export default function Home() {
                                 {g.kategori}
                               </span>
                             </td>
-                            <td className="px-2 py-2 text-gray-600 whitespace-nowrap text-xs">{g.orderDate}</td>
-                            <td className="px-2 py-2 font-mono text-xs text-gray-900 whitespace-nowrap">
+
+                            {/* Col 4: Order Date */}
+                            <td
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedRowIndex(rowIdx);
+                                setSelectedColIdx(4);
+                              }}
+                              className={`px-2 py-2 text-gray-600 whitespace-nowrap text-xs ${getCellCls(4)}`}
+                            >
+                              {g.orderDate}
+                            </td>
+
+                            {/* Col 5: No SO */}
+                            <td
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedRowIndex(rowIdx);
+                                setSelectedColIdx(5);
+                              }}
+                              className={`px-2 py-2 font-mono text-xs text-gray-900 whitespace-nowrap ${getCellCls(5)}`}
+                            >
                               {g.so}
                               {g.isDoubleInv && <span className="ml-1 text-red-600 font-bold" title="SO ini memiliki lebih dari 1 faktur">⚠</span>}
                             </td>
-                            <td className="px-2 py-2 font-mono text-xs text-gray-900 whitespace-nowrap font-medium">
+
+                            {/* Col 6: No Invoice */}
+                            <td
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedRowIndex(rowIdx);
+                                setSelectedColIdx(6);
+                              }}
+                              className={`px-2 py-2 font-mono text-xs text-gray-900 whitespace-nowrap font-medium ${getCellCls(6)}`}
+                            >
                               {hasInvoice ? (
                                 g.invoiceNumber
                               ) : (
                                 <span className="text-gray-400 italic text-xs">Menunggu Faktur</span>
                               )}
                             </td>
-                            <td className="px-2 py-2 whitespace-nowrap">
+
+                            {/* Col 7: Jenis Transaksi */}
+                            <td
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedRowIndex(rowIdx);
+                                setSelectedColIdx(7);
+                              }}
+                              className={`px-2 py-2 whitespace-nowrap ${getCellCls(7)}`}
+                            >
                               <span className={`inline-block px-2 py-0.5 rounded text-xs font-bold ${
                                 g.jenisTransaksi === "ORA"
                                   ? "bg-blue-100 text-blue-800"
@@ -938,8 +1220,28 @@ export default function Home() {
                                 {g.jenisTransaksi}
                               </span>
                             </td>
-                            <td className="px-2 py-2 text-gray-700 whitespace-nowrap max-w-xs truncate">{g.customerName}</td>
-                            <td className="px-2 py-2 text-right text-gray-900 whitespace-nowrap font-medium text-xs">
+
+                            {/* Col 8: Pelanggan */}
+                            <td
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedRowIndex(rowIdx);
+                                setSelectedColIdx(8);
+                              }}
+                              className={`px-2 py-2 text-gray-700 whitespace-nowrap max-w-xs truncate ${getCellCls(8)}`}
+                            >
+                              {g.customerName}
+                            </td>
+
+                            {/* Col 9: Total Harga */}
+                            <td
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedRowIndex(rowIdx);
+                                setSelectedColIdx(9);
+                              }}
+                              className={`px-2 py-2 text-right text-gray-900 whitespace-nowrap font-medium text-xs ${getCellCls(9)}`}
+                            >
                               {formatRupiah(g.totalHarga)}
                             </td>
                           </tr>
