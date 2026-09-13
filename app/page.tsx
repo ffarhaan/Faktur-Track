@@ -747,10 +747,9 @@ export default function Home() {
         {records.length > 0 && (
           <>
             {/* Summary */}
-            <div className="grid grid-cols-2 md:grid-cols-6 gap-3 mb-6">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
               <Card label="Total SO" value={summary.totalSO.toLocaleString("id-ID")} />
               <Card label="Total Invoice" value={summary.totalInvoices.toLocaleString("id-ID")} />
-              <Card label="Total Item" value={summary.totalItems.toLocaleString("id-ID")} />
               <Card label="Belum Terprint" value={summary.belumTerprint.toLocaleString("id-ID")} color="orange" />
               <Card label="Double INV" value={summary.doubleInv.toLocaleString("id-ID")} color="red" />
               <Card label="Total Harga" value={formatRupiah(summary.totalHarga)} small />
@@ -823,7 +822,7 @@ export default function Home() {
                     Hal {page + 1} / {totalPages || 1}
                   </span>
                   <p className="text-xs text-gray-600 font-medium">
-                    {filtered.length.toLocaleString("id-ID")} SO · {summary.totalInvoices.toLocaleString("id-ID")} invoice · {summary.totalItems.toLocaleString("id-ID")} item
+                    {filtered.length.toLocaleString("id-ID")} SO · {summary.totalInvoices.toLocaleString("id-ID")} invoice
                   </p>
                 </div>
                 <div className="flex items-center gap-1.5">
@@ -860,7 +859,6 @@ export default function Home() {
                       <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 whitespace-nowrap">No Invoice</th>
                       <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 whitespace-nowrap">Jenis Transaksi</th>
                       <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 whitespace-nowrap">Pelanggan</th>
-                      <th className="px-2 py-2 text-center text-xs font-medium text-gray-500 whitespace-nowrap">Items</th>
                       <th className="px-2 py-2 text-right text-xs font-medium text-gray-500 whitespace-nowrap">Total Harga</th>
                     </tr>
                   </thead>
@@ -884,7 +882,7 @@ export default function Home() {
                                 onClick={() => togglePrint(g)}
                                 disabled={!hasInvoice}
                                 className={`w-6 h-6 rounded flex items-center justify-center text-xs font-bold transition-all shadow-sm ${
-                                  !hasInvoice
+                                   !hasInvoice
                                     ? "bg-gray-100 text-gray-300 cursor-not-allowed"
                                     : g.allPrinted
                                     ? "bg-green-500 text-white hover:bg-orange-500 hover:rotate-180"
@@ -948,14 +946,13 @@ export default function Home() {
                               </span>
                             </td>
                             <td className="px-2 py-2 text-gray-700 whitespace-nowrap max-w-xs truncate">{g.customerName}</td>
-                            <td className="px-2 py-2 text-center text-gray-600 text-xs">{g.totalItems}</td>
                             <td className="px-2 py-2 text-right text-gray-900 whitespace-nowrap font-medium text-xs">
                               {formatRupiah(g.totalHarga)}
                             </td>
                           </tr>
                           {expanded && (
                             <tr className="bg-gray-50">
-                              <td colSpan={11} className="px-4 py-3">
+                              <td colSpan={10} className="px-4 py-3">
                                 <div className="flex flex-wrap items-center justify-between pb-2 mb-2 border-b border-gray-200 gap-2">
                                   <div className="text-xs text-gray-600">
                                     <span className="font-semibold text-gray-900">Invoice: <span className="font-mono text-blue-700 font-bold">{g.invoiceNumber}</span></span> · SO: <span className="font-semibold text-gray-900">{g.so}</span> · Pelanggan: <span className="font-semibold text-gray-900">{g.customerName}</span>
@@ -1023,7 +1020,7 @@ export default function Home() {
               {/* Pagination */}
               <div className="px-4 py-3 border-t border-gray-200 flex items-center justify-between">
                 <p className="text-xs text-gray-500">
-                  {filtered.length.toLocaleString("id-ID")} SO · {summary.totalInvoices.toLocaleString("id-ID")} invoice · {summary.totalItems.toLocaleString("id-ID")} item
+                  {filtered.length.toLocaleString("id-ID")} SO · {summary.totalInvoices.toLocaleString("id-ID")} invoice
                 </p>
                 <div className="flex items-center gap-2">
                   <button onClick={() => setPage(Math.max(0, page - 1))} disabled={page === 0}
