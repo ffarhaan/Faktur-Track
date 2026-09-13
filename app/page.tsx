@@ -200,7 +200,7 @@ export default function Home() {
         const { data, error: sbErr } = await supabase
           .from("faktur_records")
           .select("*")
-          .order("created_at", { ascending: false })
+          .order("id", { ascending: true })
           .range(from, from + step - 1);
 
         if (sbErr || !data || data.length === 0) break;
@@ -366,6 +366,7 @@ export default function Home() {
           const { data: pageData, error: pageErr } = await supabase
             .from("faktur_records")
             .select("no_faktur, status_cetak, printed_at, extra")
+            .order("id", { ascending: true })
             .range(fromIdx, fromIdx + 999);
           if (pageErr || !pageData || pageData.length === 0) break;
           existingDB = existingDB.concat(pageData as Array<Record<string, unknown>>);
