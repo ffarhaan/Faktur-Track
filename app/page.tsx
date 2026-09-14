@@ -181,7 +181,18 @@ export default function Home() {
   const [filter, setFilter] = useState<Filter>("belum");
   const [katFilter, setKatFilter] = useState<KatFilter>("all");
   const [jenisFilter, setJenisFilter] = useState<JenisFilter>("all");
+  const [sortBy, setSortBy] = useState<"invoice" | "date" | "totalHarga">("invoice");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
+  const [dateFilter, setDateFilter] = useState<string>("all");
+  const [uploadNotification, setUploadNotification] = useState<{
+    fileName: string;
+    maxOra: string;
+    maxDoo: string;
+    totalItems: number;
+    totalInvoices: number;
+    newUnprinted: number;
+    time: string;
+  } | null>(null);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
   const [printedInvoices, setPrintedInvoices] = useState<Set<string>>(new Set());
@@ -478,6 +489,41 @@ export default function Home() {
           if (sbErr) console.error("Upload upsert error:", sbErr.message);
         }
 
+        // Calculate max ORA & DOO in uploaded file
+        let maxUploadedOraNum = -1;
+        let maxUploadedOraStr = "-";
+        let maxUploadedDooNum = -1;
+        let maxUploadedDooStr = "-";
+        let newUnprintedCount = 0;
+
+        for (const [noFaktur, item] of invMap.entries()) {
+          const isPrinted = (item as { status_cetak?: boolean }).status_cetak;
+          if (!isPrinted) newUnprintedCount++;
+          const isOra = (item as { source_file?: string }).source_file === "ORA";
+          const num = parseInvNum(noFaktur);
+          if (isOra) {
+            if (num > maxUploadedOraNum) {
+              maxUploadedOraNum = num;
+              maxUploadedOraStr = noFaktur.replace(/-1P$/i, "");
+            }
+          } else {
+            if (num > maxUploadedDooNum) {
+              maxUploadedDooNum = num;
+              maxUploadedDooStr = noFaktur;
+            }
+          }
+        }
+
+        setUploadNotification({
+          fileName: file.name,
+          maxOra: maxUploadedOraStr,
+          maxDoo: maxUploadedDooStr,
+          totalItems: parsed.length,
+          totalInvoices: invMap.size,
+          newUnprinted: newUnprintedCount,
+          time: new Date().toLocaleTimeString("id-ID"),
+        });
+
         setUploadedFiles((prev) => [
           ...prev,
           { name: file.name, count: parsed.length, time: new Date().toLocaleString("id-ID") },
@@ -584,15 +630,72 @@ export default function Home() {
         };
       })
       .sort((a, b) => {
-        const invA = parseInvNum(a.invoiceNumber);
-        const invB = parseInvNum(b.invoiceNumber);
-        const diff = invA !== invB ? invA - invB : parseDateMs(a.orderDate) - parseDateMs(b.orderDate);
+        let diff = 0;
+        if (sortBy === "date") {
+          diff = parseDateMs(a.orderDate) - parseDateMs(b.orderDate);
+          if (diff === 0) diff = parseInvNum(a.invoiceNumber) - parseInvNum(b.invoiceNumber);
+        } else if (sortBy === "totalHarga") {
+          diff = a.totalHarga - b.totalHarga;
+          if (diff === 0) diff = parseInvNum(a.invoiceNumber) - parseInvNum(b.invoiceNumber);
+        } else {
+          // Default: Sort by Invoice Number
+          const invA = parseInvNum(a.invoiceNumber);
+          const invB = parseInvNum(b.invoiceNumber);
+          diff = invA !== invB ? invA - invB : parseDateMs(a.orderDate) - parseDateMs(b.orderDate);
+        }
         return sortOrder === "desc" ? -diff : diff;
       });
-  }, [records, printedInvoices, printedAtMap, sortOrder]);
+  }, [records, printedInvoices, printedAtMap, sortBy, sortOrder]);
+
+  const highestInvoices = useMemo(() => {
+    let maxOra = { invoiceNumber: "-", totalHarga: 0, orderDate: "-", isPrinted: false, customerName: "" };
+    let maxDoo = { invoiceNumber: "-", totalHarga: 0, orderDate: "-", isPrinted: false, customerName: "" };
+    let maxOraNum = -1;
+    let maxDooNum = -1;
+
+    for (const g of grouped) {
+      const num = parseInvNum(g.invoiceNumber);
+      if (g.jenisTransaksi === "ORA") {
+        if (num > maxOraNum) {
+          maxOraNum = num;
+          maxOra = {
+            invoiceNumber: g.invoiceNumber,
+            totalHarga: g.totalHarga,
+            orderDate: g.orderDate,
+            isPrinted: g.allPrinted,
+            customerName: g.customerName,
+          };
+        }
+      } else {
+        if (num > maxDooNum) {
+          maxDooNum = num;
+          maxDoo = {
+            invoiceNumber: g.invoiceNumber,
+            totalHarga: g.totalHarga,
+            orderDate: g.orderDate,
+            isPrinted: g.allPrinted,
+            customerName: g.customerName,
+          };
+        }
+      }
+    }
+    return { maxOra, maxDoo };
+  }, [grouped]);
+
+  const availableDates = useMemo(() => {
+    const set = new Set<string>();
+    for (const r of records) {
+      if (r.orderDate && r.orderDate !== "-") set.add(r.orderDate);
+    }
+    return Array.from(set).sort((a, b) => parseDateMs(b) - parseDateMs(a));
+  }, [records]);
 
   const filtered = useMemo(() => {
     let result = grouped;
+
+    if (dateFilter !== "all") {
+      result = result.filter((g) => g.orderDate === dateFilter);
+    }
 
     if (search.trim()) {
       const s = search.toLowerCase().trim();
@@ -640,7 +743,7 @@ export default function Home() {
     if (jenisFilter !== "all") result = result.filter((g) => g.jenisTransaksi === jenisFilter);
 
     return result;
-  }, [grouped, filter, katFilter, jenisFilter, search, sessionPrintedKeys]);
+  }, [grouped, filter, katFilter, jenisFilter, dateFilter, search, sessionPrintedKeys]);
 
   const totalPages = Math.ceil(filtered.length / ROWS_PER_PAGE);
   const pageData = filtered.slice(page * ROWS_PER_PAGE, (page + 1) * ROWS_PER_PAGE);
@@ -648,7 +751,7 @@ export default function Home() {
   useEffect(() => {
     setPage(0);
     setSelectedRowIndex(0);
-  }, [filter, katFilter, jenisFilter, search, sortOrder]);
+  }, [filter, katFilter, jenisFilter, dateFilter, search, sortBy, sortOrder]);
 
   // Clamp selection on page change
   useEffect(() => {
@@ -942,20 +1045,114 @@ export default function Home() {
           </div>
         )}
 
+        {/* Upload Notification Banner */}
+        {uploadNotification && (
+          <div className="mb-4 bg-gradient-to-r from-emerald-50 via-teal-50 to-blue-50 border border-emerald-300 rounded-xl p-3.5 shadow-sm flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-emerald-600 flex items-center justify-center text-white text-lg font-bold shadow-xs">
+                ✓
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-sm text-emerald-950">
+                    File Berhasil Diupload & Tersinkron! ({uploadNotification.fileName})
+                  </span>
+                  <span className="text-[11px] text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded font-mono">
+                    {uploadNotification.time}
+                  </span>
+                </div>
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-700 mt-1">
+                  <span className="font-semibold text-gray-900">
+                    📌 Faktur Terakhir (Tertinggi):
+                  </span>
+                  {uploadNotification.maxOra !== "-" && (
+                    <span className="inline-flex items-center gap-1 font-medium bg-blue-100/80 text-blue-900 px-2 py-0.5 rounded border border-blue-200">
+                      🏢 ORA (Helios): <strong className="font-mono font-bold">#{uploadNotification.maxOra}</strong>
+                    </span>
+                  )}
+                  {uploadNotification.maxDoo !== "-" && (
+                    <span className="inline-flex items-center gap-1 font-medium bg-emerald-100/80 text-emerald-900 px-2 py-0.5 rounded border border-emerald-200">
+                      🏬 DOO: <strong className="font-mono font-bold">#{uploadNotification.maxDoo}</strong>
+                    </span>
+                  )}
+                  <span className="text-gray-600">
+                    · Total {uploadNotification.totalInvoices.toLocaleString("id-ID")} faktur ({uploadNotification.totalItems.toLocaleString("id-ID")} baris)
+                  </span>
+                  {uploadNotification.newUnprinted > 0 ? (
+                    <span className="font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded border border-amber-200">
+                      🚨 {uploadNotification.newUnprinted} Faktur Baru Belum Terprint
+                    </span>
+                  ) : (
+                    <span className="font-semibold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded">
+                      ✅ Semua sudah berstatus Terprint
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+            <button
+              onClick={() => setUploadNotification(null)}
+              className="text-gray-400 hover:text-gray-700 text-xs px-2 py-1 rounded-lg hover:bg-gray-200 transition-colors"
+              title="Tutup notifikasi"
+            >
+              ✕ Tutup
+            </button>
+          </div>
+        )}
+
         {/* Data loaded */}
         {records.length > 0 && (
           <>
-            {/* Summary */}
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
+            {/* Summary & Highest Invoices Cards */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3 mb-5">
               <Card label="Total SO" value={summary.totalSO.toLocaleString("id-ID")} />
               <Card label="Total Invoice" value={summary.totalInvoices.toLocaleString("id-ID")} />
               <Card label="Belum Terprint" value={summary.belumTerprint.toLocaleString("id-ID")} color="orange" />
               <Card label="Double INV" value={summary.doubleInv.toLocaleString("id-ID")} color="red" />
+              
+              {/* Card Faktur Terakhir ORA */}
+              <div className="bg-white rounded-lg border border-blue-200 p-3.5 shadow-xs relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-12 h-12 bg-blue-50 rounded-bl-full pointer-events-none" />
+                <p className="text-[11px] font-semibold text-blue-700 uppercase tracking-wider mb-1 flex items-center gap-1">
+                  <span>🏢</span> Faktur Terakhir ORA
+                </p>
+                <p className="text-lg font-bold font-mono text-blue-950">
+                  {highestInvoices.maxOra.invoiceNumber !== "-" ? `#${highestInvoices.maxOra.invoiceNumber}` : "-"}
+                </p>
+                <div className="mt-1 flex items-center justify-between text-[11px]">
+                  <span className="text-gray-500 truncate max-w-[100px]">{highestInvoices.maxOra.orderDate || "-"}</span>
+                  <span className={`px-1.5 py-0.2 rounded font-bold text-[10px] ${
+                    highestInvoices.maxOra.isPrinted ? "bg-green-100 text-green-800" : "bg-orange-100 text-orange-800"
+                  }`}>
+                    {highestInvoices.maxOra.isPrinted ? "Terprint" : "Belum"}
+                  </span>
+                </div>
+              </div>
+
+              {/* Card Faktur Terakhir DOO */}
+              <div className="bg-white rounded-lg border border-emerald-200 p-3.5 shadow-xs relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-12 h-12 bg-emerald-50 rounded-bl-full pointer-events-none" />
+                <p className="text-[11px] font-semibold text-emerald-700 uppercase tracking-wider mb-1 flex items-center gap-1">
+                  <span>🏬</span> Faktur Terakhir DOO
+                </p>
+                <p className="text-lg font-bold font-mono text-emerald-950">
+                  {highestInvoices.maxDoo.invoiceNumber !== "-" ? `#${highestInvoices.maxDoo.invoiceNumber}` : "-"}
+                </p>
+                <div className="mt-1 flex items-center justify-between text-[11px]">
+                  <span className="text-gray-500 truncate max-w-[100px]">{highestInvoices.maxDoo.orderDate || "-"}</span>
+                  <span className={`px-1.5 py-0.2 rounded font-bold text-[10px] ${
+                    highestInvoices.maxDoo.isPrinted ? "bg-green-100 text-green-800" : "bg-orange-100 text-orange-800"
+                  }`}>
+                    {highestInvoices.maxDoo.isPrinted ? "Terprint" : "Belum"}
+                  </span>
+                </div>
+              </div>
+
               <Card label="Total Harga" value={formatRupiah(summary.totalHarga)} small />
             </div>
 
-            {/* Filters */}
-            <div className="bg-white rounded-lg border border-gray-200 p-3 mb-4 flex flex-wrap items-center gap-2">
+            {/* Filters & Sorting Toolbar */}
+            <div className="bg-white rounded-lg border border-gray-200 p-3 mb-4 flex flex-wrap items-center gap-2 shadow-xs">
               <button
                 onClick={handleManualRefresh}
                 className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-blue-400 bg-blue-50 text-blue-800 hover:bg-blue-100 flex items-center gap-1.5 whitespace-nowrap shadow-sm transition-colors"
@@ -969,41 +1166,82 @@ export default function Home() {
                   </span>
                 )}
               </button>
-              <div className="h-6 w-px bg-gray-200 mx-1" />
-              <div className="flex gap-1">
+              <div className="h-6 w-px bg-gray-200 mx-1 hidden sm:block" />
+              
+              {/* Tab Status */}
+              <div className="flex gap-1 flex-wrap">
                 <FBtn active={filter === "belum"} onClick={() => setFilter("belum")} color="orange">Belum Terprint</FBtn>
                 <FBtn active={filter === "sudah"} onClick={() => setFilter("sudah")} color="green">Sudah Terprint</FBtn>
                 <FBtn active={filter === "all"} onClick={() => setFilter("all")}>Semua</FBtn>
                 <FBtn active={filter === "double"} onClick={() => setFilter("double")} color="red">Double INV</FBtn>
               </div>
-              <div className="h-6 w-px bg-gray-200 mx-1" />
-              <div className="flex gap-1">
+              <div className="h-6 w-px bg-gray-200 mx-1 hidden sm:block" />
+
+              {/* Kategori */}
+              <div className="flex gap-1 flex-wrap">
                 <FBtn active={katFilter === "all"} onClick={() => setKatFilter("all")}>All Kat</FBtn>
                 <FBtn active={katFilter === "1P"} onClick={() => setKatFilter("1P")} color="blue">1P</FBtn>
                 <FBtn active={katFilter === "2P"} onClick={() => setKatFilter("2P")} color="green">2P</FBtn>
                 <FBtn active={katFilter === "3P"} onClick={() => setKatFilter("3P")} color="purple">3P</FBtn>
               </div>
-              <div className="h-6 w-px bg-gray-200 mx-1" />
-              <div className="flex gap-1">
+              <div className="h-6 w-px bg-gray-200 mx-1 hidden sm:block" />
+
+              {/* Jenis Transaksi */}
+              <div className="flex gap-1 flex-wrap">
                 <FBtn active={jenisFilter === "all"} onClick={() => setJenisFilter("all")}>All Jenis</FBtn>
                 <FBtn active={jenisFilter === "ORA"} onClick={() => setJenisFilter("ORA")} color="blue">ORA</FBtn>
                 <FBtn active={jenisFilter === "DOO"} onClick={() => setJenisFilter("DOO")} color="emerald">DOO</FBtn>
               </div>
-              <div className="h-6 w-px bg-gray-200 mx-1" />
-              <button
-                onClick={() => setSortOrder((prev) => (prev === "desc" ? "asc" : "desc"))}
-                className="px-2.5 py-1.5 text-xs font-medium rounded-lg border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 flex items-center gap-1 whitespace-nowrap"
-                title="Ganti urutan faktur"
-              >
-                {sortOrder === "desc" ? "⬇ Terbaru di Atas" : "⬆ Terlama di Atas"}
-              </button>
+              <div className="h-6 w-px bg-gray-200 mx-1 hidden md:block" />
+
+              {/* Filter Tanggal */}
+              {availableDates.length > 0 && (
+                <div className="flex items-center">
+                  <select
+                    value={dateFilter}
+                    onChange={(e) => setDateFilter(e.target.value)}
+                    className="px-2.5 py-1.5 text-xs font-semibold rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer shadow-xs"
+                    title="Filter berdasarkan tanggal order tertentu"
+                  >
+                    <option value="all">📅 Semua Tanggal ({availableDates.length})</option>
+                    {availableDates.map((d) => (
+                      <option key={d} value={d}>
+                        📅 {d}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              <div className="h-6 w-px bg-gray-200 mx-1 hidden md:block" />
+
+              {/* Pengurutan (Sorting) */}
+              <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-lg border border-gray-300 shadow-xs">
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value as "invoice" | "date" | "totalHarga")}
+                  className="bg-transparent text-xs font-semibold text-gray-800 px-1 py-0.5 focus:outline-none cursor-pointer"
+                  title="Pilih kolom yang ingin diurutkan"
+                >
+                  <option value="invoice">🔢 No Faktur</option>
+                  <option value="date">📅 Tanggal Order</option>
+                  <option value="totalHarga">💰 Total Harga</option>
+                </select>
+                <button
+                  onClick={() => setSortOrder((prev) => (prev === "desc" ? "asc" : "desc"))}
+                  className="px-2 py-1 text-xs font-bold rounded bg-white hover:bg-gray-50 text-blue-700 border border-gray-300 flex items-center gap-1 shadow-xs transition-colors"
+                  title="Klik untuk mengubah arah urutan (Ascending / Descending)"
+                >
+                  {sortOrder === "desc" ? "⬇ Terbesar / Terbaru" : "⬆ Terkecil / Terlama"}
+                </button>
+              </div>
+
               <div className="flex-1" />
               <input
                 type="text"
                 placeholder="Cari SO, Invoice, Apotek, Item..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 w-full sm:w-64"
+                className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 w-full sm:w-56"
               />
               <button
                 onClick={exportToExcel}
