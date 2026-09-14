@@ -244,16 +244,50 @@ export default function Home() {
     }
   }, []);
 
-  // Load on mount: fetch directly from Supabase (Source of Truth)
+  // Load on mount: fetch directly from Supabase (Source of Truth) & subscribe to Realtime WebSocket
   useEffect(() => {
     fetchFromSupabase(true);
 
-    // Sync from Supabase every 15s so all devices stay updated
+    // 1. Instant Realtime WebSocket subscription: updates across all devices in <100ms
+    const channel = supabase
+      .channel("faktur-realtime-sync")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "faktur_records",
+        },
+        () => {
+          fetchFromSupabase(false);
+        }
+      )
+      .subscribe();
+
+    // 2. Auto-sync on Tab Focus or Window Visibility Change
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        fetchFromSupabase(false);
+      }
+    };
+    const handleFocus = () => {
+      fetchFromSupabase(false);
+    };
+
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    // 3. Fallback sync interval every 6 seconds for maximum reliability
     const syncInterval = setInterval(() => {
       fetchFromSupabase(false);
-    }, 15000);
+    }, 6000);
 
-    return () => clearInterval(syncInterval);
+    return () => {
+      supabase.removeChannel(channel);
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      clearInterval(syncInterval);
+    };
   }, [fetchFromSupabase]);
 
   // Auto-refresh on new deploy version
