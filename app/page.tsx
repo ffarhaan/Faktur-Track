@@ -348,43 +348,6 @@ export default function Home() {
     [printedInvoices]
   );
 
-  const markAllAsPrinted = useCallback(async () => {
-    if (!confirm("Yakin ingin menandai SEMUA faktur sebagai 'Sudah Terprint'?")) return;
-    const next = new Set(printedInvoices);
-    const nowIso = new Date().toISOString();
-    const nextMap: Record<string, string> = { ...printedAtMap };
-    for (const r of records) {
-      next.add(r.invoiceKey);
-      nextMap[r.invoiceKey] = nowIso;
-    }
-    setPrintedInvoices(next);
-    setPrintedAtMap(nextMap);
-    try {
-      localStorage.setItem("printedInvoices", JSON.stringify([...next]));
-      localStorage.setItem("printedAtMap", JSON.stringify(nextMap));
-    } catch {}
-
-    await supabase
-      .from("faktur_records")
-      .update({ status_cetak: true, printed_at: nowIso })
-      .neq("id", "00000000-0000-0000-0000-000000000000");
-  }, [records, printedInvoices, printedAtMap]);
-
-  const markAllAsUnprinted = useCallback(async () => {
-    if (!confirm("Reset SEMUA faktur menjadi 'Belum Terprint'?")) return;
-    setPrintedInvoices(new Set());
-    setPrintedAtMap({});
-    try {
-      localStorage.setItem("printedInvoices", JSON.stringify([]));
-      localStorage.setItem("printedAtMap", JSON.stringify({}));
-    } catch {}
-
-    await supabase
-      .from("faktur_records")
-      .update({ status_cetak: false, printed_at: null })
-      .neq("id", "00000000-0000-0000-0000-000000000000");
-  }, []);
-
   // Upload: Parse & Save directly to Supabase cloud DB so all devices see it
   const handleUpload = useCallback(
     async (file: File) => {
@@ -1014,18 +977,6 @@ export default function Home() {
                 title="Ekspor semua faktur yang ada nomor faktur/invoice (Ascending terkecil ke terbesar)"
               >
                 <span>📥</span> Ekspor Excel (Ascending)
-              </button>
-              <button
-                onClick={markAllAsPrinted}
-                className="text-xs text-green-700 bg-green-50 hover:bg-green-100 px-3 py-1.5 rounded-lg border border-green-200 whitespace-nowrap"
-              >
-                Tandai Semua Printed
-              </button>
-              <button
-                onClick={markAllAsUnprinted}
-                className="text-xs text-orange-700 bg-orange-50 hover:bg-orange-100 px-3 py-1.5 rounded-lg border border-orange-200 whitespace-nowrap"
-              >
-                Reset ke Belum Terprint
               </button>
             </div>
 
