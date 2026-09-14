@@ -576,14 +576,10 @@ export default function Home() {
 
   const filtered = useMemo(() => {
     let result = grouped;
-    if (filter === "belum") result = result.filter((g) => !g.allPrinted);
-    else if (filter === "sudah") result = result.filter((g) => g.allPrinted);
-    else if (filter === "double") result = result.filter((g) => g.isDoubleInv);
-    if (katFilter !== "all") result = result.filter((g) => g.kategori === katFilter);
-    if (jenisFilter !== "all") result = result.filter((g) => g.jenisTransaksi === jenisFilter);
-    if (search) {
-      const s = search.toLowerCase();
-      result = result.filter(
+
+    if (search.trim()) {
+      const s = search.toLowerCase().trim();
+      const allMatches = result.filter(
         (g) =>
           g.so.toLowerCase().includes(s) ||
           g.invoiceNumber.toLowerCase().includes(s) ||
@@ -594,7 +590,26 @@ export default function Home() {
               i.itemCode.toLowerCase().includes(s)
           )
       );
+
+      // Try applying current active tab filters to the matches
+      let tabMatches = allMatches;
+      if (filter === "belum") tabMatches = tabMatches.filter((g) => !g.allPrinted);
+      else if (filter === "sudah") tabMatches = tabMatches.filter((g) => g.allPrinted);
+      else if (filter === "double") tabMatches = tabMatches.filter((g) => g.isDoubleInv);
+
+      if (katFilter !== "all") tabMatches = tabMatches.filter((g) => g.kategori === katFilter);
+      if (jenisFilter !== "all") tabMatches = tabMatches.filter((g) => g.jenisTransaksi === jenisFilter);
+
+      // If matches exist in current tab, show them; otherwise fallback to allMatches so user is never misled
+      return tabMatches.length > 0 ? tabMatches : allMatches;
     }
+
+    if (filter === "belum") result = result.filter((g) => !g.allPrinted);
+    else if (filter === "sudah") result = result.filter((g) => g.allPrinted);
+    else if (filter === "double") result = result.filter((g) => g.isDoubleInv);
+    if (katFilter !== "all") result = result.filter((g) => g.kategori === katFilter);
+    if (jenisFilter !== "all") result = result.filter((g) => g.jenisTransaksi === jenisFilter);
+
     return result;
   }, [grouped, filter, katFilter, jenisFilter, search]);
 
