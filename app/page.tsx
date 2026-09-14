@@ -105,10 +105,10 @@ function dbRowsToFakturRecords(rows: Array<Record<string, unknown>>): {
     const items = (extra.items as Array<Record<string, unknown>>) || [];
     const cust = String(extra.nama_pelanggan || "");
     const date = String(extra.accounting_date || extra.order_date || r.imported_at || "");
-    const isOra = isOraCustomer(cust, r.source_file as string);
-    const invKey = isOra ? `${cleanInv}-1P` : cleanInv;
+    const isOra = isOraCustomer(cust, (extra.jenis_transaksi as string) || (r.source_file as string));
+    const invKey = rawInv || (isOra ? `${cleanInv}-1P` : cleanInv);
     const cleanJenis: "DOO" | "ORA" = isOra ? "ORA" : "DOO";
-    const kategori = categorize(cleanJenis, cust, isOra ? "ORA" : "DOO");
+    const kategori = categorize(cleanJenis, cust, (extra.jenis_transaksi as string) || (r.source_file as string));
     const pAt = (r.printed_at as string) || (extra.printed_at as string) || null;
 
     if (r.status_cetak) {
@@ -293,6 +293,7 @@ export default function Home() {
   const togglePrint = useCallback(
     async (group: FakturGroup) => {
       const willBePrinted = !group.allPrinted;
+      const targetKey = group.invoiceKey;
       const custName = group.customerName || "Pelanggan";
       const confirmMsg = willBePrinted
         ? `Tandai Faktur #${group.invoiceNumber} (${custName}) sebagai SUDAH TERPRINT?`
@@ -302,34 +303,30 @@ export default function Home() {
       const nowIso = new Date().toISOString();
       const next = new Set(printedInvoices);
 
-      const allKeys = new Set([
-        group.invoiceKey,
-        group.invoiceNumber,
-        `${group.invoiceNumber}-1P`,
-        group.invoiceNumber.replace(/-1P$/i, ""),
-      ]);
-
-      for (const key of allKeys) {
-        if (willBePrinted) next.add(key);
-        else next.delete(key);
+      if (willBePrinted) {
+        next.add(targetKey);
+      } else {
+        next.delete(targetKey);
       }
       setPrintedInvoices(next);
 
       // Track items printed in this session so they persist in Belum Terprint view until manual refresh
       setSessionPrintedKeys((prev) => {
         const sNext = new Set(prev);
-        for (const key of allKeys) {
-          if (willBePrinted) sNext.add(key);
-          else sNext.delete(key);
+        if (willBePrinted) {
+          sNext.add(targetKey);
+        } else {
+          sNext.delete(targetKey);
         }
         return sNext;
       });
 
       setPrintedAtMap((prev) => {
         const nextMap = { ...prev };
-        for (const key of allKeys) {
-          if (willBePrinted) nextMap[key] = nowIso;
-          else delete nextMap[key];
+        if (willBePrinted) {
+          nextMap[targetKey] = nowIso;
+        } else {
+          delete nextMap[targetKey];
         }
         try {
           localStorage.setItem("printedAtMap", JSON.stringify(nextMap));
@@ -340,14 +337,13 @@ export default function Home() {
         localStorage.setItem("printedInvoices", JSON.stringify([...next]));
       } catch {}
 
-      const targets = Array.from(allKeys);
       await supabase
         .from("faktur_records")
         .update({
           status_cetak: willBePrinted,
           printed_at: willBePrinted ? nowIso : null,
         })
-        .in("no_faktur", targets);
+        .eq("no_faktur", targetKey);
     },
     [printedInvoices]
   );
@@ -619,7 +615,7 @@ export default function Home() {
       let tabMatches = allMatches;
       if (filter === "belum") {
         tabMatches = tabMatches.filter(
-          (g) => !g.allPrinted || sessionPrintedKeys.has(g.invoiceKey) || sessionPrintedKeys.has(g.invoiceNumber)
+          (g) => !g.allPrinted || sessionPrintedKeys.has(g.invoiceKey)
         );
       } else if (filter === "sudah") {
         tabMatches = tabMatches.filter((g) => g.allPrinted);
@@ -636,7 +632,7 @@ export default function Home() {
 
     if (filter === "belum") {
       result = result.filter(
-        (g) => !g.allPrinted || sessionPrintedKeys.has(g.invoiceKey) || sessionPrintedKeys.has(g.invoiceNumber)
+        (g) => !g.allPrinted || sessionPrintedKeys.has(g.invoiceKey)
       );
     } else if (filter === "sudah") {
       result = result.filter((g) => g.allPrinted);
