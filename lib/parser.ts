@@ -323,7 +323,22 @@ function parseExportArray(data: unknown[][], headerIdx: number = -1): FakturReco
 export async function parseExcelFile(file: File): Promise<FakturRecord[]> {
   const buffer = await file.arrayBuffer();
 
-  // Try xlsx format first
+  // 1. Try HTML format FIRST for .xls files (Oracle exports are HTML tables)
+  // Check the first 4KB for HTML/XML markers
+  const headerSample = new TextDecoder().decode(buffer.slice(0, 4096)).toLowerCase();
+  if (
+    headerSample.includes("<table") ||
+    headerSample.includes("<tr") ||
+    headerSample.includes("<html") ||
+    headerSample.includes("<!doctype") ||
+    headerSample.includes("xmlns:") ||
+    headerSample.includes("<?xml")
+  ) {
+    const fullText = new TextDecoder().decode(buffer);
+    return parseHTMLTable(fullText);
+  }
+
+  // 2. Otherwise parse binary Excel files (.xlsx)
   try {
     const wb = XLSX.read(buffer, { type: "array" });
     const ws = wb.Sheets[wb.SheetNames[0]];
@@ -367,13 +382,11 @@ export async function parseExcelFile(file: File): Promise<FakturRecord[]> {
       }
     }
   } catch {
-    // Not xlsx, try HTML
-  }
-
-  // Try HTML format for .xls files
-  const text = new TextDecoder().decode(buffer);
-  if (text.includes("<table") || text.includes("<tr")) {
-    return parseHTMLTable(text);
+    // If XLSX read fails, try HTML as fallback
+    const fullText = new TextDecoder().decode(buffer);
+    if (fullText.includes("<table") || fullText.includes("<tr")) {
+      return parseHTMLTable(fullText);
+    }
   }
 
   throw new Error(
