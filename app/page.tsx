@@ -191,6 +191,7 @@ export default function Home() {
   const [selectedRowIndex, setSelectedRowIndex] = useState(0);
   const [selectedColIdx, setSelectedColIdx] = useState(3); // Default: No Invoice
   const [copyToast, setCopyToast] = useState<string | null>(null);
+  const [sessionPrintedKeys, setSessionPrintedKeys] = useState<Set<string>>(new Set());
 
   const isFetchingRef = useRef(false);
 
@@ -283,10 +284,21 @@ export default function Home() {
     });
   }, []);
 
+  const handleManualRefresh = useCallback(() => {
+    setSessionPrintedKeys(new Set());
+    fetchFromSupabase(true);
+  }, [fetchFromSupabase]);
+
   // Print / Unprint: toggle local state AND sync to Supabase so all devices see it
   const togglePrint = useCallback(
     async (group: FakturGroup) => {
       const willBePrinted = !group.allPrinted;
+      const custName = group.customerName || "Pelanggan";
+      const confirmMsg = willBePrinted
+        ? `Tandai Faktur #${group.invoiceNumber} (${custName}) sebagai SUDAH TERPRINT?`
+        : `Batalkan status cetak Faktur #${group.invoiceNumber} (${custName}) menjadi BELUM TERPRINT?`;
+      if (!confirm(confirmMsg)) return;
+
       const nowIso = new Date().toISOString();
       const next = new Set(printedInvoices);
 
@@ -302,6 +314,17 @@ export default function Home() {
         else next.delete(key);
       }
       setPrintedInvoices(next);
+
+      // Track items printed in this session so they persist in Belum Terprint view until manual refresh
+      setSessionPrintedKeys((prev) => {
+        const sNext = new Set(prev);
+        for (const key of allKeys) {
+          if (willBePrinted) sNext.add(key);
+          else sNext.delete(key);
+        }
+        return sNext;
+      });
+
       setPrintedAtMap((prev) => {
         const nextMap = { ...prev };
         for (const key of allKeys) {
@@ -330,6 +353,7 @@ export default function Home() {
   );
 
   const markAllAsPrinted = useCallback(async () => {
+    if (!confirm("Yakin ingin menandai SEMUA faktur sebagai 'Sudah Terprint'?")) return;
     const next = new Set(printedInvoices);
     const nowIso = new Date().toISOString();
     const nextMap: Record<string, string> = { ...printedAtMap };
@@ -593,9 +617,15 @@ export default function Home() {
 
       // Try applying current active tab filters to the matches
       let tabMatches = allMatches;
-      if (filter === "belum") tabMatches = tabMatches.filter((g) => !g.allPrinted);
-      else if (filter === "sudah") tabMatches = tabMatches.filter((g) => g.allPrinted);
-      else if (filter === "double") tabMatches = tabMatches.filter((g) => g.isDoubleInv);
+      if (filter === "belum") {
+        tabMatches = tabMatches.filter(
+          (g) => !g.allPrinted || sessionPrintedKeys.has(g.invoiceKey) || sessionPrintedKeys.has(g.invoiceNumber)
+        );
+      } else if (filter === "sudah") {
+        tabMatches = tabMatches.filter((g) => g.allPrinted);
+      } else if (filter === "double") {
+        tabMatches = tabMatches.filter((g) => g.isDoubleInv);
+      }
 
       if (katFilter !== "all") tabMatches = tabMatches.filter((g) => g.kategori === katFilter);
       if (jenisFilter !== "all") tabMatches = tabMatches.filter((g) => g.jenisTransaksi === jenisFilter);
@@ -604,14 +634,20 @@ export default function Home() {
       return tabMatches.length > 0 ? tabMatches : allMatches;
     }
 
-    if (filter === "belum") result = result.filter((g) => !g.allPrinted);
-    else if (filter === "sudah") result = result.filter((g) => g.allPrinted);
-    else if (filter === "double") result = result.filter((g) => g.isDoubleInv);
+    if (filter === "belum") {
+      result = result.filter(
+        (g) => !g.allPrinted || sessionPrintedKeys.has(g.invoiceKey) || sessionPrintedKeys.has(g.invoiceNumber)
+      );
+    } else if (filter === "sudah") {
+      result = result.filter((g) => g.allPrinted);
+    } else if (filter === "double") {
+      result = result.filter((g) => g.isDoubleInv);
+    }
     if (katFilter !== "all") result = result.filter((g) => g.kategori === katFilter);
     if (jenisFilter !== "all") result = result.filter((g) => g.jenisTransaksi === jenisFilter);
 
     return result;
-  }, [grouped, filter, katFilter, jenisFilter, search]);
+  }, [grouped, filter, katFilter, jenisFilter, search, sessionPrintedKeys]);
 
   const totalPages = Math.ceil(filtered.length / ROWS_PER_PAGE);
   const pageData = filtered.slice(page * ROWS_PER_PAGE, (page + 1) * ROWS_PER_PAGE);
@@ -851,6 +887,19 @@ export default function Home() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <button
+              onClick={handleManualRefresh}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 px-3 py-1.5 rounded-lg shadow-sm transition-colors"
+              title="Refresh dan perbarui data dari database cloud"
+            >
+              <span>🔄</span>
+              <span>Refresh Data</span>
+              {sessionPrintedKeys.size > 0 && (
+                <span className="ml-0.5 px-1.5 py-0.2 bg-blue-600 text-white text-[10px] font-bold rounded-full">
+                  {sessionPrintedKeys.size}
+                </span>
+              )}
+            </button>
             {records.length > 0 && (
               <button
                 onClick={exportToExcel}
@@ -914,6 +963,20 @@ export default function Home() {
 
             {/* Filters */}
             <div className="bg-white rounded-lg border border-gray-200 p-3 mb-4 flex flex-wrap items-center gap-2">
+              <button
+                onClick={handleManualRefresh}
+                className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-blue-400 bg-blue-50 text-blue-800 hover:bg-blue-100 flex items-center gap-1.5 whitespace-nowrap shadow-sm transition-colors"
+                title="Refresh dan perbarui data dari database cloud"
+              >
+                <span>🔄</span>
+                <span>Refresh Data</span>
+                {sessionPrintedKeys.size > 0 && (
+                  <span className="px-1.5 py-0.2 bg-blue-600 text-white text-[10px] font-bold rounded-full">
+                    {sessionPrintedKeys.size} baru dicetak
+                  </span>
+                )}
+              </button>
+              <div className="h-6 w-px bg-gray-200 mx-1" />
               <div className="flex gap-1">
                 <FBtn active={filter === "belum"} onClick={() => setFilter("belum")} color="orange">Belum Terprint</FBtn>
                 <FBtn active={filter === "sudah"} onClick={() => setFilter("sudah")} color="green">Sudah Terprint</FBtn>
