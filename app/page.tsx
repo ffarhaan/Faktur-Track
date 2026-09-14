@@ -277,10 +277,10 @@ export default function Home() {
     window.addEventListener("focus", handleFocus);
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
-    // 3. Fallback sync interval every 6 seconds for maximum reliability
+    // 3. Fallback sync interval every 1 second (1000ms) for ultra-fast multi-device consistency
     const syncInterval = setInterval(() => {
       fetchFromSupabase(false);
-    }, 6000);
+    }, 1000);
 
     return () => {
       supabase.removeChannel(channel);
