@@ -205,6 +205,7 @@ export default function Home() {
   const [sessionPrintedKeys, setSessionPrintedKeys] = useState<Set<string>>(new Set());
 
   const isFetchingRef = useRef(false);
+  const lastSyncHashRef = useRef("");
 
   // Fetch all records from Supabase (Deterministic & Locked)
   const fetchFromSupabase = useCallback(async (showLoading = false) => {
@@ -238,10 +239,13 @@ export default function Home() {
           return true;
         });
 
+        // Fast fingerprint to avoid redundant state updates & re-renders
+        const hash = `${uniqueRows.length}-${uniqueRows[0]?.id || ""}-${uniqueRows[uniqueRows.length - 1]?.id || ""}`;
         const { records: recs, printedSet, printedAtMap: pMap } = dbRowsToFakturRecords(uniqueRows);
         setRecords(recs);
         setPrintedInvoices(printedSet);
         setPrintedAtMap(pMap);
+        lastSyncHashRef.current = hash;
       } else {
         setRecords([]);
         setPrintedInvoices(new Set());
@@ -288,10 +292,10 @@ export default function Home() {
     window.addEventListener("focus", handleFocus);
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
-    // 3. Fallback sync interval every 1 second (1000ms) for ultra-fast multi-device consistency
+    // 3. Fallback sync interval every 15 seconds (Realtime WebSocket handles instant <100ms updates)
     const syncInterval = setInterval(() => {
       fetchFromSupabase(false);
-    }, 1000);
+    }, 15000);
 
     return () => {
       supabase.removeChannel(channel);
@@ -753,12 +757,12 @@ export default function Home() {
     setSelectedRowIndex((prev) => Math.min(Math.max(0, prev), Math.max(0, pageData.length - 1)));
   }, [page, pageData.length]);
 
-  // Auto-scroll active row into view smoothly
+  // Auto-scroll active row into view instantly (0ms delay)
   useEffect(() => {
     if (pageData.length === 0) return;
     const rowEl = document.getElementById(`faktur-row-${selectedRowIndex}`);
     if (rowEl) {
-      rowEl.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      rowEl.scrollIntoView({ block: "nearest", behavior: "auto" });
     }
   }, [selectedRowIndex, pageData.length]);
 
