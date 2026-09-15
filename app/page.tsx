@@ -443,6 +443,20 @@ export default function Home() {
           const printedAt = prevInfo ? prevInfo.printed_at : null;
 
           if (!invMap.has(noFaktur)) {
+            const existingName = String(prevInfo?.extra?.nama_pelanggan || "").trim();
+            const incomingName = String(r.customerName || "").trim();
+            let finalCustomerName = incomingName;
+            if ((!finalCustomerName || /^\d+$/.test(finalCustomerName)) && existingName && !/^\d+$/.test(existingName)) {
+              finalCustomerName = existingName;
+            }
+
+            const prevItems = (prevInfo?.extra?.items as Array<Record<string, unknown>>) || [];
+            const initialItems: Array<Record<string, unknown>> = [];
+            if (prevItems.length > 0 && r.itemDescription === "-") {
+              // Preserve existing rich items from XXCUST if incoming file is export header only
+              initialItems.push(...prevItems);
+            }
+
             invMap.set(noFaktur, {
               no_faktur: noFaktur,
               no_sales_order: r.orderNumber,
@@ -452,11 +466,11 @@ export default function Home() {
               imported_at: importedAt,
               source_file: isOra ? "ORA" : "DOO",
               extra: {
-                nama_pelanggan: r.customerName || (prevInfo?.extra?.nama_pelanggan as string) || null,
+                nama_pelanggan: finalCustomerName || null,
                 jenis_transaksi: isOra ? "ORA" : "DOO",
                 accounting_date: r.orderDate || (prevInfo?.extra?.accounting_date as string) || null,
                 order_date: r.orderDate || (prevInfo?.extra?.order_date as string) || null,
-                items: [],
+                items: initialItems,
               },
               _soSet: new Set([r.orderNumber]),
             });
@@ -465,15 +479,17 @@ export default function Home() {
           const existing = invMap.get(noFaktur)!;
           (existing._soSet as Set<string>).add(r.orderNumber);
           const itList = (existing.extra as Record<string, unknown>).items as Array<Record<string, unknown>>;
-          itList.push({
-            item_code: r.itemCode,
-            item_description: r.itemDescription,
-            qty: r.qty,
-            uom: r.uom,
-            lot_number: r.lotNumber,
-            total_harga: r.totalHarga,
-            order_number: r.orderNumber,
-          });
+          if (r.itemDescription !== "-") {
+            itList.push({
+              item_code: r.itemCode,
+              item_description: r.itemDescription,
+              qty: r.qty,
+              uom: r.uom,
+              lot_number: r.lotNumber,
+              total_harga: r.totalHarga,
+              order_number: r.orderNumber,
+            });
+          }
         }
 
         const payload = Array.from(invMap.values()).map(({ _soSet, ...rest }) => ({
