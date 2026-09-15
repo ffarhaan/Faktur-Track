@@ -5,7 +5,10 @@ import masterApotek from "./masterApotek.json";
 const apotekMap = masterApotek as Record<string, string>;
 
 function normalize(s: string): string {
-  return String(s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  return String(s || "")
+    .toLowerCase()
+    .replace(/apotik/g, "apotek")
+    .replace(/[^a-z0-9]/g, "");
 }
 
 const normMap: Record<string, string> = {};
