@@ -1,0 +1,884 @@
+[
+  {
+    "kodeCustomer": "CA-002461",
+    "codeNum": "2461",
+    "namaApotekMBI": "Apotek Grand Medica",
+    "namaMerchant": "APOTIK GRAND MEDICA PULAU BUNGIN PD (F)",
+    "zone": "Bali Denpasar"
+  },
+  {
+    "kodeCustomer": "CA-002327",
+    "codeNum": "2327",
+    "namaApotekMBI": "Apotek Pratama Medika",
+    "namaMerchant": "APOTIK PRATAMA MEDIKA DENPASAR PD (F)",
+    "zone": "Bali Denpasar"
+  },
+  {
+    "kodeCustomer": "CA-002403",
+    "codeNum": "2403",
+    "namaApotekMBI": "Apotek Apomed",
+    "namaMerchant": "APOTIK APOMED PD (F)",
+    "zone": "Bali Kuta North"
+  },
+  {
+    "kodeCustomer": "CA-001585",
+    "codeNum": "1585",
+    "namaApotekMBI": "Apotek Cito Denpasar",
+    "namaMerchant": "APOTIK CITO APOTEK DENPASAR PD (F)",
+    "zone": "Bali Kuta North"
+  },
+  {
+    "kodeCustomer": "CA-001144",
+    "codeNum": "1144",
+    "namaApotekMBI": "Apotek Cito Taman Griya",
+    "namaMerchant": "APOTIK CITO APOTEK TAMAN GRIYA BADUNG PD (F)",
+    "zone": "Bali Kuta North"
+  },
+  {
+    "kodeCustomer": "CA-002715",
+    "codeNum": "2715",
+    "namaApotekMBI": "Apotek Satu Farma",
+    "namaMerchant": "APOTIK SATU FARMA BANYUWANGI PD (F)",
+    "zone": "Banyuwangi"
+  },
+  {
+    "kodeCustomer": "CA-002509",
+    "codeNum": "2509",
+    "namaApotekMBI": "Apotek Cito Ubud I",
+    "namaMerchant": "APOTIK CITO UBUD I PD (F)",
+    "zone": "Gianyar South"
+  },
+  {
+    "kodeCustomer": "CA-002389",
+    "codeNum": "2389",
+    "namaApotekMBI": "Apotek Sentral Kediri",
+    "namaMerchant": "APOTIK SENTRAL KEDIRI PD (F)",
+    "zone": "Kediri"
+  },
+  {
+    "kodeCustomer": "CA-002489",
+    "codeNum": "2489",
+    "namaApotekMBI": "Apotek Sina Medika",
+    "namaMerchant": "APOTIK SINA MEDIKA PD (F)",
+    "zone": "Madiun"
+  },
+  {
+    "kodeCustomer": "CA-001108",
+    "codeNum": "1108",
+    "namaApotekMBI": "Apotek Sehat Batu",
+    "namaMerchant": "APOTIK SEHAT BATU - MALANG PD (F)",
+    "zone": "Malang - Batu"
+  },
+  {
+    "kodeCustomer": "CA-002364",
+    "codeNum": "2364",
+    "namaApotekMBI": "Apotek Alya Farma",
+    "namaMerchant": "APOTIK ALYA FARMA MATARAM PD (F)",
+    "zone": "Mataram"
+  },
+  {
+    "kodeCustomer": "CA-002811",
+    "codeNum": "2811",
+    "namaApotekMBI": "Apotek Diagonal",
+    "namaMerchant": "APOTIK DIAGONAL SIDOARJO PD (F)",
+    "zone": "Sidoarjo"
+  },
+  {
+    "kodeCustomer": "CA-001978",
+    "codeNum": "1978",
+    "namaApotekMBI": "Apotek Medbox",
+    "namaMerchant": "APOTIK MEDBOX PD (F)",
+    "zone": "Sidoarjo"
+  },
+  {
+    "kodeCustomer": "CA-000377",
+    "codeNum": "377",
+    "namaApotekMBI": "Apotek Apollo Surabaya",
+    "namaMerchant": "APOTIK APOLLO PD (F)",
+    "zone": "Surabaya South"
+  },
+  {
+    "kodeCustomer": "CA-001961",
+    "codeNum": "1961",
+    "namaApotekMBI": "Apotek Assalam",
+    "namaMerchant": "APOTIK ASSALAM BALIKPAPAN PD (F)",
+    "zone": "Balikpapan South"
+  },
+  {
+    "kodeCustomer": "CA-002608",
+    "codeNum": "2608",
+    "namaApotekMBI": "Apotek Sehat Taruna Praja",
+    "namaMerchant": "APOTIK SEHAT TARUNA PRAJA PD (F)",
+    "zone": "Banjar Baru"
+  },
+  {
+    "kodeCustomer": "CA-002546",
+    "codeNum": "2546",
+    "namaApotekMBI": "Apotek Lingkar",
+    "namaMerchant": "APOTIK LINGKAR DALAM PD (F)",
+    "zone": "Banjarmasin"
+  },
+  {
+    "kodeCustomer": "CA-002696",
+    "codeNum": "2696",
+    "namaApotekMBI": "Apotek K-24 Giri Gresik",
+    "namaMerchant": "APOTIK K-24 GIRI PD (F)",
+    "zone": "Gresik"
+  },
+  {
+    "kodeCustomer": "CA-002598",
+    "codeNum": "2598",
+    "namaApotekMBI": "Apotek K-24 Merdeka",
+    "namaMerchant": "APOTIK K-24 MERDEKA PD (F)",
+    "zone": "Jombang"
+  },
+  {
+    "kodeCustomer": "CA-002433",
+    "codeNum": "2433",
+    "namaApotekMBI": "Apotek Harapan Bunda Palangka Raya",
+    "namaMerchant": "APOTIK HARAPAN BUNDA PALANGKARAYA PD (F)",
+    "zone": "Palangkaraya"
+  },
+  {
+    "kodeCustomer": "CA-002662",
+    "codeNum": "2662",
+    "namaApotekMBI": "Apotek Kharitas",
+    "namaMerchant": "APOTIK KHARITAS PD (F)",
+    "zone": "Pontianak North"
+  },
+  {
+    "kodeCustomer": "CA-003248",
+    "codeNum": "3248",
+    "namaApotekMBI": "Apotek Sakura (Kubu Raya)",
+    "namaMerchant": "APOTIK SAKURA KUBU RAYA PD (F)",
+    "zone": "Pontianak North"
+  },
+  {
+    "kodeCustomer": "CA-001905",
+    "codeNum": "1905",
+    "namaApotekMBI": "Apotek Therapy",
+    "namaMerchant": "APOTIK THERAPY PD (F)",
+    "zone": "Pontianak North"
+  },
+  {
+    "kodeCustomer": "CA-001968",
+    "codeNum": "1968",
+    "namaApotekMBI": "Apotek Mitra Sahabat",
+    "namaMerchant": "APOTIK MITRA SAHABAT PD (F)",
+    "zone": "Samarinda"
+  },
+  {
+    "kodeCustomer": "CA-001638",
+    "codeNum": "1638",
+    "namaApotekMBI": "Apotek Esti Farma Surabaya",
+    "namaMerchant": "APOTIK ESTI FARMA PD (F)",
+    "zone": "Surabaya East"
+  },
+  {
+    "kodeCustomer": "CA-001912",
+    "codeNum": "1912",
+    "namaApotekMBI": "Apotek Galens",
+    "namaMerchant": "APOTIK GALENS SURABAYA PD (F)",
+    "zone": "Surabaya West"
+  },
+  {
+    "kodeCustomer": "CA-000385",
+    "codeNum": "385",
+    "namaApotekMBI": "Apotek K24 Benowo",
+    "namaMerchant": "APOTIK K24 BENOWO PD (F)",
+    "zone": "Surabaya West"
+  },
+  {
+    "kodeCustomer": "CA-001821",
+    "codeNum": "1821",
+    "namaApotekMBI": "Apotek Keluarga Farma Surabaya",
+    "namaMerchant": "APOTIK KELUARGA FARMA SURABAYA PD (F)",
+    "zone": "Surabaya West"
+  },
+  {
+    "kodeCustomer": "CA-001822",
+    "codeNum": "1822",
+    "namaApotekMBI": "Apotek Rafa Farma Manukan",
+    "namaMerchant": "APOTIK RAFA FARMA MANUKAN PD (F)",
+    "zone": "Surabaya West"
+  },
+  {
+    "kodeCustomer": "CA-002478",
+    "codeNum": "2478",
+    "namaApotekMBI": "Apotek Hikmah Farma Nasution",
+    "namaMerchant": "APOTIK HIKMAH FARMA NASUTION PD (F)",
+    "zone": "Kendari"
+  },
+  {
+    "kodeCustomer": "CA-002528",
+    "codeNum": "2528",
+    "namaApotekMBI": "Apotek Bayeman Farma",
+    "namaMerchant": "APOTIK BAYEMAN FARMA PD (F)",
+    "zone": "Magelang"
+  },
+  {
+    "kodeCustomer": "CA-001008",
+    "codeNum": "1008",
+    "namaApotekMBI": "Apotek Ahza Abadi Makassar",
+    "namaMerchant": "APOTIK AHZA ABADI MAKASSAR PD (F)",
+    "zone": "Makassar Central"
+  },
+  {
+    "kodeCustomer": "CA-002406",
+    "codeNum": "2406",
+    "namaApotekMBI": "Apotek Avicenna BTP",
+    "namaMerchant": "APOTIK AVICENNA BTP MAKASSAR PD (F)",
+    "zone": "Makassar North"
+  },
+  {
+    "kodeCustomer": "CA-001644",
+    "codeNum": "1644",
+    "namaApotekMBI": "Apotek 24 Jam Parakita",
+    "namaMerchant": "APOTIK 24 JAM PARAKITA PD (F)",
+    "zone": "Makassar South"
+  },
+  {
+    "kodeCustomer": "CA-003281",
+    "codeNum": "3281",
+    "namaApotekMBI": "Apotek Sentosa Medika",
+    "namaMerchant": "APOTIK SENTOSA MEDIKA GOWA PD (F)",
+    "zone": "Makassar South"
+  },
+  {
+    "kodeCustomer": "CA-001946",
+    "codeNum": "1946",
+    "namaApotekMBI": "Apotek Tirza Medika",
+    "namaMerchant": "APOTIK TIRZA MEDIKA PD (F)",
+    "zone": "Makassar South"
+  },
+  {
+    "kodeCustomer": "CA-002694",
+    "codeNum": "2694",
+    "namaApotekMBI": "Apotek Zelmira Farma",
+    "namaMerchant": "APOTIK ZELMIRA FARMA PD (F)",
+    "zone": "Makassar South"
+  },
+  {
+    "kodeCustomer": "CA-002497",
+    "codeNum": "2497",
+    "namaApotekMBI": "Apotek Kartika",
+    "namaMerchant": "APOTIK KARTIKA PALU PD (F)",
+    "zone": "Palu"
+  },
+  {
+    "kodeCustomer": "CA-002321",
+    "codeNum": "2321",
+    "namaApotekMBI": "Apotek Sriwijaya",
+    "namaMerchant": "APOTIK SRIWIJAYA PURWOKERTO PD (F)",
+    "zone": "Purwokerto"
+  },
+  {
+    "kodeCustomer": "CA-002604",
+    "codeNum": "2604",
+    "namaApotekMBI": "Apotek Asasi Manahan",
+    "namaMerchant": "APOTIK ASASI MANAHAN PD (F)",
+    "zone": "Solo Central"
+  },
+  {
+    "kodeCustomer": "CA-002407",
+    "codeNum": "2407",
+    "namaApotekMBI": "Apotek Prioritas",
+    "namaMerchant": "APOTIK PRIORITAS SOLO PD (F)",
+    "zone": "Solo Central"
+  },
+  {
+    "kodeCustomer": "CA-002711",
+    "codeNum": "2711",
+    "namaApotekMBI": "Apotek Asasi Farma",
+    "namaMerchant": "APOTIK ASASI FARMA PD (F)",
+    "zone": "Solo West"
+  },
+  {
+    "kodeCustomer": "CA-001966",
+    "codeNum": "1966",
+    "namaApotekMBI": "Apotek Sumber Wara's Sukoharjo",
+    "namaMerchant": "APOTIK SUMBER WARA'S SUKOHARJO PD (F)",
+    "zone": "Solo West"
+  },
+  {
+    "kodeCustomer": "CA-002737",
+    "codeNum": "2737",
+    "namaApotekMBI": "Apotek GM",
+    "namaMerchant": "APOTIK GM TEMANGGUNG PD (F)",
+    "zone": "Temanggung"
+  },
+  {
+    "kodeCustomer": "CA-002318",
+    "codeNum": "2318",
+    "namaApotekMBI": "Apotek Tan's Farma",
+    "namaMerchant": "APOTIK TAN'S FARMA PD (F)",
+    "zone": "Yogyakarta North"
+  },
+  {
+    "kodeCustomer": "CA-001532",
+    "codeNum": "1532",
+    "namaApotekMBI": "Apotek Traviata Farma",
+    "namaMerchant": "APOTIK TRAVIATA FARMA PD (F)",
+    "zone": "Yogyakarta North"
+  },
+  {
+    "kodeCustomer": "CA-002504",
+    "codeNum": "2504",
+    "namaApotekMBI": "Apotek Wunemo",
+    "namaMerchant": "APOTIK WUNEMO GORONTALO PD (F)",
+    "zone": "Gorontalo"
+  },
+  {
+    "kodeCustomer": "CA-002463",
+    "codeNum": "2463",
+    "namaApotekMBI": "Apotek Kroden Jati",
+    "namaMerchant": "APOTIK KRODEN JATI PD (F)",
+    "zone": "Kudus Central"
+  },
+  {
+    "kodeCustomer": "CA-002591",
+    "codeNum": "2591",
+    "namaApotekMBI": "Apotek My Life Farma St. Joseph",
+    "namaMerchant": "APOTIK MY LIFE FARMA ST. JOSEPH PD (F)",
+    "zone": "Manado South"
+  },
+  {
+    "kodeCustomer": "CA-003441",
+    "codeNum": "3441",
+    "namaApotekMBI": "Apotek Cipto Sehat (Pekalongan)",
+    "namaMerchant": "APOTIK CIPTO SEHAT PEKALONGAN PD (F)",
+    "zone": "Pekalongan"
+  },
+  {
+    "kodeCustomer": "CA-002705",
+    "codeNum": "2705",
+    "namaApotekMBI": "Apotek Simbang",
+    "namaMerchant": "APOTIK SIMBANG PD (F)",
+    "zone": "Pekalongan"
+  },
+  {
+    "kodeCustomer": "CA-000534",
+    "codeNum": "534",
+    "namaApotekMBI": "Apotek Borobudur",
+    "namaMerchant": "APOTIK BOROBUDUR PD (F)",
+    "zone": "Semarang Central"
+  },
+  {
+    "kodeCustomer": "CA-000889",
+    "codeNum": "889",
+    "namaApotekMBI": "Apotek Anugrah Sehat Semarang",
+    "namaMerchant": "APOTIK ANUGRAH SEHAT SEMARANG PD (F)",
+    "zone": "Semarang North"
+  },
+  {
+    "kodeCustomer": "CA-000998",
+    "codeNum": "998",
+    "namaApotekMBI": "Apotek Prima Sehat Semarang",
+    "namaMerchant": "APOTIK PRIMA SEHAT SEMARANG PD (F)",
+    "zone": "Semarang North"
+  },
+  {
+    "kodeCustomer": "CA-000778",
+    "codeNum": "778",
+    "namaApotekMBI": "Apotek Klipang Sehat",
+    "namaMerchant": "APOTIK KLIPANG SEHAT PD (F)",
+    "zone": "Semarang South East"
+  },
+  {
+    "kodeCustomer": "CA-000075",
+    "codeNum": "75",
+    "namaApotekMBI": "Apotek K24 Karah",
+    "namaMerchant": "APOTIK K24 KARAH PD (F)",
+    "zone": ""
+  },
+  {
+    "kodeCustomer": "CA-002452",
+    "codeNum": "2452",
+    "namaApotekMBI": "Apotek Jaya Aceh Mata Ie",
+    "namaMerchant": "APOTIK JAYA ACEH MATA IE PD (F)",
+    "zone": "Banda Aceh"
+  },
+  {
+    "kodeCustomer": "CA-002456",
+    "codeNum": "2456",
+    "namaApotekMBI": "Apotek Bilmar Lampung",
+    "namaMerchant": "APOTIK BILMAR LAMPUNG PD (F)",
+    "zone": "Bandar Lampung East"
+  },
+  {
+    "kodeCustomer": "CA-002419",
+    "codeNum": "2419",
+    "namaApotekMBI": "Apotek Enggal Saras Lampung",
+    "namaMerchant": "APOTIK ENGGAL SARAS LAMPUNG PD (F)",
+    "zone": "Bandar Lampung West"
+  },
+  {
+    "kodeCustomer": "CA-000446",
+    "codeNum": "446",
+    "namaApotekMBI": "Apotek Angsana Fiesta",
+    "namaMerchant": "APOTIK ANGSANA FIESTA PD (F)",
+    "zone": "Bekasi"
+  },
+  {
+    "kodeCustomer": "CA-001248",
+    "codeNum": "1248",
+    "namaApotekMBI": "Apotek Maryam Farma",
+    "namaMerchant": "APOTIK MARYAM FARMA BEKASI PD (F)",
+    "zone": "Bekasi"
+  },
+  {
+    "kodeCustomer": "CA-002719",
+    "codeNum": "2719",
+    "namaApotekMBI": "Apotek Mutiara Angsana",
+    "namaMerchant": "APOTIK MUTIARA ANGSANA BEKASI PD (F)",
+    "zone": "Bekasi"
+  },
+  {
+    "kodeCustomer": "CA-002011",
+    "codeNum": "2011",
+    "namaApotekMBI": "Apotek Cibarusah Farma",
+    "namaMerchant": "APOTIK CIBARUSAH FARMA PD (F)",
+    "zone": "Bekasi Kabupaten South"
+  },
+  {
+    "kodeCustomer": "CA-001869",
+    "codeNum": "1869",
+    "namaApotekMBI": "Apotek Kandaka Abadi Cilegon",
+    "namaMerchant": "APOTIK KANDAKA ABADI CILEGON PD (F)",
+    "zone": "Cilegon"
+  },
+  {
+    "kodeCustomer": "CA-002420",
+    "codeNum": "2420",
+    "namaApotekMBI": "Apotek Ashshiddiq",
+    "namaMerchant": "APOTIK ASHSHIDDIQ PD (F)",
+    "zone": "Padang"
+  },
+  {
+    "kodeCustomer": "CA-002466",
+    "codeNum": "2466",
+    "namaApotekMBI": "Apotek Columbia",
+    "namaMerchant": "APOTIK COLUMBIA PD (F)",
+    "zone": "Padang"
+  },
+  {
+    "kodeCustomer": "CA-001471",
+    "codeNum": "1471",
+    "namaApotekMBI": "Apotek Dama",
+    "namaMerchant": "APOTIK DAMA PD (F)",
+    "zone": "Tangerang North"
+  },
+  {
+    "kodeCustomer": "CA-002672",
+    "codeNum": "2672",
+    "namaApotekMBI": "Apotek Ezaria",
+    "namaMerchant": "APOTIK EZARIA TANGERANG PD (F)",
+    "zone": "Tangerang North"
+  },
+  {
+    "kodeCustomer": "CA-001450",
+    "codeNum": "1450",
+    "namaApotekMBI": "Apotek Lentera Farma",
+    "namaMerchant": "APOTIK LENTERA FARMA TANGERANG PD (F)",
+    "zone": "Tangerang North"
+  },
+  {
+    "kodeCustomer": "CA-001907",
+    "codeNum": "1907",
+    "namaApotekMBI": "Apotek Bhakti Sehat",
+    "namaMerchant": "APOTIK BHAKTI SEHAT TANGERANG PD (F)",
+    "zone": "Tangerang Rural"
+  },
+  {
+    "kodeCustomer": "CA-002554",
+    "codeNum": "2554",
+    "namaApotekMBI": "Apotek Grand Farma",
+    "namaMerchant": "APOTIK GRAND FARMA PD (F)",
+    "zone": "Tangerang Rural"
+  },
+  {
+    "kodeCustomer": "CA-000886",
+    "codeNum": "886",
+    "namaApotekMBI": "Apotek Miracle Serpong",
+    "namaMerchant": "APOTIK MIRACLE SERPONG PD (F)",
+    "zone": "Tangerang Rural"
+  },
+  {
+    "kodeCustomer": "CA-002679",
+    "codeNum": "2679",
+    "namaApotekMBI": "Apotek Nes Farma",
+    "namaMerchant": "APOTIK NES FARMA PIK 2 PD (F)",
+    "zone": "Tangerang Rural"
+  },
+  {
+    "kodeCustomer": "CA-000012",
+    "codeNum": "12",
+    "namaApotekMBI": "Apotek Alpharma",
+    "namaMerchant": "APOTIK ALPHARMA PD (F)",
+    "zone": "Tangerang South"
+  },
+  {
+    "kodeCustomer": "CA-000246",
+    "codeNum": "246",
+    "namaApotekMBI": "Apotek Mose Sawah Baru",
+    "namaMerchant": "APOTIK MOSE SAWAH BARU PD (F)",
+    "zone": "Tangerang South"
+  },
+  {
+    "kodeCustomer": "CA-001596",
+    "codeNum": "1596",
+    "namaApotekMBI": "Apotek Rido Farma",
+    "namaMerchant": "APOTIK RIDO FARMA PD (F)",
+    "zone": "Tangerang South"
+  },
+  {
+    "kodeCustomer": "CA-002135",
+    "codeNum": "2135",
+    "namaApotekMBI": "Apotek Delfi",
+    "namaMerchant": "APOTIK DELFI PD (F)",
+    "zone": "Bogor"
+  },
+  {
+    "kodeCustomer": "CA-002626",
+    "codeNum": "2626",
+    "namaApotekMBI": "Apotek Mirah",
+    "namaMerchant": "APOTIK MIRAH CIAWI PD (F)",
+    "zone": "Bogor"
+  },
+  {
+    "kodeCustomer": "CA-000828",
+    "codeNum": "828",
+    "namaApotekMBI": "Apotek Delifi Bogor",
+    "namaMerchant": "APOTIK DELIFI BOGOR PD (F)",
+    "zone": "Bogor Kabupaten East"
+  },
+  {
+    "kodeCustomer": "CA-001648",
+    "codeNum": "1648",
+    "namaApotekMBI": "Apotek Bambu Kuning",
+    "namaMerchant": "APOTIK BAMBU KUNING BOGOR PD (F)",
+    "zone": "Bogor Kabupaten North"
+  },
+  {
+    "kodeCustomer": "CA-001923",
+    "codeNum": "1923",
+    "namaApotekMBI": "Apotek Sentra Budi Suratman Farma (Sentra BS Farma)",
+    "namaMerchant": "APOTIK SENTRA BS FARMA PD (F)",
+    "zone": "Bogor Kabupaten North"
+  },
+  {
+    "kodeCustomer": "CA-002467",
+    "codeNum": "2467",
+    "namaApotekMBI": "Apotek Yemenia Legenda Wisata",
+    "namaMerchant": "APOTIK YEMENIA LEGENDA WISATA PD (F)",
+    "zone": "Bogor Kabupaten North"
+  },
+  {
+    "kodeCustomer": "CA-001316",
+    "codeNum": "1316",
+    "namaApotekMBI": "Apotek Alpharma 2",
+    "namaMerchant": "APOTIK ALPHARMA 2 BOGOR PD (F)",
+    "zone": "Bogor Kabupaten West"
+  },
+  {
+    "kodeCustomer": "CA-002558",
+    "codeNum": "2558",
+    "namaApotekMBI": "Apotek Lubna Farma",
+    "namaMerchant": "APOTIK LUBNA FARMA CIBANTENG PD (F)",
+    "zone": "Bogor Kabupaten West"
+  },
+  {
+    "kodeCustomer": "CA-002514",
+    "codeNum": "2514",
+    "namaApotekMBI": "Apotek Bersama Pekanbaru",
+    "namaMerchant": "APOTIK BERSAMA PEKANBARU PD (F)",
+    "zone": "Pekanbaru"
+  },
+  {
+    "kodeCustomer": "CA-002515",
+    "codeNum": "2515",
+    "namaApotekMBI": "Apotek Esa Farma",
+    "namaMerchant": "APOTIK ESA FARMA RIAU PD (F)",
+    "zone": "Pekanbaru"
+  },
+  {
+    "kodeCustomer": "CA-003263",
+    "codeNum": "3263",
+    "namaApotekMBI": "Apotek Mama (Pekanbaru)",
+    "namaMerchant": "APOTIK MAMA PEKANBARU PD (F)",
+    "zone": "Pekanbaru"
+  },
+  {
+    "kodeCustomer": "CA-003250",
+    "codeNum": "3250",
+    "namaApotekMBI": "Apotek Family (Pekanbaru)",
+    "namaMerchant": "APOTIK FAMILY PEKANBARU PD (F)",
+    "zone": ""
+  },
+  {
+    "kodeCustomer": "CA-001915",
+    "codeNum": "1915",
+    "namaApotekMBI": "Apotek Ibnu Saad",
+    "namaMerchant": "APOTIK IBNU SAAD MARGAASIH PD (F)",
+    "zone": "Bandung - Cimahi"
+  },
+  {
+    "kodeCustomer": "CA-002913",
+    "codeNum": "2913",
+    "namaApotekMBI": "Apotek Sahabat Bersama Bandung",
+    "namaMerchant": "APOTIK SAHABAT BERSAMA PD (F)",
+    "zone": "Bandung - Cimahi"
+  },
+  {
+    "kodeCustomer": "CA-002864",
+    "codeNum": "2864",
+    "namaApotekMBI": "Apotek Apotekcare Jatinangor",
+    "namaMerchant": "APOTIK APOTEKCARE JATINANGOR PD (F)",
+    "zone": "Bandung East"
+  },
+  {
+    "kodeCustomer": "CA-001716",
+    "codeNum": "1716",
+    "namaApotekMBI": "Apotek Hey Farma",
+    "namaMerchant": "APOTIK HEY FARMA PD (F)",
+    "zone": "Bandung North"
+  },
+  {
+    "kodeCustomer": "CA-000719",
+    "codeNum": "719",
+    "namaApotekMBI": "Apotek Baladewa Farma 2",
+    "namaMerchant": "APOTIK BALADEWA FARMA 2 PD (F)",
+    "zone": "Bandung South"
+  },
+  {
+    "kodeCustomer": "CA-001533",
+    "codeNum": "1533",
+    "namaApotekMBI": "Apotek Sehat Waras",
+    "namaMerchant": "APOTIK SEHAT WARAS BANDUNG PD (F)",
+    "zone": "Bandung South"
+  },
+  {
+    "kodeCustomer": "CA-001447",
+    "codeNum": "1447",
+    "namaApotekMBI": "Apotek Endah Farma",
+    "namaMerchant": "APOTIK ENDAH FARMA PD (F)",
+    "zone": "Cianjur"
+  },
+  {
+    "kodeCustomer": "CA-001917",
+    "codeNum": "1917",
+    "namaApotekMBI": "Apotek Perjuangan",
+    "namaMerchant": "APOTIK PERJUANGAN CIREBON PD (F)",
+    "zone": "Cirebon"
+  },
+  {
+    "kodeCustomer": "CA-002458",
+    "codeNum": "2458",
+    "namaApotekMBI": "Apotek Arkan Garut",
+    "namaMerchant": "APOTIK ARKAN GARUT PD (F)",
+    "zone": "Garut Central"
+  },
+  {
+    "kodeCustomer": "CA-002628",
+    "codeNum": "2628",
+    "namaApotekMBI": "Apotek Utama Farma",
+    "namaMerchant": "APOTIK UTAMA FARMA PURWAKARTA PD (F)",
+    "zone": "Purwakarta"
+  },
+  {
+    "kodeCustomer": "CA-002421",
+    "codeNum": "2421",
+    "namaApotekMBI": "Apotek Nurani Sukabumi",
+    "namaMerchant": "APOTIK NURANI PD (F)",
+    "zone": "Sukabumi North"
+  },
+  {
+    "kodeCustomer": "CA-002392",
+    "codeNum": "2392",
+    "namaApotekMBI": "Apotek Mandiri Raya",
+    "namaMerchant": "APOTIK MANDIRI RAYA PD (F)",
+    "zone": "Tasikmalaya"
+  },
+  {
+    "kodeCustomer": "CA-002912",
+    "codeNum": "2912",
+    "namaApotekMBI": "Apotek Pharmacare Bandung 2",
+    "namaMerchant": "APOTIK PHARMACARE BANDUNG 2 PD (F)",
+    "zone": ""
+  },
+  {
+    "kodeCustomer": "CA-000294",
+    "codeNum": "294",
+    "namaApotekMBI": "Apotek Griya Farma Bendungan Hilir",
+    "namaMerchant": "APOTIK GRIYA FARMA BENDUNGAN HILIR PD (F)",
+    "zone": "Jakarta Central"
+  },
+  {
+    "kodeCustomer": "CA-001598",
+    "codeNum": "1598",
+    "namaApotekMBI": "Apotek Populer King",
+    "namaMerchant": "APOTIK POPULER KING PD (F)",
+    "zone": "Jakarta Central"
+  },
+  {
+    "kodeCustomer": "CA-000262",
+    "codeNum": "262",
+    "namaApotekMBI": "Apotek PIK Farma",
+    "namaMerchant": "APOTIK PIK FARMA PD (F)",
+    "zone": "Jakarta North"
+  },
+  {
+    "kodeCustomer": "CA-001466",
+    "codeNum": "1466",
+    "namaApotekMBI": "Apotek Pusphita",
+    "namaMerchant": "APOTIK PUSPHITA PD (F)",
+    "zone": "Jakarta North"
+  },
+  {
+    "kodeCustomer": "CA-000343",
+    "codeNum": "343",
+    "namaApotekMBI": "Apotek Altaday H Nawi",
+    "namaMerchant": "APOTIK ALTADAY H NAWI PD (F)",
+    "zone": "Jakarta South"
+  },
+  {
+    "kodeCustomer": "CA-000611",
+    "codeNum": "611",
+    "namaApotekMBI": "Apotek Mediko Farma Pd Labu",
+    "namaMerchant": "APOTIK MEDIKO FARMA PONDOK LABU PD (F)",
+    "zone": "Jakarta South"
+  },
+  {
+    "kodeCustomer": "CA-000782",
+    "codeNum": "782",
+    "namaApotekMBI": "Apotek Nusa Sehat Pejaten",
+    "namaMerchant": "APOTIK NUSA SEHAT PEJATEN PD (F)",
+    "zone": "Jakarta South"
+  },
+  {
+    "kodeCustomer": "CA-000425",
+    "codeNum": "425",
+    "namaApotekMBI": "Apotek Setia Budhi",
+    "namaMerchant": "APOTIK SETIA BUDHI PD (F)",
+    "zone": "Jakarta South"
+  },
+  {
+    "kodeCustomer": "CA-000329",
+    "codeNum": "329",
+    "namaApotekMBI": "Apotek Taman Puring",
+    "namaMerchant": "APOTIK TAMAN PURING PD (F)",
+    "zone": "Jakarta South"
+  },
+  {
+    "kodeCustomer": "CA-001611",
+    "codeNum": "1611",
+    "namaApotekMBI": "Apotek Terogong",
+    "namaMerchant": "APOTIK TEROGONG CILANDAK PD (F)",
+    "zone": ""
+  },
+  {
+    "kodeCustomer": "CA-000956",
+    "codeNum": "956",
+    "namaApotekMBI": "Apotek Azifa",
+    "namaMerchant": "APOTIK AZIFA BEKASI PD (F)",
+    "zone": "Bekasi Kabupaten North"
+  },
+  {
+    "kodeCustomer": "CA-002866",
+    "codeNum": "2866",
+    "namaApotekMBI": "Apotek Cehat Cikarang",
+    "namaMerchant": "APOTIK CEHAT CIKARANG PD (F)",
+    "zone": "Bekasi Kabupaten North"
+  },
+  {
+    "kodeCustomer": "CA-002867",
+    "codeNum": "2867",
+    "namaApotekMBI": "Apotek Sawarna Farma",
+    "namaMerchant": "APOTIK SAWARNA FARMA BEKASI PD (F)",
+    "zone": "Bekasi Kabupaten North"
+  },
+  {
+    "kodeCustomer": "CA-000695",
+    "codeNum": "695",
+    "namaApotekMBI": "Apotek Waras Cikarang",
+    "namaMerchant": "APOTIK WARAS CIKARANG PD (F)",
+    "zone": "Bekasi Kabupaten North"
+  },
+  {
+    "kodeCustomer": "CA-002896",
+    "codeNum": "2896",
+    "namaApotekMBI": "Apotek Asravi Medika",
+    "namaMerchant": "APOTIK ASRAVI MEDIKA PD (F)",
+    "zone": "Depok"
+  },
+  {
+    "kodeCustomer": "CA-000231",
+    "codeNum": "231",
+    "namaApotekMBI": "Apotek Kita",
+    "namaMerchant": "APOTIK KITA DEPOK PD (F)",
+    "zone": "Depok"
+  },
+  {
+    "kodeCustomer": "CA-000328",
+    "codeNum": "328",
+    "namaApotekMBI": "Apotek Semesta 99",
+    "namaMerchant": "APOTIK SEMESTA 99 PD (F)",
+    "zone": "Depok"
+  },
+  {
+    "kodeCustomer": "CA-000226",
+    "codeNum": "226",
+    "namaApotekMBI": "Apotek Yemenia",
+    "namaMerchant": "APOTIK YEMENIA PD (F)",
+    "zone": "Depok"
+  },
+  {
+    "kodeCustomer": "CA-002483",
+    "codeNum": "2483",
+    "namaApotekMBI": "Apotek Fahruna Farma",
+    "namaMerchant": "APOTIK FAHRUNA FARMA PD (F)",
+    "zone": "Jambi"
+  },
+  {
+    "kodeCustomer": "CA-002592",
+    "codeNum": "2592",
+    "namaApotekMBI": "Apotek Sehat Jambi",
+    "namaMerchant": "APOTIK SEHAT SULTAN SYAHRIL PD (F)",
+    "zone": "Jambi"
+  },
+  {
+    "kodeCustomer": "CA-001511",
+    "codeNum": "1511",
+    "namaApotekMBI": "Apotek Laras Farma",
+    "namaMerchant": "APOTIK LARAS FARMA KARAWANG PD (F)",
+    "zone": "Karawang"
+  },
+  {
+    "kodeCustomer": "CA-002388",
+    "codeNum": "2388",
+    "namaApotekMBI": "Apotek Queen Cikampek",
+    "namaMerchant": "APOTIK QUEEN FARMA PD (F)",
+    "zone": "Karawang"
+  },
+  {
+    "kodeCustomer": "CA-003383",
+    "codeNum": "3383",
+    "namaApotekMBI": "Apotek Dunia Farma Medika",
+    "namaMerchant": "APOTIK DUNIA FARMA MEDIKA PD (F)",
+    "zone": "Medan Central"
+  },
+  {
+    "kodeCustomer": "CA-002512",
+    "codeNum": "2512",
+    "namaApotekMBI": "Apotek Sehat Sembada",
+    "namaMerchant": "APOTIK SEHAT SEMBADA PD (F)",
+    "zone": "Medan South"
+  },
+  {
+    "kodeCustomer": "CA-002266",
+    "codeNum": "2266",
+    "namaApotekMBI": "Apotek Rakyat Palembang",
+    "namaMerchant": "APOTIK RAKYAT PALEMBANG PD (F)",
+    "zone": "Palembang South"
+  }
+]

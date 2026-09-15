@@ -1,6 +1,7 @@
 import * as XLSX from "xlsx";
 import { FakturRecord } from "./types";
 import masterApotek from "./masterApotek.json";
+import master2P from "./master2P.json";
 
 const apotekMap = masterApotek as Record<string, string>;
 
@@ -15,6 +16,16 @@ const normMap: Record<string, string> = {};
 for (const [k, v] of Object.entries(apotekMap)) {
   normMap[normalize(k)] = v;
 }
+
+// 2P lookup structures
+const master2PCodeMap = new Set<string>();
+const master2PNameSet = new Set<string>();
+
+master2P.forEach((item) => {
+  if (item.codeNum) master2PCodeMap.add(item.codeNum);
+  if (item.namaApotekMBI) master2PNameSet.add(normalize(item.namaApotekMBI));
+  if (item.namaMerchant) master2PNameSet.add(normalize(item.namaMerchant));
+});
 
 /**
  * ATURAN BAKU KLASIFIKASI TRANSAKSI (LOCKED):
@@ -34,11 +45,17 @@ export function isOraCustomer(customerName?: string, sourceFile?: string): boole
 
 /**
  * ATURAN BAKU KATEGORI PRIORITAS (LOCKED):
- * - 1P: PT Helios (ORA) + Apotek Prioritas 1 DOO (Medika Prima, SBS, Pasti Hemat, Halomedika, Medika Akses) + Master Apotek 1P.
- * - 2P: Apotek Prioritas 2 (dari masterApotek.json).
+ * - 1P: PT Helios (ORA) + Apotek Prioritas 1 DOO (Medika Prima, SBS, Pasti Hemat, Halomedika, Medika Akses).
+ * - 2P: Apotek Prioritas 2 (dicek via Kode Customer / Ship-to Site ID & Nama Apotek di master 2P).
  * - 3P: Apotek Reguler lainnya.
  */
-export function categorize(jenisTransaksi: string, customerName: string, sourceFile?: string): "1P" | "2P" | "3P" {
+export function categorize(
+  jenisTransaksi: string,
+  customerName: string,
+  sourceFile?: string,
+  shipToSite?: string,
+  billToSite?: string
+): "1P" | "2P" | "3P" {
   const cust = String(customerName || "").trim();
   const upper = cust.toUpperCase();
   const rawJenis = String(jenisTransaksi || "").toUpperCase();
@@ -60,24 +77,35 @@ export function categorize(jenisTransaksi: string, customerName: string, sourceF
     return "1P";
   }
 
-  // Exact match from master apotek
-  const exact = apotekMap[cust.toLowerCase()];
-  if (exact === "1P" || exact === "2P" || exact === "3P") return exact;
-
-  // Normalized match (ignore spaces and punctuation)
-  const norm = normMap[normalize(cust)];
-  if (norm === "1P" || norm === "2P" || norm === "3P") return norm;
-
-  // Substring matching for 2P and 1P
-  const normCust = normalize(cust);
-  for (const [name, cat] of Object.entries(apotekMap)) {
-    if (cat === "2P" || cat === "1P") {
-      const normName = normalize(name);
-      if (normCust.includes(normName) || (normName.length > 5 && normName.includes(normCust))) {
-        return cat as "1P" | "2P";
-      }
+  // 2P Lapis 1: Cek Kode Customer dari Ship-to Site
+  if (shipToSite) {
+    const num = String(shipToSite).replace(/[^0-9]/g, "").replace(/^0+/, "");
+    if (num && master2PCodeMap.has(num)) {
+      return "2P";
     }
   }
+
+  // 2P Lapis 2: Cek Kode Customer dari Bill-to Customer Site
+  if (billToSite) {
+    const num = String(billToSite).replace(/[^0-9]/g, "").replace(/^0+/, "");
+    if (num && master2PCodeMap.has(num)) {
+      return "2P";
+    }
+  }
+
+  // 2P Lapis 3: Cek kecocokan nama apotek di daftar master 2P
+  const normCust = normalize(cust);
+  if (master2PNameSet.has(normCust)) {
+    return "2P";
+  }
+
+  // Exact match from master apotek
+  const exact = apotekMap[cust.toLowerCase()];
+  if (exact === "1P" || exact === "2P" || exact === "3P") return exact as "1P" | "2P" | "3P";
+
+  // Normalized match (ignore spaces and punctuation)
+  const norm = normMap[normCust];
+  if (norm === "1P" || norm === "2P" || norm === "3P") return norm as "1P" | "2P" | "3P";
 
   return "3P";
 }
@@ -183,6 +211,8 @@ function parseHTMLTable(html: string): FakturRecord[] {
     if (s === "transaction number" || (!colMap["inv"] && s.includes("transaction number"))) colMap["inv"] = i;
     if (s === "ship-to customer") colMap["customer"] = i;
     if (s === "bill-to customer") colMap["billTo"] = i;
+    if (s === "ship-to site" || (!colMap["shipSite"] && s.includes("ship-to site"))) colMap["shipSite"] = i;
+    if (s === "bill-to customer site" || (!colMap["billSite"] && s.includes("bill-to customer site"))) colMap["billSite"] = i;
     if (s === "transaction source" || (!colMap["source"] && s.includes("transaction source"))) colMap["source"] = i;
     if (s === "transaction type" || (!colMap["jenis"] && s.includes("transaction type"))) colMap["jenis"] = i;
     if (s === "entered amount" || (!colMap["amount"] && s.includes("entered amount"))) colMap["amount"] = i;
@@ -210,7 +240,10 @@ function parseHTMLTable(html: string): FakturRecord[] {
     const isOra = isOraCustomer(customerName, rawSource);
     const jenisTransaksi: "ORA" | "DOO" = isOra ? "ORA" : "DOO";
 
-    const kategori = isOra ? "1P" : categorize(jenisTransaksi, customerName, jenisTransaksi);
+    const shipSite = colMap["shipSite"] !== undefined ? texts[colMap["shipSite"]] : "";
+    const billSite = colMap["billSite"] !== undefined ? texts[colMap["billSite"]] : "";
+
+    const kategori = isOra ? "1P" : categorize(jenisTransaksi, customerName, jenisTransaksi, shipSite, billSite);
     const invoiceKey = isOra ? `${invVal}-1P` : invVal;
 
     records.push({
@@ -260,6 +293,8 @@ function parseExportArray(data: unknown[][], headerIdx: number = -1): FakturReco
       if (s === "transaction number" || (!colMap["inv"] && s.includes("transaction number"))) colMap["inv"] = i;
       if (s === "ship-to customer") colMap["customer"] = i;
       if (s === "bill-to customer") colMap["billTo"] = i;
+      if (s === "ship-to site" || (!colMap["shipSite"] && s.includes("ship-to site"))) colMap["shipSite"] = i;
+      if (s === "bill-to customer site" || (!colMap["billSite"] && s.includes("bill-to customer site"))) colMap["billSite"] = i;
       if (s === "transaction source" || (!colMap["source"] && s.includes("transaction source"))) colMap["source"] = i;
       if (s === "transaction type" || (!colMap["jenis"] && s.includes("transaction type"))) colMap["jenis"] = i;
       if (s === "entered amount" || (!colMap["amount"] && s.includes("entered amount"))) colMap["amount"] = i;
@@ -298,7 +333,10 @@ function parseExportArray(data: unknown[][], headerIdx: number = -1): FakturReco
     const isOra = isOraCustomer(customerName, rawSource);
     const jenisTransaksi: "ORA" | "DOO" = isOra ? "ORA" : "DOO";
 
-    const kategori = isOra ? "1P" : categorize(jenisTransaksi, customerName, jenisTransaksi);
+    const shipSite = String((colMap["shipSite"] !== undefined ? row[colMap["shipSite"]] : "") || "");
+    const billSite = String((colMap["billSite"] !== undefined ? row[colMap["billSite"]] : "") || "");
+
+    const kategori = isOra ? "1P" : categorize(jenisTransaksi, customerName, jenisTransaksi, shipSite, billSite);
     const invoiceKey = isOra ? `${invVal}-1P` : invVal;
 
     const rawAmount = row[colMap["amount"] ?? 11];
