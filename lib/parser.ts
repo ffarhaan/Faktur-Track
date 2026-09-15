@@ -27,7 +27,8 @@ export function isOraCustomer(customerName?: string, sourceFile?: string): boole
   return (
     upperCust.includes("HELIOS") ||
     upperCust.startsWith("HAK") ||
-    (upperSrc === "ORA" && (upperCust.includes("HELIOS") || upperCust.startsWith("HAK") || !upperCust))
+    upperSrc.includes("ORA") ||
+    upperCust === "1001"
   );
 }
 
@@ -45,10 +46,11 @@ export function categorize(jenisTransaksi: string, customerName: string, sourceF
 
   // 1P: Helios (ORA) atau Apotek DOO 1P (Halomedika, Medika Prima, SBS, Pasti Hemat, Medika Akses)
   if (
-    rawSource === "ORA" ||
+    rawSource.includes("ORA") ||
     rawJenis === "ORA" ||
     upper.includes("HELIOS") ||
     upper.startsWith("HAK") ||
+    upper === "1001" ||
     upper.includes("HALOMEDIKA") ||
     upper.includes("MEDIKA PRIMA") ||
     upper.includes("SBS") ||
@@ -175,17 +177,15 @@ function parseHTMLTable(html: string): FakturRecord[] {
 
   const colMap: Record<string, number> = {};
   headerCells.forEach((h, i) => {
-    const s = h.toLowerCase();
-    if (s.includes("accounting date") || s.includes("transaction date"))
-      colMap["date"] = i;
+    const s = h.toLowerCase().trim();
+    if (s === "accounting date" || s === "transaction date" || (!colMap["date"] && (s.includes("accounting date") || s.includes("transaction date")))) colMap["date"] = i;
     if (s === "reference") colMap["so"] = i;
-    if (s.includes("transaction number")) colMap["inv"] = i;
-    // Ship-to Customer = nama pelanggan (utama), Bill-to Customer = fallback
-    if (s.includes("ship-to customer")) colMap["customer"] = i;
-    if (s.includes("bill-to customer")) colMap["billTo"] = i;
-    if (s.includes("transaction source")) colMap["source"] = i;
-    if (s.includes("transaction type")) colMap["jenis"] = i;
-    if (s.includes("entered amount")) colMap["amount"] = i;
+    if (s === "transaction number" || (!colMap["inv"] && s.includes("transaction number"))) colMap["inv"] = i;
+    if (s === "ship-to customer") colMap["customer"] = i;
+    if (s === "bill-to customer") colMap["billTo"] = i;
+    if (s === "transaction source" || (!colMap["source"] && s.includes("transaction source"))) colMap["source"] = i;
+    if (s === "transaction type" || (!colMap["jenis"] && s.includes("transaction type"))) colMap["jenis"] = i;
+    if (s === "entered amount" || (!colMap["amount"] && s.includes("entered amount"))) colMap["amount"] = i;
   });
 
   const records: FakturRecord[] = [];
@@ -201,7 +201,11 @@ function parseHTMLTable(html: string): FakturRecord[] {
     if (!soVal && !invVal) continue;
 
     // Ship-to Customer sebagai nama pelanggan, fallback ke Bill-to Customer
-    const customerName = texts[colMap["customer"]] || texts[colMap["billTo"]] || "";
+    const customerName = (colMap["customer"] !== undefined && texts[colMap["customer"]])
+      ? texts[colMap["customer"]]
+      : (colMap["billTo"] !== undefined && texts[colMap["billTo"]])
+      ? texts[colMap["billTo"]]
+      : "";
     const rawSource = texts[colMap["source"]] || "";
     const isOra = isOraCustomer(customerName, rawSource);
     const jenisTransaksi: "ORA" | "DOO" = isOra ? "ORA" : "DOO";
@@ -250,15 +254,15 @@ function parseExportArray(data: unknown[][], headerIdx: number = -1): FakturReco
   if (headerIdx !== -1) {
     const header = data[headerIdx] as string[];
     header.forEach((h, i) => {
-      const s = String(h || "").toLowerCase();
-      if (s.includes("accounting date") || s.includes("transaction date")) colMap["date"] = i;
-      if (s === "reference" || s.includes("reference")) colMap["so"] = i;
-      if (s.includes("transaction number")) colMap["inv"] = i;
-      if (s.includes("ship-to customer") || s.includes("customer")) colMap["customer"] = i;
-      if (s.includes("bill-to customer")) colMap["billTo"] = i;
-      if (s.includes("transaction source")) colMap["source"] = i;
-      if (s.includes("transaction type")) colMap["jenis"] = i;
-      if (s.includes("entered amount") || s.includes("amount")) colMap["amount"] = i;
+      const s = String(h || "").toLowerCase().trim();
+      if (s === "accounting date" || s === "transaction date" || (!colMap["date"] && (s.includes("accounting date") || s.includes("transaction date")))) colMap["date"] = i;
+      if (s === "reference") colMap["so"] = i;
+      if (s === "transaction number" || (!colMap["inv"] && s.includes("transaction number"))) colMap["inv"] = i;
+      if (s === "ship-to customer") colMap["customer"] = i;
+      if (s === "bill-to customer") colMap["billTo"] = i;
+      if (s === "transaction source" || (!colMap["source"] && s.includes("transaction source"))) colMap["source"] = i;
+      if (s === "transaction type" || (!colMap["jenis"] && s.includes("transaction type"))) colMap["jenis"] = i;
+      if (s === "entered amount" || (!colMap["amount"] && s.includes("entered amount"))) colMap["amount"] = i;
     });
     startIdx = headerIdx + 1;
   } else {
@@ -285,8 +289,8 @@ function parseExportArray(data: unknown[][], headerIdx: number = -1): FakturReco
     if (soVal.toLowerCase() === "reference" || invVal.toLowerCase().includes("transaction")) continue;
 
     const customerName = String(
-      (colMap["customer"] !== undefined ? row[colMap["customer"]] : "") ||
-      (colMap["billTo"] !== undefined ? row[colMap["billTo"]] : "") ||
+      (colMap["customer"] !== undefined && row[colMap["customer"]] ? row[colMap["customer"]] : "") ||
+      (colMap["billTo"] !== undefined && row[colMap["billTo"]] ? row[colMap["billTo"]] : "") ||
       row[3] || ""
     ).trim();
 
