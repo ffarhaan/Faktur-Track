@@ -339,11 +339,6 @@ export default function Home() {
     async (group: FakturGroup) => {
       const willBePrinted = !group.allPrinted;
       const targetKey = group.invoiceKey;
-      const custName = group.customerName || "Pelanggan";
-      const confirmMsg = willBePrinted
-        ? `Tandai Faktur #${group.invoiceNumber} (${custName}) sebagai SUDAH TERPRINT?`
-        : `Batalkan status cetak Faktur #${group.invoiceNumber} (${custName}) menjadi BELUM TERPRINT?`;
-      if (!confirm(confirmMsg)) return;
 
       const nowIso = new Date().toISOString();
       const next = new Set(printedInvoices);
