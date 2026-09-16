@@ -229,6 +229,8 @@ export default function Home() {
 
   const isFetchingRef = useRef(false);
   const lastSyncHashRef = useRef("");
+  const pendingPrintsRef = useRef<Map<string, { status: boolean; time: number }>>(new Map());
+  const inFlightToggleRef = useRef<Set<string>>(new Set());
 
   // Fetch all records from Supabase (Deterministic & Locked)
   const fetchFromSupabase = useCallback(async (showLoading = false) => {
@@ -265,6 +267,23 @@ export default function Home() {
         // Fast fingerprint to avoid redundant state updates & re-renders
         const hash = `${uniqueRows.length}-${uniqueRows[0]?.id || ""}-${uniqueRows[uniqueRows.length - 1]?.id || ""}`;
         const { records: recs, printedSet, printedAtMap: pMap } = dbRowsToFakturRecords(uniqueRows);
+
+        // Merge recent pending optimistic user actions (within last 15s) so background sync doesn't revert local user edits
+        const now = Date.now();
+        pendingPrintsRef.current.forEach((val, k) => {
+          if (now - val.time < 15000) {
+            if (val.status) {
+              printedSet.add(k);
+              if (!pMap[k]) pMap[k] = new Date(val.time).toISOString();
+            } else {
+              printedSet.delete(k);
+              delete pMap[k];
+            }
+          } else {
+            pendingPrintsRef.current.delete(k);
+          }
+        });
+
         setRecords(recs);
         setPrintedInvoices(printedSet);
         setPrintedAtMap(pMap);
@@ -366,24 +385,42 @@ export default function Home() {
     async (group: FakturGroup) => {
       const willBePrinted = !group.allPrinted;
       const targetKey = group.invoiceKey;
+      const cleanInv = group.invoiceNumber.replace(/-1P$/i, "");
+      const keysToUpdate = Array.from(new Set([targetKey, cleanInv, `${cleanInv}-1P`].filter(Boolean)));
+
+      // Debounce rapid toggles on the same invoice (< 300ms)
+      if (inFlightToggleRef.current.has(targetKey)) return;
+      inFlightToggleRef.current.add(targetKey);
+      setTimeout(() => {
+        inFlightToggleRef.current.delete(targetKey);
+      }, 300);
 
       const nowIso = new Date().toISOString();
       const next = new Set(printedInvoices);
 
       if (willBePrinted) {
         next.add(targetKey);
+        keysToUpdate.forEach((k) => next.add(k));
       } else {
         next.delete(targetKey);
+        keysToUpdate.forEach((k) => next.delete(k));
       }
       setPrintedInvoices(next);
+
+      // Record in pending prints for optimistic retention against background sync
+      keysToUpdate.forEach((k) => {
+        pendingPrintsRef.current.set(k, { status: willBePrinted, time: Date.now() });
+      });
 
       // Track items printed in this session so they persist in Belum Terprint view until manual refresh
       setSessionPrintedKeys((prev) => {
         const sNext = new Set(prev);
         if (willBePrinted) {
           sNext.add(targetKey);
+          keysToUpdate.forEach((k) => sNext.add(k));
         } else {
           sNext.delete(targetKey);
+          keysToUpdate.forEach((k) => sNext.delete(k));
         }
         return sNext;
       });
@@ -391,9 +428,13 @@ export default function Home() {
       setPrintedAtMap((prev) => {
         const nextMap = { ...prev };
         if (willBePrinted) {
-          nextMap[targetKey] = nowIso;
+          keysToUpdate.forEach((k) => {
+            nextMap[k] = nowIso;
+          });
         } else {
-          delete nextMap[targetKey];
+          keysToUpdate.forEach((k) => {
+            delete nextMap[k];
+          });
         }
         try {
           localStorage.setItem("printedAtMap", JSON.stringify(nextMap));
@@ -404,13 +445,21 @@ export default function Home() {
         localStorage.setItem("printedInvoices", JSON.stringify([...next]));
       } catch {}
 
-      await supabase
-        .from("faktur_records")
-        .update({
-          status_cetak: willBePrinted,
-          printed_at: willBePrinted ? nowIso : null,
-        })
-        .eq("no_faktur", targetKey);
+      try {
+        const { error: updateErr } = await supabase
+          .from("faktur_records")
+          .update({
+            status_cetak: willBePrinted,
+            printed_at: willBePrinted ? nowIso : null,
+          })
+          .in("no_faktur", keysToUpdate);
+
+        if (updateErr) {
+          console.error("Supabase update error:", updateErr.message);
+        }
+      } catch (err) {
+        console.error("Failed to update print status in Supabase:", err);
+      }
     },
     [printedInvoices]
   );
@@ -920,6 +969,9 @@ export default function Home() {
         setSelectedColIdx((prev) => Math.max(0, prev - 1));
       } else if (e.key === " " || e.code === "Space") {
         e.preventDefault();
+        if (target && target.tagName === "BUTTON") {
+          target.blur();
+        }
         const currentGroup = pageData[selectedRowIndex];
         if (
           currentGroup &&
@@ -1577,7 +1629,18 @@ export default function Home() {
                               className={`px-2 py-2 ${getCellCls(1)}`}
                             >
                               <button
-                                onClick={() => togglePrint(g)}
+                                type="button"
+                                tabIndex={-1}
+                                onKeyDown={(e) => {
+                                  if (e.key === " " || e.code === "Space") {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                  }
+                                }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  togglePrint(g);
+                                }}
                                 disabled={!hasInvoice}
                                 className={`w-6 h-6 rounded flex items-center justify-center text-xs font-bold transition-all shadow-sm ${
                                    !hasInvoice
