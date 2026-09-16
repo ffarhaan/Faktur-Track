@@ -186,13 +186,36 @@ export default function Home() {
   const [dateFilter, setDateFilter] = useState<string>("all");
   const [uploadNotification, setUploadNotification] = useState<{
     fileName: string;
+    prevOra: string | null;
     maxOra: string;
+    rangeOra: string | null;
+    prevDoo: string | null;
     maxDoo: string;
+    rangeDoo: string | null;
     totalItems: number;
     totalInvoices: number;
     newUnprinted: number;
     time: string;
   } | null>(null);
+
+  const [invoiceProgression, setInvoiceProgression] = useState<{
+    prevDoo: string | null;
+    newDoo: string | null;
+    rangeDoo: string | null;
+    prevOra: string | null;
+    newOra: string | null;
+    rangeOra: string | null;
+    updatedAt: string;
+  } | null>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem("invoiceProgression");
+        if (saved) return JSON.parse(saved);
+      } catch {}
+    }
+    return null;
+  });
+
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
   const [printedInvoices, setPrintedInvoices] = useState<Set<string>>(new Set());
@@ -423,7 +446,30 @@ export default function Home() {
         }
 
         const existingStatusMap = new Map<string, { status_cetak: boolean; printed_at: string | null; extra: Record<string, unknown> | null }>();
+        let prevDooNum = -1;
+        let prevDooStr = "-";
+        let prevOraNum = -1;
+        let prevOraStr = "-";
+
         existingDB.forEach((row: Record<string, unknown>) => {
+          const rawInv = String(row.no_faktur || "");
+          const isOra = rawInv.endsWith("-1P") || (row.source_file === "ORA");
+          const cleanInv = rawInv.replace(/-1P$/i, "");
+          const num = parseInvNum(cleanInv);
+          if (num > 0) {
+            if (isOra) {
+              if (num > prevOraNum) {
+                prevOraNum = num;
+                prevOraStr = cleanInv;
+              }
+            } else {
+              if (num > prevDooNum) {
+                prevDooNum = num;
+                prevDooStr = cleanInv;
+              }
+            }
+          }
+
           existingStatusMap.set(String(row.no_faktur).trim(), {
             status_cetak: Boolean(row.status_cetak),
             printed_at: (row.printed_at as string) || null,
@@ -452,11 +498,6 @@ export default function Home() {
 
             const prevItems = (prevInfo?.extra?.items as Array<Record<string, unknown>>) || [];
             const initialItems: Array<Record<string, unknown>> = [];
-            if (prevItems.length > 0 && r.itemDescription === "-") {
-              // Preserve existing rich items from XXCUST if incoming file is export header only
-              initialItems.push(...prevItems);
-            }
-
             invMap.set(noFaktur, {
               no_faktur: noFaktur,
               no_sales_order: r.orderNumber,
@@ -466,11 +507,11 @@ export default function Home() {
               imported_at: importedAt,
               source_file: isOra ? "ORA" : "DOO",
               extra: {
-                nama_pelanggan: finalCustomerName || null,
+                nama_pelanggan: r.customerName || (prevInfo?.extra?.nama_pelanggan as string) || null,
                 jenis_transaksi: isOra ? "ORA" : "DOO",
                 accounting_date: r.orderDate || (prevInfo?.extra?.accounting_date as string) || null,
                 order_date: r.orderDate || (prevInfo?.extra?.order_date as string) || null,
-                items: initialItems,
+                items: [],
               },
               _soSet: new Set([r.orderNumber]),
             });
@@ -479,17 +520,15 @@ export default function Home() {
           const existing = invMap.get(noFaktur)!;
           (existing._soSet as Set<string>).add(r.orderNumber);
           const itList = (existing.extra as Record<string, unknown>).items as Array<Record<string, unknown>>;
-          if (r.itemDescription !== "-") {
-            itList.push({
-              item_code: r.itemCode,
-              item_description: r.itemDescription,
-              qty: r.qty,
-              uom: r.uom,
-              lot_number: r.lotNumber,
-              total_harga: r.totalHarga,
-              order_number: r.orderNumber,
-            });
-          }
+          itList.push({
+            item_code: r.itemCode,
+            item_description: r.itemDescription,
+            qty: r.qty,
+            uom: r.uom,
+            lot_number: r.lotNumber,
+            total_harga: r.totalHarga,
+            order_number: r.orderNumber,
+          });
         }
 
         const payload = Array.from(invMap.values()).map(({ _soSet, ...rest }) => ({
@@ -504,9 +543,14 @@ export default function Home() {
           if (sbErr) console.error("Upload upsert error:", sbErr.message);
         }
 
-        // Calculate max ORA & DOO in uploaded file
+        // Calculate min and max ORA & DOO in uploaded file
+        let minUploadedOraNum = Infinity;
+        let minUploadedOraStr = "-";
         let maxUploadedOraNum = -1;
         let maxUploadedOraStr = "-";
+
+        let minUploadedDooNum = Infinity;
+        let minUploadedDooStr = "-";
         let maxUploadedDooNum = -1;
         let maxUploadedDooStr = "-";
         let newUnprintedCount = 0;
@@ -515,24 +559,54 @@ export default function Home() {
           const isPrinted = (item as { status_cetak?: boolean }).status_cetak;
           if (!isPrinted) newUnprintedCount++;
           const isOra = (item as { source_file?: string }).source_file === "ORA";
-          const num = parseInvNum(noFaktur);
-          if (isOra) {
-            if (num > maxUploadedOraNum) {
-              maxUploadedOraNum = num;
-              maxUploadedOraStr = noFaktur.replace(/-1P$/i, "");
-            }
-          } else {
-            if (num > maxUploadedDooNum) {
-              maxUploadedDooNum = num;
-              maxUploadedDooStr = noFaktur;
+          const cleanInv = noFaktur.replace(/-1P$/i, "");
+          const num = parseInvNum(cleanInv);
+          if (num > 0) {
+            if (isOra) {
+              if (num > maxUploadedOraNum) {
+                maxUploadedOraNum = num;
+                maxUploadedOraStr = cleanInv;
+              }
+              if (num < minUploadedOraNum) {
+                minUploadedOraNum = num;
+                minUploadedOraStr = cleanInv;
+              }
+            } else {
+              if (num > maxUploadedDooNum) {
+                maxUploadedDooNum = num;
+                maxUploadedDooStr = cleanInv;
+              }
+              if (num < minUploadedDooNum) {
+                minUploadedDooNum = num;
+                minUploadedDooStr = cleanInv;
+              }
             }
           }
         }
 
+        const progObj = {
+          prevDoo: prevDooStr !== "-" ? prevDooStr : null,
+          newDoo: maxUploadedDooStr !== "-" ? maxUploadedDooStr : null,
+          rangeDoo: minUploadedDooStr !== "-" && maxUploadedDooStr !== "-" ? `${minUploadedDooStr} ➔ ${maxUploadedDooStr}` : null,
+          prevOra: prevOraStr !== "-" ? prevOraStr : null,
+          newOra: maxUploadedOraStr !== "-" ? maxUploadedOraStr : null,
+          rangeOra: minUploadedOraStr !== "-" && maxUploadedOraStr !== "-" ? `${minUploadedOraStr} ➔ ${maxUploadedOraStr}` : null,
+          updatedAt: new Date().toLocaleTimeString("id-ID"),
+        };
+
+        setInvoiceProgression(progObj);
+        try {
+          localStorage.setItem("invoiceProgression", JSON.stringify(progObj));
+        } catch {}
+
         setUploadNotification({
           fileName: file.name,
+          prevOra: prevOraStr !== "-" ? prevOraStr : null,
           maxOra: maxUploadedOraStr,
+          rangeOra: minUploadedOraStr !== "-" && maxUploadedOraStr !== "-" ? `${minUploadedOraStr} ➔ ${maxUploadedOraStr}` : null,
+          prevDoo: prevDooStr !== "-" ? prevDooStr : null,
           maxDoo: maxUploadedDooStr,
+          rangeDoo: minUploadedDooStr !== "-" && maxUploadedDooStr !== "-" ? `${minUploadedDooStr} ➔ ${maxUploadedDooStr}` : null,
           totalItems: parsed.length,
           totalInvoices: invMap.size,
           newUnprinted: newUnprintedCount,
@@ -664,12 +738,18 @@ export default function Home() {
 
   const highestInvoices = useMemo(() => {
     let maxOra = { invoiceNumber: "-", totalHarga: 0, orderDate: "-", isPrinted: false, customerName: "" };
-    let maxDoo = { invoiceNumber: "-", totalHarga: 0, orderDate: "-", isPrinted: false, customerName: "" };
+    let minOraStr = "-";
     let maxOraNum = -1;
+    let minOraNum = Infinity;
+
+    let maxDoo = { invoiceNumber: "-", totalHarga: 0, orderDate: "-", isPrinted: false, customerName: "" };
+    let minDooStr = "-";
     let maxDooNum = -1;
+    let minDooNum = Infinity;
 
     for (const g of grouped) {
       const num = parseInvNum(g.invoiceNumber);
+      if (num <= 0) continue;
       if (g.jenisTransaksi === "ORA") {
         if (num > maxOraNum) {
           maxOraNum = num;
@@ -680,6 +760,10 @@ export default function Home() {
             isPrinted: g.allPrinted,
             customerName: g.customerName,
           };
+        }
+        if (num < minOraNum) {
+          minOraNum = num;
+          minOraStr = g.invoiceNumber;
         }
       } else {
         if (num > maxDooNum) {
@@ -692,9 +776,20 @@ export default function Home() {
             customerName: g.customerName,
           };
         }
+        if (num < minDooNum) {
+          minDooNum = num;
+          minDooStr = g.invoiceNumber;
+        }
       }
     }
-    return { maxOra, maxDoo };
+    return {
+      maxOra,
+      minOra: minOraStr,
+      rangeOra: minOraStr !== "-" && maxOra.invoiceNumber !== "-" ? `${minOraStr} ➔ ${maxOra.invoiceNumber}` : null,
+      maxDoo,
+      minDoo: minDooStr,
+      rangeDoo: minDooStr !== "-" && maxDoo.invoiceNumber !== "-" ? `${minDooStr} ➔ ${maxDoo.invoiceNumber}` : null,
+    };
   }, [grouped]);
 
   const availableDates = useMemo(() => {
@@ -1076,25 +1171,53 @@ export default function Home() {
                     {uploadNotification.time}
                   </span>
                 </div>
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-700 mt-1">
-                  <span className="font-semibold text-gray-900">
-                    📌 Faktur Terakhir (Tertinggi):
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-gray-700 mt-1.5">
+                  <span className="font-semibold text-gray-900 flex items-center gap-1">
+                    <span>📌</span> Progresi Faktur Terakhir:
                   </span>
-                  {uploadNotification.maxOra !== "-" && (
-                    <span className="inline-flex items-center gap-1 font-medium bg-blue-100/80 text-blue-900 px-2 py-0.5 rounded border border-blue-200">
-                      🏢 ORA (Helios): <strong className="font-mono font-bold">#{uploadNotification.maxOra}</strong>
+                  {uploadNotification.maxDoo !== "-" && (
+                    <span className="inline-flex items-center gap-1.5 font-medium bg-emerald-100/90 text-emerald-950 px-2.5 py-1 rounded-md border border-emerald-300">
+                      🏬 DOO:{" "}
+                      {uploadNotification.prevDoo && uploadNotification.prevDoo !== uploadNotification.maxDoo ? (
+                        <>
+                          <span className="font-mono text-emerald-700 line-through decoration-emerald-500">#{uploadNotification.prevDoo}</span>
+                          <span className="text-emerald-600 font-bold">➔</span>
+                          <strong className="font-mono font-bold text-emerald-900 bg-emerald-200/80 px-1 rounded">#{uploadNotification.maxDoo}</strong>
+                        </>
+                      ) : (
+                        <strong className="font-mono font-bold">#{uploadNotification.maxDoo}</strong>
+                      )}
+                      {uploadNotification.rangeDoo && (
+                        <span className="text-[11px] text-emerald-700 font-normal">
+                          (Rentang File: #{uploadNotification.rangeDoo})
+                        </span>
+                      )}
                     </span>
                   )}
-                  {uploadNotification.maxDoo !== "-" && (
-                    <span className="inline-flex items-center gap-1 font-medium bg-emerald-100/80 text-emerald-900 px-2 py-0.5 rounded border border-emerald-200">
-                      🏬 DOO: <strong className="font-mono font-bold">#{uploadNotification.maxDoo}</strong>
+                  {uploadNotification.maxOra !== "-" && (
+                    <span className="inline-flex items-center gap-1.5 font-medium bg-blue-100/90 text-blue-950 px-2.5 py-1 rounded-md border border-blue-300">
+                      🏢 ORA (Helios):{" "}
+                      {uploadNotification.prevOra && uploadNotification.prevOra !== uploadNotification.maxOra ? (
+                        <>
+                          <span className="font-mono text-blue-700 line-through decoration-blue-500">#{uploadNotification.prevOra}</span>
+                          <span className="text-blue-600 font-bold">➔</span>
+                          <strong className="font-mono font-bold text-blue-900 bg-blue-200/80 px-1 rounded">#{uploadNotification.maxOra}</strong>
+                        </>
+                      ) : (
+                        <strong className="font-mono font-bold">#{uploadNotification.maxOra}</strong>
+                      )}
+                      {uploadNotification.rangeOra && (
+                        <span className="text-[11px] text-blue-700 font-normal">
+                          (Rentang File: #{uploadNotification.rangeOra})
+                        </span>
+                      )}
                     </span>
                   )}
                   <span className="text-gray-600">
                     · Total {uploadNotification.totalInvoices.toLocaleString("id-ID")} faktur ({uploadNotification.totalItems.toLocaleString("id-ID")} baris)
                   </span>
                   {uploadNotification.newUnprinted > 0 ? (
-                    <span className="font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded border border-amber-200">
+                    <span className="font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded border border-amber-300">
                       🚨 {uploadNotification.newUnprinted} Faktur Baru Belum Terprint
                     </span>
                   ) : (
@@ -1107,7 +1230,7 @@ export default function Home() {
             </div>
             <button
               onClick={() => setUploadNotification(null)}
-              className="text-gray-400 hover:text-gray-700 text-xs px-2 py-1 rounded-lg hover:bg-gray-200 transition-colors"
+              className="text-gray-400 hover:text-gray-700 text-xs px-2 py-1 rounded-lg hover:bg-gray-200 transition-colors ml-2"
               title="Tutup notifikasi"
             >
               ✕ Tutup
@@ -1126,40 +1249,84 @@ export default function Home() {
               <Card label="Double INV" value={summary.doubleInv.toLocaleString("id-ID")} color="red" />
               
               {/* Card Faktur Terakhir ORA */}
-              <div className="bg-white rounded-lg border border-blue-200 p-3.5 shadow-xs relative overflow-hidden">
+              <div className="bg-white rounded-lg border border-blue-200 p-3.5 shadow-xs relative overflow-hidden flex flex-col justify-between">
                 <div className="absolute top-0 right-0 w-12 h-12 bg-blue-50 rounded-bl-full pointer-events-none" />
-                <p className="text-[11px] font-semibold text-blue-700 uppercase tracking-wider mb-1 flex items-center gap-1">
-                  <span>🏢</span> Faktur Terakhir ORA
-                </p>
-                <p className="text-lg font-bold font-mono text-blue-950">
-                  {highestInvoices.maxOra.invoiceNumber !== "-" ? `#${highestInvoices.maxOra.invoiceNumber}` : "-"}
-                </p>
-                <div className="mt-1 flex items-center justify-between text-[11px]">
-                  <span className="text-gray-500 truncate max-w-[100px]">{highestInvoices.maxOra.orderDate || "-"}</span>
-                  <span className={`px-1.5 py-0.2 rounded font-bold text-[10px] ${
-                    highestInvoices.maxOra.isPrinted ? "bg-green-100 text-green-800" : "bg-orange-100 text-orange-800"
-                  }`}>
-                    {highestInvoices.maxOra.isPrinted ? "Terprint" : "Belum"}
+                <div>
+                  <p className="text-[11px] font-semibold text-blue-700 uppercase tracking-wider mb-1 flex items-center justify-between">
+                    <span className="flex items-center gap-1"><span>🏢</span> Faktur Terakhir ORA</span>
+                    {highestInvoices.maxOra.invoiceNumber !== "-" && (
+                      <span className={`px-1.5 py-0.2 rounded font-bold text-[10px] ${
+                        highestInvoices.maxOra.isPrinted ? "bg-green-100 text-green-800" : "bg-orange-100 text-orange-800"
+                      }`}>
+                        {highestInvoices.maxOra.isPrinted ? "Terprint" : "Belum"}
+                      </span>
+                    )}
+                  </p>
+                  <p className="text-lg font-bold font-mono text-blue-950">
+                    {highestInvoices.maxOra.invoiceNumber !== "-" ? `#${highestInvoices.maxOra.invoiceNumber}` : "-"}
+                  </p>
+
+                  {/* Progression display: e.g. #110006 ➔ #110016 */}
+                  {invoiceProgression?.prevOra && invoiceProgression.newOra && invoiceProgression.prevOra !== invoiceProgression.newOra && (
+                    <div className="mt-1 flex items-center gap-1 text-[11px] font-mono bg-blue-50 text-blue-800 px-1.5 py-0.5 rounded border border-blue-150">
+                      <span className="text-gray-500 font-sans text-[10px]">Sebelum:</span>
+                      <span>#{invoiceProgression.prevOra}</span>
+                      <span className="text-blue-600 font-bold">➔</span>
+                      <span className="font-bold">#{invoiceProgression.newOra}</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="mt-2 pt-1 border-t border-gray-100 flex flex-col gap-0.5 text-[11px] text-gray-500">
+                  <span className="truncate" title={highestInvoices.maxOra.customerName || highestInvoices.maxOra.orderDate}>
+                    {highestInvoices.maxOra.orderDate || "-"}
                   </span>
+                  {highestInvoices.rangeOra && (
+                    <span className="text-[10px] font-mono text-blue-600/80 font-medium truncate" title="Rentang Nomor Faktur ORA di Database">
+                      Rentang: #{highestInvoices.rangeOra}
+                    </span>
+                  )}
                 </div>
               </div>
 
               {/* Card Faktur Terakhir DOO */}
-              <div className="bg-white rounded-lg border border-emerald-200 p-3.5 shadow-xs relative overflow-hidden">
+              <div className="bg-white rounded-lg border border-emerald-200 p-3.5 shadow-xs relative overflow-hidden flex flex-col justify-between">
                 <div className="absolute top-0 right-0 w-12 h-12 bg-emerald-50 rounded-bl-full pointer-events-none" />
-                <p className="text-[11px] font-semibold text-emerald-700 uppercase tracking-wider mb-1 flex items-center gap-1">
-                  <span>🏬</span> Faktur Terakhir DOO
-                </p>
-                <p className="text-lg font-bold font-mono text-emerald-950">
-                  {highestInvoices.maxDoo.invoiceNumber !== "-" ? `#${highestInvoices.maxDoo.invoiceNumber}` : "-"}
-                </p>
-                <div className="mt-1 flex items-center justify-between text-[11px]">
-                  <span className="text-gray-500 truncate max-w-[100px]">{highestInvoices.maxDoo.orderDate || "-"}</span>
-                  <span className={`px-1.5 py-0.2 rounded font-bold text-[10px] ${
-                    highestInvoices.maxDoo.isPrinted ? "bg-green-100 text-green-800" : "bg-orange-100 text-orange-800"
-                  }`}>
-                    {highestInvoices.maxDoo.isPrinted ? "Terprint" : "Belum"}
+                <div>
+                  <p className="text-[11px] font-semibold text-emerald-700 uppercase tracking-wider mb-1 flex items-center justify-between">
+                    <span className="flex items-center gap-1"><span>🏬</span> Faktur Terakhir DOO</span>
+                    {highestInvoices.maxDoo.invoiceNumber !== "-" && (
+                      <span className={`px-1.5 py-0.2 rounded font-bold text-[10px] ${
+                        highestInvoices.maxDoo.isPrinted ? "bg-green-100 text-green-800" : "bg-orange-100 text-orange-800"
+                      }`}>
+                        {highestInvoices.maxDoo.isPrinted ? "Terprint" : "Belum"}
+                      </span>
+                    )}
+                  </p>
+                  <p className="text-lg font-bold font-mono text-emerald-950">
+                    {highestInvoices.maxDoo.invoiceNumber !== "-" ? `#${highestInvoices.maxDoo.invoiceNumber}` : "-"}
+                  </p>
+
+                  {/* Progression display: e.g. #110006 ➔ #110016 */}
+                  {invoiceProgression?.prevDoo && invoiceProgression.newDoo && invoiceProgression.prevDoo !== invoiceProgression.newDoo && (
+                    <div className="mt-1 flex items-center gap-1 text-[11px] font-mono bg-emerald-50 text-emerald-800 px-1.5 py-0.5 rounded border border-emerald-150">
+                      <span className="text-gray-500 font-sans text-[10px]">Sebelum:</span>
+                      <span>#{invoiceProgression.prevDoo}</span>
+                      <span className="text-emerald-600 font-bold">➔</span>
+                      <span className="font-bold">#{invoiceProgression.newDoo}</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="mt-2 pt-1 border-t border-gray-100 flex flex-col gap-0.5 text-[11px] text-gray-500">
+                  <span className="truncate" title={highestInvoices.maxDoo.customerName || highestInvoices.maxDoo.orderDate}>
+                    {highestInvoices.maxDoo.orderDate || "-"}
                   </span>
+                  {highestInvoices.rangeDoo && (
+                    <span className="text-[10px] font-mono text-emerald-600/80 font-medium truncate" title="Rentang Nomor Faktur DOO di Database">
+                      Rentang: #{highestInvoices.rangeDoo}
+                    </span>
+                  )}
                 </div>
               </div>
 
