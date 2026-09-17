@@ -508,13 +508,13 @@ export default function Home() {
 
         const importedAt = new Date().toISOString();
 
-        // Fetch ALL existing print status from DB (paginated) so we NEVER reset already printed invoices
+        // Fetch ALL existing print status & data from DB (paginated) so we NEVER reset already printed invoices or rich item data
         let existingDB: Array<Record<string, unknown>> = [];
         let fromIdx = 0;
         while (true) {
           const { data: pageData, error: pageErr } = await supabase
             .from("faktur_records")
-            .select("no_faktur, status_cetak, printed_at, extra")
+            .select("no_faktur, no_sales_order, status_cetak, printed_at, extra")
             .order("id", { ascending: true })
             .range(fromIdx, fromIdx + 999);
           if (pageErr || !pageData || pageData.length === 0) break;
@@ -523,7 +523,15 @@ export default function Home() {
           fromIdx += 1000;
         }
 
-        const existingStatusMap = new Map<string, { status_cetak: boolean; printed_at: string | null; extra: Record<string, unknown> | null }>();
+        const existingStatusMap = new Map<
+          string,
+          {
+            no_sales_order: string | null;
+            status_cetak: boolean;
+            printed_at: string | null;
+            extra: Record<string, unknown> | null;
+          }
+        >();
         let existingProgression: InvoiceProgression = {};
         let prev1PNum = -1;
         let prev1PStr = "-";
@@ -580,11 +588,17 @@ export default function Home() {
           }
 
           existingStatusMap.set(String(row.no_faktur).trim(), {
+            no_sales_order: (row.no_sales_order as string) || null,
             status_cetak: Boolean(row.status_cetak),
             printed_at: (row.printed_at as string) || null,
             extra: (row.extra as Record<string, unknown>) || null,
           });
         });
+
+        // Check if uploaded file contains detailed items (XXCUST format)
+        const isFileItemRich = parsed.some(
+          (r) => r.itemCode && r.itemCode !== "-" && r.itemCode !== ""
+        );
 
         // Group parsed records by invoice to upsert to Supabase
         const invMap = new Map<string, Record<string, unknown>>();
@@ -596,50 +610,96 @@ export default function Home() {
           const prevInfo = existingStatusMap.get(noFaktur);
           const isPrinted = prevInfo ? prevInfo.status_cetak : false;
           const printedAt = prevInfo ? prevInfo.printed_at : null;
+          const prevExtra = (prevInfo?.extra as Record<string, unknown>) || null;
+          const prevItems = (prevExtra?.items as Array<Record<string, unknown>>) || [];
+          const hasExistingRichItems =
+            prevItems.length > 0 &&
+            prevItems.some(
+              (it) => it.item_code && it.item_code !== "-" && it.item_code !== ""
+            );
+          const existingSO = String(
+            prevInfo?.no_sales_order || (prevExtra?.order_number as string) || ""
+          ).trim();
+
+          const isIncomingItem = Boolean(
+            r.itemCode && r.itemCode !== "-" && r.itemCode !== ""
+          );
 
           if (!invMap.has(noFaktur)) {
-            const existingName = String(prevInfo?.extra?.nama_pelanggan || "").trim();
+            const existingName = String(prevExtra?.nama_pelanggan || "").trim();
             const incomingName = String(r.customerName || "").trim();
             let finalCustomerName = incomingName;
             if ((!finalCustomerName || /^\d+$/.test(finalCustomerName)) && existingName && !/^\d+$/.test(existingName)) {
               finalCustomerName = existingName;
             }
 
+            // SO Number selection:
+            // 1. If file is XXCUST, use incoming r.orderNumber.
+            // 2. If file is summary ORA export and DB already has clean SO from XXCUST, PRESERVE existing SO!
+            let finalSO = r.orderNumber;
+            if (
+              !isFileItemRich &&
+              existingSO &&
+              existingSO !== "-" &&
+              !existingSO.startsWith("ORA_") &&
+              existingSO.length < 35
+            ) {
+              finalSO = existingSO;
+            }
+
             invMap.set(noFaktur, {
               no_faktur: noFaktur,
-              no_sales_order: r.orderNumber,
+              no_sales_order: finalSO,
               no_delivery_order: null,
               status_cetak: isPrinted,
               printed_at: printedAt,
               imported_at: importedAt,
               source_file: isOra ? "ORA" : "DOO",
               extra: {
-                nama_pelanggan: r.customerName || (prevInfo?.extra?.nama_pelanggan as string) || null,
+                nama_pelanggan: finalCustomerName || (prevExtra?.nama_pelanggan as string) || null,
                 jenis_transaksi: isOra ? "ORA" : "DOO",
-                accounting_date: r.orderDate || (prevInfo?.extra?.accounting_date as string) || null,
-                order_date: r.orderDate || (prevInfo?.extra?.order_date as string) || null,
+                accounting_date: r.orderDate || (prevExtra?.accounting_date as string) || null,
+                order_date: r.orderDate || (prevExtra?.order_date as string) || null,
                 kategori: r.kategori,
-                items: [],
+                items: !isFileItemRich && hasExistingRichItems ? prevItems : [],
               },
-              _soSet: new Set([r.orderNumber]),
+              _soSet: new Set([finalSO]),
+              _hasPreservedItems: !isFileItemRich && hasExistingRichItems,
             });
           }
 
           const existing = invMap.get(noFaktur)!;
-          (existing._soSet as Set<string>).add(r.orderNumber);
-          const itList = (existing.extra as Record<string, unknown>).items as Array<Record<string, unknown>>;
-          itList.push({
-            item_code: r.itemCode,
-            item_description: r.itemDescription,
-            qty: r.qty,
-            uom: r.uom,
-            lot_number: r.lotNumber,
-            total_harga: r.totalHarga,
-            order_number: r.orderNumber,
-          });
+          if (isFileItemRich && isIncomingItem) {
+            if (r.orderNumber) {
+              (existing._soSet as Set<string>).add(r.orderNumber);
+            }
+            const itList = (existing.extra as Record<string, unknown>).items as Array<Record<string, unknown>>;
+            itList.push({
+              item_code: r.itemCode,
+              item_description: r.itemDescription,
+              qty: r.qty,
+              uom: r.uom,
+              lot_number: r.lotNumber,
+              total_harga: r.totalHarga,
+              order_number: r.orderNumber,
+            });
+          } else if (!existing._hasPreservedItems) {
+            const itList = (existing.extra as Record<string, unknown>).items as Array<Record<string, unknown>>;
+            if (itList.length === 0) {
+              itList.push({
+                item_code: r.itemCode,
+                item_description: r.itemDescription,
+                qty: r.qty,
+                uom: r.uom,
+                lot_number: r.lotNumber,
+                total_harga: r.totalHarga,
+                order_number: r.orderNumber,
+              });
+            }
+          }
         }
 
-        const payload = Array.from(invMap.values()).map(({ _soSet, ...rest }) => ({
+        const payload = Array.from(invMap.values()).map(({ _soSet, _hasPreservedItems, ...rest }) => ({
           ...rest,
           no_sales_order: (_soSet as Set<string>).size > 0 ? Array.from(_soSet as Set<string>).join(", ") : rest.no_sales_order,
         }));
