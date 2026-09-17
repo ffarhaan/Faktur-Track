@@ -93,13 +93,39 @@ function dbRowsToFakturRecords(rows: Array<Record<string, unknown>>): {
   records: FakturRecord[];
   printedSet: Set<string>;
   printedAtMap: Record<string, string>;
+  progression: {
+    prevDoo: string | null;
+    newDoo: string | null;
+    rangeDoo: string | null;
+    prevOra: string | null;
+    newOra: string | null;
+    rangeOra: string | null;
+    updatedAt: string;
+  } | null;
 } {
   const records: FakturRecord[] = [];
   const printedSet = new Set<string>();
   const printedAtMap: Record<string, string> = {};
+  let progression: {
+    prevDoo: string | null;
+    newDoo: string | null;
+    rangeDoo: string | null;
+    prevOra: string | null;
+    newOra: string | null;
+    rangeOra: string | null;
+    updatedAt: string;
+  } | null = null;
 
   for (const r of rows) {
     const rawInv = String(r.no_faktur || "");
+    if (rawInv === "__SYSTEM_METADATA__") {
+      const extra = (r.extra as Record<string, unknown>) || {};
+      if (extra.invoiceProgression) {
+        progression = extra.invoiceProgression as unknown as typeof progression;
+      }
+      continue;
+    }
+
     const cleanInv = rawInv.replace(/-1P$/i, "");
     const extra = (r.extra as Record<string, unknown>) || {};
     const items = (extra.items as Array<Record<string, unknown>>) || [];
@@ -170,7 +196,7 @@ function dbRowsToFakturRecords(rows: Array<Record<string, unknown>>): {
     if (soInvMap[rec.orderNumber]?.size > 1) rec.isDoubleInv = true;
   }
 
-  return { records, printedSet, printedAtMap };
+  return { records, printedSet, printedAtMap, progression };
 }
 
 export default function Home() {
@@ -266,7 +292,14 @@ export default function Home() {
 
         // Fast fingerprint to avoid redundant state updates & re-renders
         const hash = `${uniqueRows.length}-${uniqueRows[0]?.id || ""}-${uniqueRows[uniqueRows.length - 1]?.id || ""}`;
-        const { records: recs, printedSet, printedAtMap: pMap } = dbRowsToFakturRecords(uniqueRows);
+        const { records: recs, printedSet, printedAtMap: pMap, progression: prog } = dbRowsToFakturRecords(uniqueRows);
+
+        if (prog) {
+          setInvoiceProgression(prog);
+          try {
+            localStorage.setItem("invoiceProgression", JSON.stringify(prog));
+          } catch {}
+        }
 
         // Merge recent pending optimistic user actions (within last 15s) so background sync doesn't revert local user edits
         const now = Date.now();
@@ -636,10 +669,10 @@ export default function Home() {
         const progObj = {
           prevDoo: prevDooStr !== "-" ? prevDooStr : null,
           newDoo: maxUploadedDooStr !== "-" ? maxUploadedDooStr : null,
-          rangeDoo: minUploadedDooStr !== "-" && maxUploadedDooStr !== "-" ? `${minUploadedDooStr} ➔ ${maxUploadedDooStr}` : null,
+          rangeDoo: prevDooStr !== "-" && maxUploadedDooStr !== "-" && prevDooStr !== maxUploadedDooStr ? `${prevDooStr} ➔ ${maxUploadedDooStr}` : (maxUploadedDooStr !== "-" ? maxUploadedDooStr : null),
           prevOra: prevOraStr !== "-" ? prevOraStr : null,
           newOra: maxUploadedOraStr !== "-" ? maxUploadedOraStr : null,
-          rangeOra: minUploadedOraStr !== "-" && maxUploadedOraStr !== "-" ? `${minUploadedOraStr} ➔ ${maxUploadedOraStr}` : null,
+          rangeOra: prevOraStr !== "-" && maxUploadedOraStr !== "-" && prevOraStr !== maxUploadedOraStr ? `${prevOraStr} ➔ ${maxUploadedOraStr}` : (maxUploadedOraStr !== "-" ? maxUploadedOraStr : null),
           updatedAt: new Date().toLocaleTimeString("id-ID"),
         };
 
@@ -648,14 +681,30 @@ export default function Home() {
           localStorage.setItem("invoiceProgression", JSON.stringify(progObj));
         } catch {}
 
+        // Save progression to Supabase metadata so all devices see this progression
+        try {
+          await supabase.from("faktur_records").upsert({
+            no_faktur: "__SYSTEM_METADATA__",
+            no_sales_order: "__SYSTEM__",
+            status_cetak: true,
+            imported_at: importedAt,
+            source_file: "SYS",
+            extra: {
+              invoiceProgression: progObj,
+            },
+          }, { onConflict: "no_faktur" });
+        } catch (err) {
+          console.error("Failed to save progression to Supabase metadata:", err);
+        }
+
         setUploadNotification({
           fileName: file.name,
           prevOra: prevOraStr !== "-" ? prevOraStr : null,
           maxOra: maxUploadedOraStr,
-          rangeOra: minUploadedOraStr !== "-" && maxUploadedOraStr !== "-" ? `${minUploadedOraStr} ➔ ${maxUploadedOraStr}` : null,
+          rangeOra: prevOraStr !== "-" && maxUploadedOraStr !== "-" && prevOraStr !== maxUploadedOraStr ? `${prevOraStr} ➔ ${maxUploadedOraStr}` : null,
           prevDoo: prevDooStr !== "-" ? prevDooStr : null,
           maxDoo: maxUploadedDooStr,
-          rangeDoo: minUploadedDooStr !== "-" && maxUploadedDooStr !== "-" ? `${minUploadedDooStr} ➔ ${maxUploadedDooStr}` : null,
+          rangeDoo: prevDooStr !== "-" && maxUploadedDooStr !== "-" && prevDooStr !== maxUploadedDooStr ? `${prevDooStr} ➔ ${maxUploadedDooStr}` : null,
           totalItems: parsed.length,
           totalInvoices: invMap.size,
           newUnprinted: newUnprintedCount,
@@ -1314,28 +1363,25 @@ export default function Home() {
                       </span>
                     )}
                   </p>
-                  <p className="text-lg font-bold font-mono text-blue-950">
+                  <p className="text-xl font-bold font-mono text-blue-950">
                     {highestInvoices.maxOra.invoiceNumber !== "-" ? `#${highestInvoices.maxOra.invoiceNumber}` : "-"}
                   </p>
-
-                  {/* Progression display: e.g. #110006 ➔ #110016 */}
-                  {invoiceProgression?.prevOra && invoiceProgression.newOra && invoiceProgression.prevOra !== invoiceProgression.newOra && (
-                    <div className="mt-1 flex items-center gap-1 text-[11px] font-mono bg-blue-50 text-blue-800 px-1.5 py-0.5 rounded border border-blue-150">
-                      <span className="text-gray-500 font-sans text-[10px]">Sebelum:</span>
-                      <span>#{invoiceProgression.prevOra}</span>
-                      <span className="text-blue-600 font-bold">➔</span>
-                      <span className="font-bold">#{invoiceProgression.newOra}</span>
-                    </div>
-                  )}
                 </div>
 
-                <div className="mt-2 pt-1 border-t border-gray-100 flex flex-col gap-0.5 text-[11px] text-gray-500">
+                <div className="mt-2 pt-1.5 border-t border-gray-100 flex flex-col gap-1 text-[11px] text-gray-500">
                   <span className="truncate" title={highestInvoices.maxOra.customerName || highestInvoices.maxOra.orderDate}>
-                    {highestInvoices.maxOra.orderDate || "-"}
+                    📅 {highestInvoices.maxOra.orderDate || "-"}
                   </span>
-                  {highestInvoices.rangeOra && (
-                    <span className="text-[10px] font-mono text-blue-600/80 font-medium truncate" title="Rentang Nomor Faktur ORA di Database">
-                      Rentang: #{highestInvoices.rangeOra}
+                  {invoiceProgression?.prevOra && invoiceProgression.newOra && invoiceProgression.prevOra !== invoiceProgression.newOra ? (
+                    <span className="text-[11px] font-mono text-blue-800 bg-blue-50/90 font-semibold px-2 py-0.5 rounded border border-blue-200 flex items-center gap-1">
+                      <span className="text-gray-500 font-sans text-[10px]">Rentang:</span>
+                      <span className="line-through decoration-blue-400 text-blue-600">#{invoiceProgression.prevOra}</span>
+                      <span className="text-blue-600 font-bold">➔</span>
+                      <span className="font-bold text-blue-900">#{invoiceProgression.newOra}</span>
+                    </span>
+                  ) : (
+                    <span className="text-[10px] font-mono text-blue-600/80 font-medium">
+                      Faktur Terakhir: #{highestInvoices.maxOra.invoiceNumber}
                     </span>
                   )}
                 </div>
@@ -1355,28 +1401,25 @@ export default function Home() {
                       </span>
                     )}
                   </p>
-                  <p className="text-lg font-bold font-mono text-emerald-950">
+                  <p className="text-xl font-bold font-mono text-emerald-950">
                     {highestInvoices.maxDoo.invoiceNumber !== "-" ? `#${highestInvoices.maxDoo.invoiceNumber}` : "-"}
                   </p>
-
-                  {/* Progression display: e.g. #110006 ➔ #110016 */}
-                  {invoiceProgression?.prevDoo && invoiceProgression.newDoo && invoiceProgression.prevDoo !== invoiceProgression.newDoo && (
-                    <div className="mt-1 flex items-center gap-1 text-[11px] font-mono bg-emerald-50 text-emerald-800 px-1.5 py-0.5 rounded border border-emerald-150">
-                      <span className="text-gray-500 font-sans text-[10px]">Sebelum:</span>
-                      <span>#{invoiceProgression.prevDoo}</span>
-                      <span className="text-emerald-600 font-bold">➔</span>
-                      <span className="font-bold">#{invoiceProgression.newDoo}</span>
-                    </div>
-                  )}
                 </div>
 
-                <div className="mt-2 pt-1 border-t border-gray-100 flex flex-col gap-0.5 text-[11px] text-gray-500">
+                <div className="mt-2 pt-1.5 border-t border-gray-100 flex flex-col gap-1 text-[11px] text-gray-500">
                   <span className="truncate" title={highestInvoices.maxDoo.customerName || highestInvoices.maxDoo.orderDate}>
-                    {highestInvoices.maxDoo.orderDate || "-"}
+                    📅 {highestInvoices.maxDoo.orderDate || "-"}
                   </span>
-                  {highestInvoices.rangeDoo && (
-                    <span className="text-[10px] font-mono text-emerald-600/80 font-medium truncate" title="Rentang Nomor Faktur DOO di Database">
-                      Rentang: #{highestInvoices.rangeDoo}
+                  {invoiceProgression?.prevDoo && invoiceProgression.newDoo && invoiceProgression.prevDoo !== invoiceProgression.newDoo ? (
+                    <span className="text-[11px] font-mono text-emerald-800 bg-emerald-50/90 font-semibold px-2 py-0.5 rounded border border-emerald-200 flex items-center gap-1">
+                      <span className="text-gray-500 font-sans text-[10px]">Rentang:</span>
+                      <span className="line-through decoration-emerald-400 text-emerald-600">#{invoiceProgression.prevDoo}</span>
+                      <span className="text-emerald-600 font-bold">➔</span>
+                      <span className="font-bold text-emerald-900">#{invoiceProgression.newDoo}</span>
+                    </span>
+                  ) : (
+                    <span className="text-[10px] font-mono text-emerald-600/80 font-medium">
+                      Faktur Terakhir: #{highestInvoices.maxDoo.invoiceNumber}
                     </span>
                   )}
                 </div>
