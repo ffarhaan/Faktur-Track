@@ -225,12 +225,21 @@ export default function Home() {
   } | null>(null);
 
   const [invoiceProgression, setInvoiceProgression] = useState<{
-    prevDoo: string | null;
-    newDoo: string | null;
-    rangeDoo: string | null;
-    prevOra: string | null;
-    newOra: string | null;
-    rangeOra: string | null;
+    prev1P?: string | null;
+    new1P?: string | null;
+    range1P?: string | null;
+    prev2P?: string | null;
+    new2P?: string | null;
+    range2P?: string | null;
+    prev3P?: string | null;
+    new3P?: string | null;
+    range3P?: string | null;
+    prevDoo?: string | null;
+    newDoo?: string | null;
+    rangeDoo?: string | null;
+    prevOra?: string | null;
+    newOra?: string | null;
+    rangeOra?: string | null;
     updatedAt: string;
   } | null>(() => {
     if (typeof window !== "undefined") {
@@ -528,17 +537,41 @@ export default function Home() {
         }
 
         const existingStatusMap = new Map<string, { status_cetak: boolean; printed_at: string | null; extra: Record<string, unknown> | null }>();
+        let prev1PNum = -1;
+        let prev1PStr = "-";
+        let prev2PNum = -1;
+        let prev2PStr = "-";
+        let prev3PNum = -1;
+        let prev3PStr = "-";
         let prevDooNum = -1;
         let prevDooStr = "-";
         let prevOraNum = -1;
         let prevOraStr = "-";
 
         existingDB.forEach((row: Record<string, unknown>) => {
+          if (row.no_faktur === "__SYSTEM_METADATA__") return;
           const rawInv = String(row.no_faktur || "");
-          const isOra = rawInv.endsWith("-1P") || (row.source_file === "ORA");
           const cleanInv = rawInv.replace(/-1P$/i, "");
+          const extra = (row.extra as Record<string, unknown>) || {};
+          const cust = String(extra.nama_pelanggan || "");
+          const isOra = isOraCustomer(cust, (extra.jenis_transaksi as string) || (row.source_file as string));
           const num = parseInvNum(cleanInv);
+          const kat = categorize(isOra ? "ORA" : "DOO", cust, (extra.jenis_transaksi as string) || (row.source_file as string));
+
           if (num > 0) {
+            if (kat === "1P" && num > prev1PNum) {
+              prev1PNum = num;
+              prev1PStr = cleanInv;
+            }
+            if (kat === "2P" && num > prev2PNum) {
+              prev2PNum = num;
+              prev2PStr = cleanInv;
+            }
+            if (kat === "3P" && num > prev3PNum) {
+              prev3PNum = num;
+              prev3PStr = cleanInv;
+            }
+
             if (isOra) {
               if (num > prevOraNum) {
                 prevOraNum = num;
@@ -578,8 +611,6 @@ export default function Home() {
               finalCustomerName = existingName;
             }
 
-            const prevItems = (prevInfo?.extra?.items as Array<Record<string, unknown>>) || [];
-            const initialItems: Array<Record<string, unknown>> = [];
             invMap.set(noFaktur, {
               no_faktur: noFaktur,
               no_sales_order: r.orderNumber,
@@ -593,6 +624,7 @@ export default function Home() {
                 jenis_transaksi: isOra ? "ORA" : "DOO",
                 accounting_date: r.orderDate || (prevInfo?.extra?.accounting_date as string) || null,
                 order_date: r.orderDate || (prevInfo?.extra?.order_date as string) || null,
+                kategori: r.kategori,
                 items: [],
               },
               _soSet: new Set([r.orderNumber]),
@@ -625,7 +657,14 @@ export default function Home() {
           if (sbErr) console.error("Upload upsert error:", sbErr.message);
         }
 
-        // Calculate min and max ORA & DOO in uploaded file
+        // Calculate max invoices per category (1P, 2P, 3P, ORA, DOO) in uploaded file
+        let maxUploaded1PNum = -1;
+        let maxUploaded1PStr = "-";
+        let maxUploaded2PNum = -1;
+        let maxUploaded2PStr = "-";
+        let maxUploaded3PNum = -1;
+        let maxUploaded3PStr = "-";
+
         let minUploadedOraNum = Infinity;
         let minUploadedOraStr = "-";
         let maxUploadedOraNum = -1;
@@ -640,10 +679,27 @@ export default function Home() {
         for (const [noFaktur, item] of invMap.entries()) {
           const isPrinted = (item as { status_cetak?: boolean }).status_cetak;
           if (!isPrinted) newUnprintedCount++;
+          const extra = (item as { extra?: Record<string, unknown> }).extra || {};
+          const cust = String(extra.nama_pelanggan || "");
           const isOra = (item as { source_file?: string }).source_file === "ORA";
           const cleanInv = noFaktur.replace(/-1P$/i, "");
           const num = parseInvNum(cleanInv);
+          const kat = (extra.kategori as "1P" | "2P" | "3P") || categorize(isOra ? "ORA" : "DOO", cust, isOra ? "ORA" : "DOO");
+
           if (num > 0) {
+            if (kat === "1P" && num > maxUploaded1PNum) {
+              maxUploaded1PNum = num;
+              maxUploaded1PStr = cleanInv;
+            }
+            if (kat === "2P" && num > maxUploaded2PNum) {
+              maxUploaded2PNum = num;
+              maxUploaded2PStr = cleanInv;
+            }
+            if (kat === "3P" && num > maxUploaded3PNum) {
+              maxUploaded3PNum = num;
+              maxUploaded3PStr = cleanInv;
+            }
+
             if (isOra) {
               if (num > maxUploadedOraNum) {
                 maxUploadedOraNum = num;
@@ -667,6 +723,15 @@ export default function Home() {
         }
 
         const progObj = {
+          prev1P: prev1PStr !== "-" ? prev1PStr : null,
+          new1P: maxUploaded1PStr !== "-" ? maxUploaded1PStr : null,
+          range1P: prev1PStr !== "-" && maxUploaded1PStr !== "-" && prev1PStr !== maxUploaded1PStr ? `${prev1PStr} ➔ ${maxUploaded1PStr}` : (maxUploaded1PStr !== "-" ? maxUploaded1PStr : null),
+          prev2P: prev2PStr !== "-" ? prev2PStr : null,
+          new2P: maxUploaded2PStr !== "-" ? maxUploaded2PStr : null,
+          range2P: prev2PStr !== "-" && maxUploaded2PStr !== "-" && prev2PStr !== maxUploaded2PStr ? `${prev2PStr} ➔ ${maxUploaded2PStr}` : (maxUploaded2PStr !== "-" ? maxUploaded2PStr : null),
+          prev3P: prev3PStr !== "-" ? prev3PStr : null,
+          new3P: maxUploaded3PStr !== "-" ? maxUploaded3PStr : null,
+          range3P: prev3PStr !== "-" && maxUploaded3PStr !== "-" && prev3PStr !== maxUploaded3PStr ? `${prev3PStr} ➔ ${maxUploaded3PStr}` : (maxUploaded3PStr !== "-" ? maxUploaded3PStr : null),
           prevDoo: prevDooStr !== "-" ? prevDooStr : null,
           newDoo: maxUploadedDooStr !== "-" ? maxUploadedDooStr : null,
           rangeDoo: prevDooStr !== "-" && maxUploadedDooStr !== "-" && prevDooStr !== maxUploadedDooStr ? `${prevDooStr} ➔ ${maxUploadedDooStr}` : (maxUploadedDooStr !== "-" ? maxUploadedDooStr : null),
@@ -835,58 +900,60 @@ export default function Home() {
   }, [records, printedInvoices, printedAtMap, sortBy, sortOrder]);
 
   const highestInvoices = useMemo(() => {
-    let maxOra = { invoiceNumber: "-", totalHarga: 0, orderDate: "-", isPrinted: false, customerName: "" };
-    let minOraStr = "-";
-    let maxOraNum = -1;
-    let minOraNum = Infinity;
+    let max1P = { invoiceNumber: "-", totalHarga: 0, orderDate: "-", isPrinted: false, customerName: "", jenisTransaksi: "1P" };
+    let max2P = { invoiceNumber: "-", totalHarga: 0, orderDate: "-", isPrinted: false, customerName: "", jenisTransaksi: "2P" };
+    let max3P = { invoiceNumber: "-", totalHarga: 0, orderDate: "-", isPrinted: false, customerName: "", jenisTransaksi: "3P" };
+    let maxOra = { invoiceNumber: "-", totalHarga: 0, orderDate: "-", isPrinted: false, customerName: "", jenisTransaksi: "ORA" };
+    let maxDoo = { invoiceNumber: "-", totalHarga: 0, orderDate: "-", isPrinted: false, customerName: "", jenisTransaksi: "DOO" };
 
-    let maxDoo = { invoiceNumber: "-", totalHarga: 0, orderDate: "-", isPrinted: false, customerName: "" };
-    let minDooStr = "-";
+    let max1PNum = -1;
+    let max2PNum = -1;
+    let max3PNum = -1;
+    let maxOraNum = -1;
     let maxDooNum = -1;
-    let minDooNum = Infinity;
 
     for (const g of grouped) {
       const num = parseInvNum(g.invoiceNumber);
       if (num <= 0) continue;
-      if (g.jenisTransaksi === "ORA") {
-        if (num > maxOraNum) {
-          maxOraNum = num;
-          maxOra = {
-            invoiceNumber: g.invoiceNumber,
-            totalHarga: g.totalHarga,
-            orderDate: g.orderDate,
-            isPrinted: g.allPrinted,
-            customerName: g.customerName,
-          };
-        }
-        if (num < minOraNum) {
-          minOraNum = num;
-          minOraStr = g.invoiceNumber;
-        }
-      } else {
-        if (num > maxDooNum) {
-          maxDooNum = num;
-          maxDoo = {
-            invoiceNumber: g.invoiceNumber,
-            totalHarga: g.totalHarga,
-            orderDate: g.orderDate,
-            isPrinted: g.allPrinted,
-            customerName: g.customerName,
-          };
-        }
-        if (num < minDooNum) {
-          minDooNum = num;
-          minDooStr = g.invoiceNumber;
-        }
+
+      const itemInfo = {
+        invoiceNumber: g.invoiceNumber,
+        totalHarga: g.totalHarga,
+        orderDate: g.orderDate,
+        isPrinted: g.allPrinted,
+        customerName: g.customerName,
+        jenisTransaksi: g.jenisTransaksi,
+      };
+
+      if (g.kategori === "1P" && num > max1PNum) {
+        max1PNum = num;
+        max1P = itemInfo;
+      }
+      if (g.kategori === "2P" && num > max2PNum) {
+        max2PNum = num;
+        max2P = itemInfo;
+      }
+      if (g.kategori === "3P" && num > max3PNum) {
+        max3PNum = num;
+        max3P = itemInfo;
+      }
+
+      if (g.jenisTransaksi === "ORA" && num > maxOraNum) {
+        maxOraNum = num;
+        maxOra = itemInfo;
+      }
+      if (g.jenisTransaksi === "DOO" && num > maxDooNum) {
+        maxDooNum = num;
+        maxDoo = itemInfo;
       }
     }
+
     return {
+      max1P,
+      max2P,
+      max3P,
       maxOra,
-      minOra: minOraStr,
-      rangeOra: minOraStr !== "-" && maxOra.invoiceNumber !== "-" ? `${minOraStr} ➔ ${maxOra.invoiceNumber}` : null,
       maxDoo,
-      minDoo: minDooStr,
-      rangeDoo: minDooStr !== "-" && maxDoo.invoiceNumber !== "-" ? `${minDooStr} ➔ ${maxDoo.invoiceNumber}` : null,
     };
   }, [grouped]);
 
@@ -1342,90 +1409,139 @@ export default function Home() {
         {/* Data loaded */}
         {records.length > 0 && (
           <>
-            {/* Summary & Highest Invoices Cards */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3 mb-5">
+            {/* Row 1: General Summary KPI Cards */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-3">
               <Card label="Total SO" value={summary.totalSO.toLocaleString("id-ID")} />
               <Card label="Total Invoice" value={summary.totalInvoices.toLocaleString("id-ID")} />
               <Card label="Belum Terprint" value={summary.belumTerprint.toLocaleString("id-ID")} color="orange" />
               <Card label="Double INV" value={summary.doubleInv.toLocaleString("id-ID")} color="red" />
-              
-              {/* Card Faktur Terakhir ORA */}
+              <Card label="Total Harga" value={formatRupiah(summary.totalHarga)} small />
+            </div>
+
+            {/* Row 2: Faktur Terakhir 1P, 2P, 3P Category Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
+              {/* Card Faktur Terakhir 1P */}
               <div className="bg-white rounded-lg border border-blue-200 p-3.5 shadow-xs relative overflow-hidden flex flex-col justify-between">
                 <div className="absolute top-0 right-0 w-12 h-12 bg-blue-50 rounded-bl-full pointer-events-none" />
                 <div>
-                  <p className="text-[11px] font-semibold text-blue-700 uppercase tracking-wider mb-1 flex items-center justify-between">
-                    <span className="flex items-center gap-1"><span>🏢</span> Faktur Terakhir ORA</span>
-                    {highestInvoices.maxOra.invoiceNumber !== "-" && (
-                      <span className={`px-1.5 py-0.2 rounded font-bold text-[10px] ${
-                        highestInvoices.maxOra.isPrinted ? "bg-green-100 text-green-800" : "bg-orange-100 text-orange-800"
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[11px] font-bold text-blue-800 uppercase tracking-wider flex items-center gap-1.5">
+                      <span>🏢</span> Faktur Terakhir 1P
+                      <span className="px-1.5 py-0.2 bg-blue-100 text-blue-800 text-[10px] rounded font-mono font-bold">1P (Helios/DOO)</span>
+                    </span>
+                    {highestInvoices.max1P.invoiceNumber !== "-" && (
+                      <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] shadow-2xs ${
+                        highestInvoices.max1P.isPrinted ? "bg-green-100 text-green-800 border border-green-300" : "bg-orange-100 text-orange-800 border border-orange-300"
                       }`}>
-                        {highestInvoices.maxOra.isPrinted ? "Terprint" : "Belum"}
+                        {highestInvoices.max1P.isPrinted ? "✓ Terprint" : "○ Belum Print"}
                       </span>
                     )}
-                  </p>
-                  <p className="text-xl font-bold font-mono text-blue-950">
-                    {highestInvoices.maxOra.invoiceNumber !== "-" ? `#${highestInvoices.maxOra.invoiceNumber}` : "-"}
+                  </div>
+                  <p className="text-2xl font-bold font-mono text-blue-950 mt-1">
+                    {highestInvoices.max1P.invoiceNumber !== "-" ? `#${highestInvoices.max1P.invoiceNumber}` : "-"}
                   </p>
                 </div>
 
-                <div className="mt-2 pt-1.5 border-t border-gray-100 flex flex-col gap-1 text-[11px] text-gray-500">
-                  <span className="truncate" title={highestInvoices.maxOra.customerName || highestInvoices.maxOra.orderDate}>
-                    📅 {highestInvoices.maxOra.orderDate || "-"}
+                <div className="mt-2.5 pt-1.5 border-t border-blue-50 flex flex-col gap-1 text-[11px] text-gray-500">
+                  <span className="truncate" title={highestInvoices.max1P.customerName || highestInvoices.max1P.orderDate}>
+                    {highestInvoices.max1P.customerName ? `👤 ${highestInvoices.max1P.customerName}` : `📅 ${highestInvoices.max1P.orderDate || "-"}`}
                   </span>
-                  {invoiceProgression?.prevOra && invoiceProgression.newOra && invoiceProgression.prevOra !== invoiceProgression.newOra ? (
-                    <span className="text-[11px] font-mono text-blue-800 bg-blue-50/90 font-semibold px-2 py-0.5 rounded border border-blue-200 flex items-center gap-1">
+                  {invoiceProgression?.prev1P && invoiceProgression.new1P && invoiceProgression.prev1P !== invoiceProgression.new1P ? (
+                    <span className="text-[11px] font-mono text-blue-800 bg-blue-50 font-semibold px-2 py-0.5 rounded border border-blue-200 flex items-center gap-1">
                       <span className="text-gray-500 font-sans text-[10px]">Rentang:</span>
-                      <span className="line-through decoration-blue-400 text-blue-600">#{invoiceProgression.prevOra}</span>
+                      <span className="line-through decoration-blue-400 text-blue-600">#{invoiceProgression.prev1P}</span>
                       <span className="text-blue-600 font-bold">➔</span>
-                      <span className="font-bold text-blue-900">#{invoiceProgression.newOra}</span>
+                      <span className="font-bold text-blue-900">#{invoiceProgression.new1P}</span>
                     </span>
                   ) : (
-                    <span className="text-[10px] font-mono text-blue-600/80 font-medium">
-                      Faktur Terakhir: #{highestInvoices.maxOra.invoiceNumber}
+                    <span className="text-[10px] font-mono text-blue-700/80 font-medium">
+                      📅 {highestInvoices.max1P.orderDate || "-"}
                     </span>
                   )}
                 </div>
               </div>
 
-              {/* Card Faktur Terakhir DOO */}
+              {/* Card Faktur Terakhir 2P */}
               <div className="bg-white rounded-lg border border-emerald-200 p-3.5 shadow-xs relative overflow-hidden flex flex-col justify-between">
                 <div className="absolute top-0 right-0 w-12 h-12 bg-emerald-50 rounded-bl-full pointer-events-none" />
                 <div>
-                  <p className="text-[11px] font-semibold text-emerald-700 uppercase tracking-wider mb-1 flex items-center justify-between">
-                    <span className="flex items-center gap-1"><span>🏬</span> Faktur Terakhir DOO</span>
-                    {highestInvoices.maxDoo.invoiceNumber !== "-" && (
-                      <span className={`px-1.5 py-0.2 rounded font-bold text-[10px] ${
-                        highestInvoices.maxDoo.isPrinted ? "bg-green-100 text-green-800" : "bg-orange-100 text-orange-800"
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider flex items-center gap-1.5">
+                      <span>🏪</span> Faktur Terakhir 2P
+                      <span className="px-1.5 py-0.2 bg-emerald-100 text-emerald-800 text-[10px] rounded font-mono font-bold">2P (Mitra)</span>
+                    </span>
+                    {highestInvoices.max2P.invoiceNumber !== "-" && (
+                      <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] shadow-2xs ${
+                        highestInvoices.max2P.isPrinted ? "bg-green-100 text-green-800 border border-green-300" : "bg-orange-100 text-orange-800 border border-orange-300"
                       }`}>
-                        {highestInvoices.maxDoo.isPrinted ? "Terprint" : "Belum"}
+                        {highestInvoices.max2P.isPrinted ? "✓ Terprint" : "○ Belum Print"}
                       </span>
                     )}
-                  </p>
-                  <p className="text-xl font-bold font-mono text-emerald-950">
-                    {highestInvoices.maxDoo.invoiceNumber !== "-" ? `#${highestInvoices.maxDoo.invoiceNumber}` : "-"}
+                  </div>
+                  <p className="text-2xl font-bold font-mono text-emerald-950 mt-1">
+                    {highestInvoices.max2P.invoiceNumber !== "-" ? `#${highestInvoices.max2P.invoiceNumber}` : "-"}
                   </p>
                 </div>
 
-                <div className="mt-2 pt-1.5 border-t border-gray-100 flex flex-col gap-1 text-[11px] text-gray-500">
-                  <span className="truncate" title={highestInvoices.maxDoo.customerName || highestInvoices.maxDoo.orderDate}>
-                    📅 {highestInvoices.maxDoo.orderDate || "-"}
+                <div className="mt-2.5 pt-1.5 border-t border-emerald-50 flex flex-col gap-1 text-[11px] text-gray-500">
+                  <span className="truncate" title={highestInvoices.max2P.customerName || highestInvoices.max2P.orderDate}>
+                    {highestInvoices.max2P.customerName ? `👤 ${highestInvoices.max2P.customerName}` : `📅 ${highestInvoices.max2P.orderDate || "-"}`}
                   </span>
-                  {invoiceProgression?.prevDoo && invoiceProgression.newDoo && invoiceProgression.prevDoo !== invoiceProgression.newDoo ? (
-                    <span className="text-[11px] font-mono text-emerald-800 bg-emerald-50/90 font-semibold px-2 py-0.5 rounded border border-emerald-200 flex items-center gap-1">
+                  {invoiceProgression?.prev2P && invoiceProgression.new2P && invoiceProgression.prev2P !== invoiceProgression.new2P ? (
+                    <span className="text-[11px] font-mono text-emerald-800 bg-emerald-50 font-semibold px-2 py-0.5 rounded border border-emerald-200 flex items-center gap-1">
                       <span className="text-gray-500 font-sans text-[10px]">Rentang:</span>
-                      <span className="line-through decoration-emerald-400 text-emerald-600">#{invoiceProgression.prevDoo}</span>
+                      <span className="line-through decoration-emerald-400 text-emerald-600">#{invoiceProgression.prev2P}</span>
                       <span className="text-emerald-600 font-bold">➔</span>
-                      <span className="font-bold text-emerald-900">#{invoiceProgression.newDoo}</span>
+                      <span className="font-bold text-emerald-900">#{invoiceProgression.new2P}</span>
                     </span>
                   ) : (
-                    <span className="text-[10px] font-mono text-emerald-600/80 font-medium">
-                      Faktur Terakhir: #{highestInvoices.maxDoo.invoiceNumber}
+                    <span className="text-[10px] font-mono text-emerald-700/80 font-medium">
+                      📅 {highestInvoices.max2P.orderDate || "-"}
                     </span>
                   )}
                 </div>
               </div>
 
-              <Card label="Total Harga" value={formatRupiah(summary.totalHarga)} small />
+              {/* Card Faktur Terakhir 3P */}
+              <div className="bg-white rounded-lg border border-purple-200 p-3.5 shadow-xs relative overflow-hidden flex flex-col justify-between">
+                <div className="absolute top-0 right-0 w-12 h-12 bg-purple-50 rounded-bl-full pointer-events-none" />
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[11px] font-bold text-purple-800 uppercase tracking-wider flex items-center gap-1.5">
+                      <span>🏬</span> Faktur Terakhir 3P
+                      <span className="px-1.5 py-0.2 bg-purple-100 text-purple-800 text-[10px] rounded font-mono font-bold">3P (Reguler)</span>
+                    </span>
+                    {highestInvoices.max3P.invoiceNumber !== "-" && (
+                      <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] shadow-2xs ${
+                        highestInvoices.max3P.isPrinted ? "bg-green-100 text-green-800 border border-green-300" : "bg-orange-100 text-orange-800 border border-orange-300"
+                      }`}>
+                        {highestInvoices.max3P.isPrinted ? "✓ Terprint" : "○ Belum Print"}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-2xl font-bold font-mono text-purple-950 mt-1">
+                    {highestInvoices.max3P.invoiceNumber !== "-" ? `#${highestInvoices.max3P.invoiceNumber}` : "-"}
+                  </p>
+                </div>
+
+                <div className="mt-2.5 pt-1.5 border-t border-purple-50 flex flex-col gap-1 text-[11px] text-gray-500">
+                  <span className="truncate" title={highestInvoices.max3P.customerName || highestInvoices.max3P.orderDate}>
+                    {highestInvoices.max3P.customerName ? `👤 ${highestInvoices.max3P.customerName}` : `📅 ${highestInvoices.max3P.orderDate || "-"}`}
+                  </span>
+                  {invoiceProgression?.prev3P && invoiceProgression.new3P && invoiceProgression.prev3P !== invoiceProgression.new3P ? (
+                    <span className="text-[11px] font-mono text-purple-800 bg-purple-50 font-semibold px-2 py-0.5 rounded border border-purple-200 flex items-center gap-1">
+                      <span className="text-gray-500 font-sans text-[10px]">Rentang:</span>
+                      <span className="line-through decoration-purple-400 text-purple-600">#{invoiceProgression.prev3P}</span>
+                      <span className="text-purple-600 font-bold">➔</span>
+                      <span className="font-bold text-purple-900">#{invoiceProgression.new3P}</span>
+                    </span>
+                  ) : (
+                    <span className="text-[10px] font-mono text-purple-700/80 font-medium">
+                      📅 {highestInvoices.max3P.orderDate || "-"}
+                    </span>
+                  )}
+                </div>
+              </div>
             </div>
 
             {/* Filters & Sorting Toolbar */}
