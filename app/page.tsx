@@ -261,6 +261,7 @@ export default function Home() {
   const [selectedColIdx, setSelectedColIdx] = useState(3); // Default: No Invoice
   const [copyToast, setCopyToast] = useState<string | null>(null);
   const [sessionPrintedKeys, setSessionPrintedKeys] = useState<Set<string>>(new Set());
+  const [showHelpModal, setShowHelpModal] = useState(false);
 
   const isFetchingRef = useRef(false);
   const lastSyncHashRef = useRef("");
@@ -900,17 +901,15 @@ export default function Home() {
   }, [records, printedInvoices, printedAtMap, sortBy, sortOrder]);
 
   const highestInvoices = useMemo(() => {
-    let max1P = { invoiceNumber: "-", totalHarga: 0, orderDate: "-", isPrinted: false, customerName: "", jenisTransaksi: "1P" };
+    let max1POra = { invoiceNumber: "-", totalHarga: 0, orderDate: "-", isPrinted: false, customerName: "", jenisTransaksi: "ORA" };
+    let max1PDoo = { invoiceNumber: "-", totalHarga: 0, orderDate: "-", isPrinted: false, customerName: "", jenisTransaksi: "DOO" };
     let max2P = { invoiceNumber: "-", totalHarga: 0, orderDate: "-", isPrinted: false, customerName: "", jenisTransaksi: "2P" };
     let max3P = { invoiceNumber: "-", totalHarga: 0, orderDate: "-", isPrinted: false, customerName: "", jenisTransaksi: "3P" };
-    let maxOra = { invoiceNumber: "-", totalHarga: 0, orderDate: "-", isPrinted: false, customerName: "", jenisTransaksi: "ORA" };
-    let maxDoo = { invoiceNumber: "-", totalHarga: 0, orderDate: "-", isPrinted: false, customerName: "", jenisTransaksi: "DOO" };
 
-    let max1PNum = -1;
+    let max1POraNum = -1;
+    let max1PDooNum = -1;
     let max2PNum = -1;
     let max3PNum = -1;
-    let maxOraNum = -1;
-    let maxDooNum = -1;
 
     for (const g of grouped) {
       const num = parseInvNum(g.invoiceNumber);
@@ -925,9 +924,14 @@ export default function Home() {
         jenisTransaksi: g.jenisTransaksi,
       };
 
-      if (g.kategori === "1P" && num > max1PNum) {
-        max1PNum = num;
-        max1P = itemInfo;
+      if (g.kategori === "1P") {
+        if (g.jenisTransaksi === "ORA" && num > max1POraNum) {
+          max1POraNum = num;
+          max1POra = itemInfo;
+        } else if (g.jenisTransaksi === "DOO" && num > max1PDooNum) {
+          max1PDooNum = num;
+          max1PDoo = itemInfo;
+        }
       }
       if (g.kategori === "2P" && num > max2PNum) {
         max2PNum = num;
@@ -937,23 +941,13 @@ export default function Home() {
         max3PNum = num;
         max3P = itemInfo;
       }
-
-      if (g.jenisTransaksi === "ORA" && num > maxOraNum) {
-        maxOraNum = num;
-        maxOra = itemInfo;
-      }
-      if (g.jenisTransaksi === "DOO" && num > maxDooNum) {
-        maxDooNum = num;
-        maxDoo = itemInfo;
-      }
     }
 
     return {
-      max1P,
+      max1POra,
+      max1PDoo,
       max2P,
       max3P,
-      maxOra,
-      maxDoo,
     };
   }, [grouped]);
 
@@ -1262,6 +1256,13 @@ export default function Home() {
           </div>
           <div className="flex items-center gap-2">
             <button
+              onClick={() => setShowHelpModal(true)}
+              className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 flex items-center justify-center text-sm shadow-xs transition-all hover:scale-105"
+              title="Panduan & Pintasan Keyboard"
+            >
+              ⌨️
+            </button>
+            <button
               onClick={handleManualRefresh}
               className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 px-3 py-1.5 rounded-lg shadow-sm transition-colors"
               title="Refresh dan perbarui data dari database cloud"
@@ -1369,47 +1370,61 @@ export default function Home() {
         {/* Data loaded */}
         {records.length > 0 && (
           <>
-            {/* Unified Compact Summary & Category Cards (1 Row) */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 mb-3">
-              <Card label="Total SO" value={summary.totalSO.toLocaleString("id-ID")} />
-              <Card label="Total Invoice" value={summary.totalInvoices.toLocaleString("id-ID")} />
-              <Card label="Belum Terprint" value={summary.belumTerprint.toLocaleString("id-ID")} color="orange" />
-              <Card label="Double INV" value={summary.doubleInv.toLocaleString("id-ID")} color="red" />
+            {/* Summary & Category Cards: 2 Rows x 4 Columns */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-3.5">
+              {/* Row 1, Col 1: Total SO */}
+              <div className="bg-white rounded-lg border border-gray-200 p-2.5 shadow-2xs flex flex-col justify-between">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-0.5 truncate">Total SO</p>
+                <p className="text-base font-bold font-mono text-gray-900 truncate">{summary.totalSO.toLocaleString("id-ID")}</p>
+              </div>
 
-              {/* Card Faktur 1P */}
+              {/* Row 1, Col 2: Belum Terprint */}
+              <div className="bg-white rounded-lg border border-orange-200 p-2.5 shadow-2xs flex flex-col justify-between">
+                <div className="flex items-center justify-between gap-1 mb-0.5">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-orange-600 truncate">Belum Terprint</p>
+                  {summary.belumTerprint > 0 && (
+                    <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-orange-100 text-orange-800">
+                      🚨 Pending
+                    </span>
+                  )}
+                </div>
+                <p className="text-base font-bold font-mono text-orange-600 truncate">{summary.belumTerprint.toLocaleString("id-ID")}</p>
+              </div>
+
+              {/* Row 1, Col 3: 1P ORA */}
               <div className="bg-white rounded-lg border border-blue-200 p-2.5 shadow-2xs flex flex-col justify-between">
                 <div>
                   <div className="flex items-center justify-between gap-1 mb-0.5">
                     <span className="text-[10px] font-bold text-blue-800 uppercase flex items-center gap-1 truncate">
-                      <span>🏢</span> Faktur 1P
+                      <span>🏢</span> 1P ORA
                     </span>
-                    {highestInvoices.max1P.invoiceNumber !== "-" && (
+                    {highestInvoices.max1POra.invoiceNumber !== "-" && (
                       <span className={`px-1.5 py-0.2 rounded text-[9px] font-bold ${
-                        highestInvoices.max1P.isPrinted ? "bg-green-100 text-green-800" : "bg-orange-100 text-orange-800"
+                        highestInvoices.max1POra.isPrinted ? "bg-green-100 text-green-800" : "bg-orange-100 text-orange-800"
                       }`}>
-                        {highestInvoices.max1P.isPrinted ? "✓" : "○"}
+                        {highestInvoices.max1POra.isPrinted ? "✓" : "○"}
                       </span>
                     )}
                   </div>
                   <p className="text-base font-bold font-mono text-blue-950 truncate">
-                    {highestInvoices.max1P.invoiceNumber !== "-" ? `#${highestInvoices.max1P.invoiceNumber}` : "-"}
+                    {highestInvoices.max1POra.invoiceNumber !== "-" ? `#${highestInvoices.max1POra.invoiceNumber}` : "-"}
                   </p>
                 </div>
                 <div className="text-[10px] font-mono text-gray-500 truncate mt-1 pt-1 border-t border-blue-50">
-                  {invoiceProgression?.prev1P && invoiceProgression.new1P && invoiceProgression.prev1P !== invoiceProgression.new1P ? (
-                    <span className="text-blue-700 font-bold bg-blue-50 px-1 rounded">{invoiceProgression.prev1P}➔{invoiceProgression.new1P}</span>
+                  {invoiceProgression?.prevOra && invoiceProgression.newOra && invoiceProgression.prevOra !== invoiceProgression.newOra ? (
+                    <span className="text-blue-700 font-bold bg-blue-50 px-1 rounded">{invoiceProgression.prevOra}➔{invoiceProgression.newOra}</span>
                   ) : (
-                    <span>📅 {highestInvoices.max1P.orderDate || "-"}</span>
+                    <span>📅 {highestInvoices.max1POra.orderDate || "-"}</span>
                   )}
                 </div>
               </div>
 
-              {/* Card Faktur 2P */}
+              {/* Row 1, Col 4: 2P */}
               <div className="bg-white rounded-lg border border-emerald-200 p-2.5 shadow-2xs flex flex-col justify-between">
                 <div>
                   <div className="flex items-center justify-between gap-1 mb-0.5">
                     <span className="text-[10px] font-bold text-emerald-800 uppercase flex items-center gap-1 truncate">
-                      <span>🏪</span> Faktur 2P
+                      <span>🏪</span> 2P
                     </span>
                     {highestInvoices.max2P.invoiceNumber !== "-" && (
                       <span className={`px-1.5 py-0.2 rounded text-[9px] font-bold ${
@@ -1432,12 +1447,59 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* Card Faktur 3P */}
+              {/* Row 2, Col 1: Total Invoice */}
+              <div className="bg-white rounded-lg border border-gray-200 p-2.5 shadow-2xs flex flex-col justify-between">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-0.5 truncate">Total Invoice</p>
+                <p className="text-base font-bold font-mono text-gray-900 truncate">{summary.totalInvoices.toLocaleString("id-ID")}</p>
+              </div>
+
+              {/* Row 2, Col 2: Double INV */}
+              <div className="bg-white rounded-lg border border-red-200 p-2.5 shadow-2xs flex flex-col justify-between">
+                <div className="flex items-center justify-between gap-1 mb-0.5">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-red-600 truncate">Double INV</p>
+                  {summary.doubleInv > 0 && (
+                    <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-red-100 text-red-800">
+                      ⚠️ Cek
+                    </span>
+                  )}
+                </div>
+                <p className="text-base font-bold font-mono text-red-600 truncate">{summary.doubleInv.toLocaleString("id-ID")}</p>
+              </div>
+
+              {/* Row 2, Col 3: 1P DOO */}
+              <div className="bg-white rounded-lg border border-teal-200 p-2.5 shadow-2xs flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between gap-1 mb-0.5">
+                    <span className="text-[10px] font-bold text-teal-800 uppercase flex items-center gap-1 truncate">
+                      <span>🏬</span> 1P DOO
+                    </span>
+                    {highestInvoices.max1PDoo.invoiceNumber !== "-" && (
+                      <span className={`px-1.5 py-0.2 rounded text-[9px] font-bold ${
+                        highestInvoices.max1PDoo.isPrinted ? "bg-green-100 text-green-800" : "bg-orange-100 text-orange-800"
+                      }`}>
+                        {highestInvoices.max1PDoo.isPrinted ? "✓" : "○"}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-base font-bold font-mono text-teal-950 truncate">
+                    {highestInvoices.max1PDoo.invoiceNumber !== "-" ? `#${highestInvoices.max1PDoo.invoiceNumber}` : "-"}
+                  </p>
+                </div>
+                <div className="text-[10px] font-mono text-gray-500 truncate mt-1 pt-1 border-t border-teal-50">
+                  {invoiceProgression?.prevDoo && invoiceProgression.newDoo && invoiceProgression.prevDoo !== invoiceProgression.newDoo ? (
+                    <span className="text-teal-700 font-bold bg-teal-50 px-1 rounded">{invoiceProgression.prevDoo}➔{invoiceProgression.newDoo}</span>
+                  ) : (
+                    <span>📅 {highestInvoices.max1PDoo.orderDate || "-"}</span>
+                  )}
+                </div>
+              </div>
+
+              {/* Row 2, Col 4: 3P */}
               <div className="bg-white rounded-lg border border-purple-200 p-2.5 shadow-2xs flex flex-col justify-between">
                 <div>
                   <div className="flex items-center justify-between gap-1 mb-0.5">
                     <span className="text-[10px] font-bold text-purple-800 uppercase flex items-center gap-1 truncate">
-                      <span>🏬</span> Faktur 3P
+                      <span>🏢</span> 3P
                     </span>
                     {highestInvoices.max3P.invoiceNumber !== "-" && (
                       <span className={`px-1.5 py-0.2 rounded text-[9px] font-bold ${
@@ -1541,18 +1603,35 @@ export default function Home() {
                   className="px-2 py-1 text-xs font-bold rounded bg-white hover:bg-gray-50 text-blue-700 border border-gray-300 flex items-center gap-1 shadow-xs transition-colors"
                   title="Klik untuk mengubah arah urutan (Ascending / Descending)"
                 >
-                  {sortOrder === "desc" ? "⬇ Terbesar / Terbaru" : "⬆ Terkecil / Terlama"}
+                  {sortOrder === "desc" ? "⬇ Terbesar" : "⬆ Terkecil"}
                 </button>
               </div>
 
-              <div className="flex-1" />
-              <input
-                type="text"
-                placeholder="Cari SO, Invoice, Apotek, Item..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 w-full sm:w-56"
-              />
+              {/* Long Search Bar */}
+              <div className="w-full sm:flex-1 sm:min-w-[280px] flex items-center">
+                <div className="relative w-full">
+                  <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400 text-xs">
+                    🔍
+                  </span>
+                  <input
+                    type="text"
+                    placeholder="Cari nomor SO, no Invoice, nama Apotek / Pelanggan, item..."
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    className="w-full pl-8 pr-8 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-2xs"
+                  />
+                  {search && (
+                    <button
+                      onClick={() => setSearch("")}
+                      className="absolute inset-y-0 right-0 pr-2.5 flex items-center text-gray-400 hover:text-gray-600 font-bold text-xs"
+                      title="Hapus pencarian"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+              </div>
+
               <button
                 onClick={exportToExcel}
                 className="text-xs font-semibold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 px-3 py-1.5 rounded-lg border border-emerald-300 flex items-center gap-1.5 whitespace-nowrap shadow-sm"
@@ -1560,47 +1639,6 @@ export default function Home() {
               >
                 <span>📥</span> Ekspor Excel (Ascending)
               </button>
-            </div>
-
-            {/* Keyboard Shortcuts Helper Bar */}
-            <div className="bg-slate-900 text-slate-100 px-3.5 py-2 rounded-lg mb-3 text-xs flex flex-wrap items-center justify-between gap-2 shadow-sm border border-slate-700">
-              <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-                <span className="font-bold text-amber-300 flex items-center gap-1">
-                  <span>⌨️</span> Navigasi Keyboard:
-                </span>
-                <span className="flex items-center gap-1 text-slate-300">
-                  <kbd className="px-1.5 py-0.5 bg-slate-800 rounded text-[11px] font-mono border border-slate-600 text-amber-200">↑</kbd>
-                  <kbd className="px-1.5 py-0.5 bg-slate-800 rounded text-[11px] font-mono border border-slate-600 text-amber-200">↓</kbd>
-                  <span>Baris</span>
-                </span>
-                <span className="flex items-center gap-1 text-slate-300">
-                  <kbd className="px-1.5 py-0.5 bg-slate-800 rounded text-[11px] font-mono border border-slate-600 text-amber-200">←</kbd>
-                  <kbd className="px-1.5 py-0.5 bg-slate-800 rounded text-[11px] font-mono border border-slate-600 text-amber-200">→</kbd>
-                  <span>Sel Kolom</span>
-                </span>
-                <span className="flex items-center gap-1 text-slate-300">
-                  <kbd className="px-1.5 py-0.5 bg-slate-800 rounded text-[11px] font-mono border border-slate-600 text-amber-200">Space</kbd>
-                  <span>Cetak (✓/○)</span>
-                </span>
-                <span className="flex items-center gap-1 text-slate-300">
-                  <kbd className="px-1.5 py-0.5 bg-slate-800 rounded text-[11px] font-mono border border-slate-600 text-amber-200">Ctrl+C</kbd>
-                  <span>Salin Sel/Baris</span>
-                </span>
-                <span className="flex items-center gap-1 text-slate-300">
-                  <kbd className="px-1.5 py-0.5 bg-slate-800 rounded text-[11px] font-mono border border-slate-600 text-amber-200">Enter</kbd>
-                  <span>Rincian</span>
-                </span>
-                <span className="flex items-center gap-1 text-slate-300">
-                  <kbd className="px-1.5 py-0.5 bg-slate-800 rounded text-[11px] font-mono border border-slate-600 text-amber-200">PgUp</kbd>
-                  <kbd className="px-1.5 py-0.5 bg-slate-800 rounded text-[11px] font-mono border border-slate-600 text-amber-200">PgDn</kbd>
-                  <span>Halaman</span>
-                </span>
-              </div>
-              {copyToast && (
-                <div className="bg-emerald-600 text-white font-bold px-2.5 py-0.5 rounded shadow text-[11px] animate-pulse">
-                  {copyToast}
-                </div>
-              )}
             </div>
 
             {/* Table */}
@@ -1947,7 +1985,106 @@ export default function Home() {
           </>
         )}
       </div>
+
+      {/* Floating Copy Toast */}
+      {copyToast && (
+        <div className="fixed bottom-5 right-5 z-50 bg-slate-900/95 text-white font-semibold text-xs px-4 py-2.5 rounded-xl shadow-2xl border border-slate-700 flex items-center gap-2 animate-bounce">
+          <span>📋</span>
+          <span>{copyToast}</span>
+        </div>
+      )}
+
+      {/* Keyboard Shortcuts Modal */}
+      <HelpModal isOpen={showHelpModal} onClose={() => setShowHelpModal(false)} />
     </main>
+  );
+}
+
+function HelpModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
+  if (!isOpen) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs animate-in fade-in duration-150">
+      <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-gray-100 relative">
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 w-8 h-8 rounded-full flex items-center justify-center hover:bg-gray-100 transition-colors text-lg"
+          title="Tutup"
+        >
+          ✕
+        </button>
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xl shadow-xs">
+            ⌨️
+          </div>
+          <div>
+            <h2 className="text-base font-bold text-gray-900">Cara Penggunaan & Pintasan Keyboard</h2>
+            <p className="text-xs text-gray-500">Navigasi cepat ala spreadsheet tanpa perlu mouse</p>
+          </div>
+        </div>
+
+        <div className="space-y-2.5 text-xs">
+          <div className="grid grid-cols-2 gap-2 bg-gray-50 p-3 rounded-xl border border-gray-200">
+            <div className="flex items-center justify-between pr-2 border-r border-gray-200">
+              <span className="text-gray-700">Pindah Baris</span>
+              <div className="flex gap-1">
+                <kbd className="px-1.5 py-0.5 bg-white rounded border border-gray-300 text-[11px] font-mono font-bold shadow-2xs">↑</kbd>
+                <kbd className="px-1.5 py-0.5 bg-white rounded border border-gray-300 text-[11px] font-mono font-bold shadow-2xs">↓</kbd>
+              </div>
+            </div>
+            <div className="flex items-center justify-between pl-1">
+              <span className="text-gray-700">Pindah Kolom/Sel</span>
+              <div className="flex gap-1">
+                <kbd className="px-1.5 py-0.5 bg-white rounded border border-gray-300 text-[11px] font-mono font-bold shadow-2xs">←</kbd>
+                <kbd className="px-1.5 py-0.5 bg-white rounded border border-gray-300 text-[11px] font-mono font-bold shadow-2xs">→</kbd>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 bg-gray-50 p-3 rounded-xl border border-gray-200">
+            <div className="flex items-center justify-between pr-2 border-r border-gray-200">
+              <span className="text-gray-700">Cetak (Centang)</span>
+              <kbd className="px-2 py-0.5 bg-amber-500 text-white rounded border border-amber-600 text-[11px] font-mono font-bold shadow-2xs">Space</kbd>
+            </div>
+            <div className="flex items-center justify-between pl-1">
+              <span className="text-gray-700">Salin Data Sel</span>
+              <kbd className="px-1.5 py-0.5 bg-white rounded border border-gray-300 text-[11px] font-mono font-bold shadow-2xs">Ctrl+C</kbd>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 bg-gray-50 p-3 rounded-xl border border-gray-200">
+            <div className="flex items-center justify-between pr-2 border-r border-gray-200">
+              <span className="text-gray-700">Buka Detail Item</span>
+              <kbd className="px-2 py-0.5 bg-white rounded border border-gray-300 text-[11px] font-mono font-bold shadow-2xs">Enter</kbd>
+            </div>
+            <div className="flex items-center justify-between pl-1">
+              <span className="text-gray-700">Pindah Halaman</span>
+              <div className="flex gap-1">
+                <kbd className="px-1.5 py-0.5 bg-white rounded border border-gray-300 text-[11px] font-mono font-bold shadow-2xs">PgUp</kbd>
+                <kbd className="px-1.5 py-0.5 bg-white rounded border border-gray-300 text-[11px] font-mono font-bold shadow-2xs">PgDn</kbd>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-blue-900 mt-3">
+            <p className="font-bold mb-1 flex items-center gap-1">
+              <span>💡</span> Tips Singkronisasi Multi-Device:
+            </p>
+            <p className="text-[11px] text-blue-800 leading-relaxed">
+              Data faktur, status centang cetak, dan rentang faktur terbaru otomatis tersinkronisasi realtime ke semua perangkat melalui Supabase Cloud.
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-5 flex justify-end">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 bg-gray-900 hover:bg-gray-800 text-white text-xs font-semibold rounded-xl shadow transition-colors"
+          >
+            Mengerti & Tutup
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
