@@ -1539,167 +1539,167 @@ export default function Home() {
         {/* Data loaded */}
         {records.length > 0 && (
           <>
-            {/* Summary & Category Cards: 2 Rows x 4 Columns */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-3.5">
+            {/* Summary & Category Cards: 2 Rows x 4 Columns (Compact & Sleek) */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 mb-2.5">
               {/* Row 1, Col 1: Total SO */}
-              <div className="bg-white rounded-lg border border-gray-200 p-2.5 shadow-2xs flex flex-col justify-between">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-0.5 truncate">Total SO</p>
-                <p className="text-base font-bold font-mono text-gray-900 truncate">{summary.totalSO.toLocaleString("id-ID")}</p>
+              <div className="bg-white rounded-md border border-gray-200 px-2 py-1 shadow-2xs flex flex-col justify-between">
+                <p className="text-[9px] font-bold uppercase tracking-wider text-gray-500 truncate">Total SO</p>
+                <p className="text-sm font-bold font-mono text-gray-900 truncate leading-tight">{summary.totalSO.toLocaleString("id-ID")}</p>
               </div>
 
               {/* Row 1, Col 2: Belum Terprint */}
-              <div className="bg-white rounded-lg border border-orange-200 p-2.5 shadow-2xs flex flex-col justify-between">
-                <div className="flex items-center justify-between gap-1 mb-0.5">
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-orange-600 truncate">Belum Terprint</p>
+              <div className="bg-white rounded-md border border-orange-200 px-2 py-1 shadow-2xs flex flex-col justify-between">
+                <div className="flex items-center justify-between gap-1">
+                  <p className="text-[9px] font-bold uppercase tracking-wider text-orange-600 truncate">Belum Terprint</p>
                   {summary.belumTerprint > 0 && (
-                    <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-orange-100 text-orange-800">
+                    <span className="px-1 py-0.2 rounded text-[8px] font-bold bg-orange-100 text-orange-800">
                       🚨 Pending
                     </span>
                   )}
                 </div>
-                <p className="text-base font-bold font-mono text-orange-600 truncate">{summary.belumTerprint.toLocaleString("id-ID")}</p>
+                <p className="text-sm font-bold font-mono text-orange-600 truncate leading-tight">{summary.belumTerprint.toLocaleString("id-ID")}</p>
               </div>
 
               {/* Row 1, Col 3: 1P ORA */}
-              <div className="bg-white rounded-lg border border-blue-200 p-2.5 shadow-2xs flex flex-col justify-between">
+              <div className="bg-white rounded-md border border-blue-200 px-2 py-1 shadow-2xs flex flex-col justify-between">
                 <div>
-                  <div className="flex items-center justify-between gap-1 mb-0.5">
-                    <span className="text-[10px] font-bold text-blue-800 uppercase flex items-center gap-1 truncate">
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="text-[9px] font-bold text-blue-800 uppercase flex items-center gap-0.5 truncate">
                       <span>🏢</span> 1P ORA
                     </span>
                     {highestInvoices.max1POra.invoiceNumber !== "-" && (
-                      <span className={`px-1.5 py-0.2 rounded text-[9px] font-bold ${
+                      <span className={`px-1 py-0.2 rounded text-[8px] font-bold ${
                         highestInvoices.max1POra.isPrinted ? "bg-green-100 text-green-800" : "bg-orange-100 text-orange-800"
                       }`}>
                         {highestInvoices.max1POra.isPrinted ? "✓" : "○"}
                       </span>
                     )}
                   </div>
-                  <p className="text-base font-bold font-mono text-blue-950 truncate">
+                  <p className="text-sm font-bold font-mono text-blue-950 truncate leading-tight">
                     {highestInvoices.max1POra.invoiceNumber !== "-" ? `#${highestInvoices.max1POra.invoiceNumber}` : "-"}
                   </p>
                 </div>
-                <div className="flex items-center justify-between gap-1 text-[10px] font-mono mt-1 pt-1 border-t border-blue-50">
+                <div className="flex items-center justify-between gap-1 text-[8.5px] font-mono mt-0.5 pt-0.5 border-t border-blue-50">
                   {invoiceProgression?.rangeOra ? (
-                    <span className="text-blue-700 font-bold bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded truncate" title={`Rentang Upload: ${invoiceProgression.rangeOra}`}>
+                    <span className="text-blue-700 font-bold bg-blue-50 border border-blue-200 px-1 py-0.2 rounded text-[8px] truncate" title={`Rentang Upload: ${invoiceProgression.rangeOra}`}>
                       {invoiceProgression.rangeOra}
                     </span>
                   ) : (
                     <span className="text-gray-400">-</span>
                   )}
-                  <span className="text-gray-500 truncate">📅 {highestInvoices.max1POra.orderDate || "-"}</span>
+                  <span className="text-gray-500 text-[8px] truncate">📅 {highestInvoices.max1POra.orderDate || "-"}</span>
                 </div>
               </div>
 
               {/* Row 1, Col 4: 2P */}
-              <div className="bg-white rounded-lg border border-emerald-200 p-2.5 shadow-2xs flex flex-col justify-between">
+              <div className="bg-white rounded-md border border-emerald-200 px-2 py-1 shadow-2xs flex flex-col justify-between">
                 <div>
-                  <div className="flex items-center justify-between gap-1 mb-0.5">
-                    <span className="text-[10px] font-bold text-emerald-800 uppercase flex items-center gap-1 truncate">
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="text-[9px] font-bold text-emerald-800 uppercase flex items-center gap-0.5 truncate">
                       <span>🏪</span> 2P
                     </span>
                     {highestInvoices.max2P.invoiceNumber !== "-" && (
-                      <span className={`px-1.5 py-0.2 rounded text-[9px] font-bold ${
+                      <span className={`px-1 py-0.2 rounded text-[8px] font-bold ${
                         highestInvoices.max2P.isPrinted ? "bg-green-100 text-green-800" : "bg-orange-100 text-orange-800"
                       }`}>
                         {highestInvoices.max2P.isPrinted ? "✓" : "○"}
                       </span>
                     )}
                   </div>
-                  <p className="text-base font-bold font-mono text-emerald-950 truncate">
+                  <p className="text-sm font-bold font-mono text-emerald-950 truncate leading-tight">
                     {highestInvoices.max2P.invoiceNumber !== "-" ? `#${highestInvoices.max2P.invoiceNumber}` : "-"}
                   </p>
                 </div>
-                <div className="flex items-center justify-between gap-1 text-[10px] font-mono mt-1 pt-1 border-t border-emerald-50">
+                <div className="flex items-center justify-between gap-1 text-[8.5px] font-mono mt-0.5 pt-0.5 border-t border-emerald-50">
                   {invoiceProgression?.range2P ? (
-                    <span className="text-emerald-700 font-bold bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded truncate" title={`Rentang Upload: ${invoiceProgression.range2P}`}>
+                    <span className="text-emerald-700 font-bold bg-emerald-50 border border-emerald-200 px-1 py-0.2 rounded text-[8px] truncate" title={`Rentang Upload: ${invoiceProgression.range2P}`}>
                       {invoiceProgression.range2P}
                     </span>
                   ) : (
                     <span className="text-gray-400">-</span>
                   )}
-                  <span className="text-gray-500 truncate">📅 {highestInvoices.max2P.orderDate || "-"}</span>
+                  <span className="text-gray-500 text-[8px] truncate">📅 {highestInvoices.max2P.orderDate || "-"}</span>
                 </div>
               </div>
 
               {/* Row 2, Col 1: Total Invoice */}
-              <div className="bg-white rounded-lg border border-gray-200 p-2.5 shadow-2xs flex flex-col justify-between">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-0.5 truncate">Total Invoice</p>
-                <p className="text-base font-bold font-mono text-gray-900 truncate">{summary.totalInvoices.toLocaleString("id-ID")}</p>
+              <div className="bg-white rounded-md border border-gray-200 px-2 py-1 shadow-2xs flex flex-col justify-between">
+                <p className="text-[9px] font-bold uppercase tracking-wider text-gray-500 truncate">Total Invoice</p>
+                <p className="text-sm font-bold font-mono text-gray-900 truncate leading-tight">{summary.totalInvoices.toLocaleString("id-ID")}</p>
               </div>
 
               {/* Row 2, Col 2: Double INV */}
-              <div className="bg-white rounded-lg border border-red-200 p-2.5 shadow-2xs flex flex-col justify-between">
-                <div className="flex items-center justify-between gap-1 mb-0.5">
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-red-600 truncate">Double INV</p>
+              <div className="bg-white rounded-md border border-red-200 px-2 py-1 shadow-2xs flex flex-col justify-between">
+                <div className="flex items-center justify-between gap-1">
+                  <p className="text-[9px] font-bold uppercase tracking-wider text-red-600 truncate">Double INV</p>
                   {summary.doubleInv > 0 && (
-                    <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-red-100 text-red-800">
+                    <span className="px-1 py-0.2 rounded text-[8px] font-bold bg-red-100 text-red-800">
                       ⚠️ Cek
                     </span>
                   )}
                 </div>
-                <p className="text-base font-bold font-mono text-red-600 truncate">{summary.doubleInv.toLocaleString("id-ID")}</p>
+                <p className="text-sm font-bold font-mono text-red-600 truncate leading-tight">{summary.doubleInv.toLocaleString("id-ID")}</p>
               </div>
 
               {/* Row 2, Col 3: 1P DOO */}
-              <div className="bg-white rounded-lg border border-teal-200 p-2.5 shadow-2xs flex flex-col justify-between">
+              <div className="bg-white rounded-md border border-teal-200 px-2 py-1 shadow-2xs flex flex-col justify-between">
                 <div>
-                  <div className="flex items-center justify-between gap-1 mb-0.5">
-                    <span className="text-[10px] font-bold text-teal-800 uppercase flex items-center gap-1 truncate">
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="text-[9px] font-bold text-teal-800 uppercase flex items-center gap-0.5 truncate">
                       <span>🏬</span> 1P DOO
                     </span>
                     {highestInvoices.max1PDoo.invoiceNumber !== "-" && (
-                      <span className={`px-1.5 py-0.2 rounded text-[9px] font-bold ${
+                      <span className={`px-1 py-0.2 rounded text-[8px] font-bold ${
                         highestInvoices.max1PDoo.isPrinted ? "bg-green-100 text-green-800" : "bg-orange-100 text-orange-800"
                       }`}>
                         {highestInvoices.max1PDoo.isPrinted ? "✓" : "○"}
                       </span>
                     )}
                   </div>
-                  <p className="text-base font-bold font-mono text-teal-950 truncate">
+                  <p className="text-sm font-bold font-mono text-teal-950 truncate leading-tight">
                     {highestInvoices.max1PDoo.invoiceNumber !== "-" ? `#${highestInvoices.max1PDoo.invoiceNumber}` : "-"}
                   </p>
                 </div>
-                <div className="flex items-center justify-between gap-1 text-[10px] font-mono mt-1 pt-1 border-t border-teal-50">
+                <div className="flex items-center justify-between gap-1 text-[8.5px] font-mono mt-0.5 pt-0.5 border-t border-teal-50">
                   {invoiceProgression?.rangeDoo || invoiceProgression?.range1P ? (
-                    <span className="text-teal-700 font-bold bg-teal-50 border border-teal-200 px-1.5 py-0.5 rounded truncate" title={`Rentang Upload: ${invoiceProgression?.rangeDoo || invoiceProgression?.range1P}`}>
+                    <span className="text-teal-700 font-bold bg-teal-50 border border-teal-200 px-1 py-0.2 rounded text-[8px] truncate" title={`Rentang Upload: ${invoiceProgression?.rangeDoo || invoiceProgression?.range1P}`}>
                       {invoiceProgression?.rangeDoo || invoiceProgression?.range1P}
                     </span>
                   ) : (
                     <span className="text-gray-400">-</span>
                   )}
-                  <span className="text-gray-500 truncate">📅 {highestInvoices.max1PDoo.orderDate || "-"}</span>
+                  <span className="text-gray-500 text-[8px] truncate">📅 {highestInvoices.max1PDoo.orderDate || "-"}</span>
                 </div>
               </div>
 
               {/* Row 2, Col 4: 3P */}
-              <div className="bg-white rounded-lg border border-purple-200 p-2.5 shadow-2xs flex flex-col justify-between">
+              <div className="bg-white rounded-md border border-purple-200 px-2 py-1 shadow-2xs flex flex-col justify-between">
                 <div>
-                  <div className="flex items-center justify-between gap-1 mb-0.5">
-                    <span className="text-[10px] font-bold text-purple-800 uppercase flex items-center gap-1 truncate">
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="text-[9px] font-bold text-purple-800 uppercase flex items-center gap-0.5 truncate">
                       <span>🏢</span> 3P
                     </span>
                     {highestInvoices.max3P.invoiceNumber !== "-" && (
-                      <span className={`px-1.5 py-0.2 rounded text-[9px] font-bold ${
+                      <span className={`px-1 py-0.2 rounded text-[8px] font-bold ${
                         highestInvoices.max3P.isPrinted ? "bg-green-100 text-green-800" : "bg-orange-100 text-orange-800"
                       }`}>
                         {highestInvoices.max3P.isPrinted ? "✓" : "○"}
                       </span>
                     )}
                   </div>
-                  <p className="text-base font-bold font-mono text-purple-950 truncate">
+                  <p className="text-sm font-bold font-mono text-purple-950 truncate leading-tight">
                     {highestInvoices.max3P.invoiceNumber !== "-" ? `#${highestInvoices.max3P.invoiceNumber}` : "-"}
                   </p>
                 </div>
-                <div className="flex items-center justify-between gap-1 text-[10px] font-mono mt-1 pt-1 border-t border-purple-50">
+                <div className="flex items-center justify-between gap-1 text-[8.5px] font-mono mt-0.5 pt-0.5 border-t border-purple-50">
                   {invoiceProgression?.range3P ? (
-                    <span className="text-purple-700 font-bold bg-purple-50 border border-purple-200 px-1.5 py-0.5 rounded truncate" title={`Rentang Upload: ${invoiceProgression.range3P}`}>
+                    <span className="text-purple-700 font-bold bg-purple-50 border border-purple-200 px-1 py-0.2 rounded text-[8px] truncate" title={`Rentang Upload: ${invoiceProgression.range3P}`}>
                       {invoiceProgression.range3P}
                     </span>
                   ) : (
                     <span className="text-gray-400">-</span>
                   )}
-                  <span className="text-gray-500 truncate">📅 {highestInvoices.max3P.orderDate || "-"}</span>
+                  <span className="text-gray-500 text-[8px] truncate">📅 {highestInvoices.max3P.orderDate || "-"}</span>
                 </div>
               </div>
             </div>
