@@ -1402,27 +1402,12 @@ export default function Home() {
         </div>
       </header>
 
-      <div className="max-w-7xl mx-auto px-4 py-4">
-        {/* Upload bar - compact, always visible */}
-        <div
-          onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-          onDragLeave={() => setDragOver(false)}
-          onDrop={onDrop}
-          className={`flex items-center gap-3 rounded-lg border p-2 mb-3 transition-colors ${
-            dragOver ? "border-blue-500 bg-blue-50" : "border-gray-300 bg-white"
-          }`}
-        >
-          <label className="bg-blue-600 text-white px-4 py-1.5 rounded-lg cursor-pointer hover:bg-blue-700 text-sm font-medium whitespace-nowrap">
-            Upload Excel
-            <input type="file" accept=".xlsx,.xls" onChange={onFileInput} className="hidden" />
-          </label>
-          {loading && <span className="text-sm text-gray-500">Membaca file...</span>}
-          {uploadedFiles.length > 0 && (
-            <span className="text-xs text-gray-400 truncate">
-              {uploadedFiles.length} file diupload · terakhir: {uploadedFiles[uploadedFiles.length - 1].name}
-            </span>
-          )}
-        </div>
+      <div
+        onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={onDrop}
+        className="max-w-7xl mx-auto px-4 py-4"
+      >
         {error && (
           <div className="mb-3 bg-red-50 border border-red-200 text-red-700 px-4 py-2 rounded-lg text-sm">
             {error}
@@ -1469,6 +1454,25 @@ export default function Home() {
             >
               ✕
             </button>
+          </div>
+        )}
+
+        {/* Empty state when no data loaded */}
+        {records.length === 0 && (
+          <div className="bg-white rounded-xl border-2 border-dashed border-gray-300 p-12 text-center my-6 shadow-xs">
+            <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center text-3xl mx-auto mb-3">
+              📊
+            </div>
+            <h3 className="text-base font-bold text-gray-800 mb-1">Belum Ada Data Faktur</h3>
+            <p className="text-xs text-gray-500 mb-4 max-w-md mx-auto">
+              Silakan upload file Excel export dari Oracle (.xlsx / .xls) untuk tracking faktur dan sinkronisasi otomatis antar perangkat.
+            </p>
+            <label className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl cursor-pointer text-sm font-semibold shadow transition-colors">
+              <span>📁</span>
+              <span>Upload File Excel</span>
+              <input type="file" accept=".xlsx,.xls" onChange={onFileInput} className="hidden" />
+            </label>
+            {loading && <p className="text-xs text-gray-500 mt-3 animate-pulse">Membaca file...</p>}
           </div>
         )}
 
@@ -1641,121 +1645,124 @@ export default function Home() {
             </div>
 
             {/* Filters & Sorting Toolbar */}
-            <div className="bg-white rounded-lg border border-gray-200 p-3 mb-4 flex flex-wrap items-center gap-2 shadow-xs">
-              <button
-                onClick={handleManualRefresh}
-                className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-blue-400 bg-blue-50 text-blue-800 hover:bg-blue-100 flex items-center gap-1.5 whitespace-nowrap shadow-sm transition-colors"
-                title="Refresh dan perbarui data dari database cloud"
-              >
-                <span>🔄</span>
-                <span>Refresh Data</span>
-                {sessionPrintedKeys.size > 0 && (
-                  <span className="px-1.5 py-0.2 bg-blue-600 text-white text-[10px] font-bold rounded-full">
-                    {sessionPrintedKeys.size} baru dicetak
-                  </span>
-                )}
-              </button>
-              <div className="h-6 w-px bg-gray-200 mx-1 hidden sm:block" />
-              
-              {/* Tab Status */}
-              <div className="flex gap-1 flex-wrap">
-                <FBtn active={filter === "belum"} onClick={() => setFilter("belum")} color="orange">Belum Terprint</FBtn>
-                <FBtn active={filter === "sudah"} onClick={() => setFilter("sudah")} color="green">Sudah Terprint</FBtn>
-                <FBtn active={filter === "all"} onClick={() => setFilter("all")}>Semua</FBtn>
-                <FBtn active={filter === "double"} onClick={() => setFilter("double")} color="red">Double INV</FBtn>
-              </div>
-              <div className="h-6 w-px bg-gray-200 mx-1 hidden sm:block" />
-
-              {/* Kategori */}
-              <div className="flex gap-1 flex-wrap">
-                <FBtn active={katFilter === "all"} onClick={() => setKatFilter("all")}>All Kat</FBtn>
-                <FBtn active={katFilter === "1P"} onClick={() => setKatFilter("1P")} color="blue">1P</FBtn>
-                <FBtn active={katFilter === "2P"} onClick={() => setKatFilter("2P")} color="green">2P</FBtn>
-                <FBtn active={katFilter === "3P"} onClick={() => setKatFilter("3P")} color="purple">3P</FBtn>
-              </div>
-              <div className="h-6 w-px bg-gray-200 mx-1 hidden sm:block" />
-
-              {/* Jenis Transaksi */}
-              <div className="flex gap-1 flex-wrap">
-                <FBtn active={jenisFilter === "all"} onClick={() => setJenisFilter("all")}>All Jenis</FBtn>
-                <FBtn active={jenisFilter === "ORA"} onClick={() => setJenisFilter("ORA")} color="blue">ORA</FBtn>
-                <FBtn active={jenisFilter === "DOO"} onClick={() => setJenisFilter("DOO")} color="emerald">DOO</FBtn>
-              </div>
-              <div className="h-6 w-px bg-gray-200 mx-1 hidden md:block" />
-
-              {/* Filter Tanggal */}
-              {availableDates.length > 0 && (
-                <div className="flex items-center">
-                  <select
-                    value={dateFilter}
-                    onChange={(e) => setDateFilter(e.target.value)}
-                    className="px-2.5 py-1.5 text-xs font-semibold rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer shadow-xs"
-                    title="Filter berdasarkan tanggal order tertentu"
-                  >
-                    <option value="all">📅 Semua Tanggal ({availableDates.length})</option>
-                    {availableDates.map((d) => (
-                      <option key={d} value={d}>
-                        📅 {d}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-              <div className="h-6 w-px bg-gray-200 mx-1 hidden md:block" />
-
-              {/* Pengurutan (Sorting) */}
-              <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-lg border border-gray-300 shadow-xs">
-                <select
-                  value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value as "invoice" | "date" | "totalHarga")}
-                  className="bg-transparent text-xs font-semibold text-gray-800 px-1 py-0.5 focus:outline-none cursor-pointer"
-                  title="Pilih kolom yang ingin diurutkan"
-                >
-                  <option value="invoice">🔢 No Faktur</option>
-                  <option value="date">📅 Tanggal Order</option>
-                  <option value="totalHarga">💰 Total Harga</option>
-                </select>
+            <div className="bg-white rounded-lg border border-gray-200 p-3 mb-4 space-y-2.5 shadow-xs">
+              {/* Row 1: All Filters & Sorting in 1 cohesive line */}
+              <div className="flex flex-wrap items-center gap-2">
                 <button
-                  onClick={() => setSortOrder((prev) => (prev === "desc" ? "asc" : "desc"))}
-                  className="px-2 py-1 text-xs font-bold rounded bg-white hover:bg-gray-50 text-blue-700 border border-gray-300 flex items-center gap-1 shadow-xs transition-colors"
-                  title="Klik untuk mengubah arah urutan (Ascending / Descending)"
+                  onClick={handleManualRefresh}
+                  className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-blue-400 bg-blue-50 text-blue-800 hover:bg-blue-100 flex items-center gap-1.5 whitespace-nowrap shadow-sm transition-colors"
+                  title="Refresh dan perbarui data dari database cloud"
                 >
-                  {sortOrder === "desc" ? "⬇ Terbesar" : "⬆ Terkecil"}
-                </button>
-              </div>
-
-              {/* Long Search Bar */}
-              <div className="w-full sm:flex-1 sm:min-w-[280px] flex items-center">
-                <div className="relative w-full">
-                  <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400 text-xs">
-                    🔍
-                  </span>
-                  <input
-                    type="text"
-                    placeholder="Cari nomor SO, no Invoice, nama Apotek / Pelanggan, item..."
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    className="w-full pl-8 pr-8 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-2xs"
-                  />
-                  {search && (
-                    <button
-                      onClick={() => setSearch("")}
-                      className="absolute inset-y-0 right-0 pr-2.5 flex items-center text-gray-400 hover:text-gray-600 font-bold text-xs"
-                      title="Hapus pencarian"
-                    >
-                      ✕
-                    </button>
+                  <span>🔄</span>
+                  <span>Refresh Data</span>
+                  {sessionPrintedKeys.size > 0 && (
+                    <span className="px-1.5 py-0.2 bg-blue-600 text-white text-[10px] font-bold rounded-full">
+                      {sessionPrintedKeys.size} baru dicetak
+                    </span>
                   )}
+                </button>
+                <div className="h-6 w-px bg-gray-200 mx-1 hidden sm:block" />
+                
+                {/* Tab Status */}
+                <div className="flex gap-1 flex-wrap">
+                  <FBtn active={filter === "belum"} onClick={() => setFilter("belum")} color="orange">Belum Terprint</FBtn>
+                  <FBtn active={filter === "sudah"} onClick={() => setFilter("sudah")} color="green">Sudah Terprint</FBtn>
+                  <FBtn active={filter === "all"} onClick={() => setFilter("all")}>Semua</FBtn>
+                  <FBtn active={filter === "double"} onClick={() => setFilter("double")} color="red">Double INV</FBtn>
+                </div>
+                <div className="h-6 w-px bg-gray-200 mx-1 hidden sm:block" />
+
+                {/* Kategori */}
+                <div className="flex gap-1 flex-wrap">
+                  <FBtn active={katFilter === "all"} onClick={() => setKatFilter("all")}>All Kat</FBtn>
+                  <FBtn active={katFilter === "1P"} onClick={() => setKatFilter("1P")} color="blue">1P</FBtn>
+                  <FBtn active={katFilter === "2P"} onClick={() => setKatFilter("2P")} color="green">2P</FBtn>
+                  <FBtn active={katFilter === "3P"} onClick={() => setKatFilter("3P")} color="purple">3P</FBtn>
+                </div>
+                <div className="h-6 w-px bg-gray-200 mx-1 hidden sm:block" />
+
+                {/* Jenis Transaksi */}
+                <div className="flex gap-1 flex-wrap">
+                  <FBtn active={jenisFilter === "all"} onClick={() => setJenisFilter("all")}>All Jenis</FBtn>
+                  <FBtn active={jenisFilter === "ORA"} onClick={() => setJenisFilter("ORA")} color="blue">ORA</FBtn>
+                  <FBtn active={jenisFilter === "DOO"} onClick={() => setJenisFilter("DOO")} color="emerald">DOO</FBtn>
+                </div>
+                <div className="h-6 w-px bg-gray-200 mx-1 hidden md:block" />
+
+                {/* Filter Tanggal */}
+                {availableDates.length > 0 && (
+                  <div className="flex items-center">
+                    <select
+                      value={dateFilter}
+                      onChange={(e) => setDateFilter(e.target.value)}
+                      className="px-2.5 py-1.5 text-xs font-semibold rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer shadow-xs"
+                      title="Filter berdasarkan tanggal order tertentu"
+                    >
+                      <option value="all">📅 Semua Tanggal ({availableDates.length})</option>
+                      {availableDates.map((d) => (
+                        <option key={d} value={d}>
+                          📅 {d}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {/* Pengurutan (Sorting) - Pindah ke sebelah Semua Tanggal */}
+                <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-lg border border-gray-300 shadow-xs">
+                  <select
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value as "invoice" | "date" | "totalHarga")}
+                    className="bg-transparent text-xs font-semibold text-gray-800 px-1 py-0.5 focus:outline-none cursor-pointer"
+                    title="Pilih kolom yang ingin diurutkan"
+                  >
+                    <option value="invoice">🔢 No Faktur</option>
+                    <option value="date">📅 Tanggal Order</option>
+                    <option value="totalHarga">💰 Total Harga</option>
+                  </select>
+                  <button
+                    onClick={() => setSortOrder((prev) => (prev === "desc" ? "asc" : "desc"))}
+                    className="px-2 py-1 text-xs font-bold rounded bg-white hover:bg-gray-50 text-blue-700 border border-gray-300 flex items-center gap-1 shadow-xs transition-colors"
+                    title="Klik untuk mengubah arah urutan (Ascending / Descending)"
+                  >
+                    {sortOrder === "desc" ? "⬇ Terbesar" : "⬆ Terkecil"}
+                  </button>
                 </div>
               </div>
 
-              <button
-                onClick={exportToExcel}
-                className="text-xs font-semibold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 px-3 py-1.5 rounded-lg border border-emerald-300 flex items-center gap-1.5 whitespace-nowrap shadow-sm"
-                title="Ekspor semua faktur yang ada nomor faktur/invoice (Ascending terkecil ke terbesar)"
-              >
-                <span>📥</span> Ekspor Excel (Ascending)
-              </button>
+              {/* Row 2: Long Search Bar & Upload Excel Button */}
+              <div className="flex items-center gap-2 pt-1 border-t border-gray-100">
+                <div className="flex-1 flex items-center">
+                  <div className="relative w-full">
+                    <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400 text-xs">
+                      🔍
+                    </span>
+                    <input
+                      type="text"
+                      placeholder="Cari nomor SO, no Invoice, nama Apotek / Pelanggan, item obat..."
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                      className="w-full pl-8 pr-8 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-2xs"
+                    />
+                    {search && (
+                      <button
+                        onClick={() => setSearch("")}
+                        className="absolute inset-y-0 right-0 pr-2.5 flex items-center text-gray-400 hover:text-gray-600 font-bold text-xs"
+                        title="Hapus pencarian"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <label className="bg-blue-600 hover:bg-blue-700 text-white px-3.5 py-1.5 rounded-lg cursor-pointer text-xs font-semibold whitespace-nowrap shadow-sm flex items-center gap-1.5 transition-colors">
+                  <span>📁</span>
+                  <span>Upload Excel</span>
+                  <input type="file" accept=".xlsx,.xls" onChange={onFileInput} className="hidden" />
+                </label>
+                {loading && <span className="text-xs text-gray-500 animate-pulse whitespace-nowrap">Membaca...</span>}
+              </div>
             </div>
 
             {/* Table */}
