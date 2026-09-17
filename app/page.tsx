@@ -1645,57 +1645,57 @@ export default function Home() {
             </div>
 
             {/* Filters & Sorting Toolbar */}
-            <div className="bg-white rounded-lg border border-gray-200 p-3 mb-4 space-y-2.5 shadow-xs">
-              {/* Row 1: All Filters & Sorting in 1 cohesive line */}
-              <div className="flex flex-wrap items-center gap-2">
+            <div className="bg-white rounded-lg border border-gray-200 p-2.5 mb-4 space-y-2 shadow-xs">
+              {/* Row 1: All Filters & Sorting in 1 strict line */}
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 select-none">
                 <button
                   onClick={handleManualRefresh}
-                  className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-blue-400 bg-blue-50 text-blue-800 hover:bg-blue-100 flex items-center gap-1.5 whitespace-nowrap shadow-sm transition-colors"
+                  className="px-2.5 py-1 text-xs font-semibold rounded-md border border-blue-400 bg-blue-50 text-blue-800 hover:bg-blue-100 flex items-center gap-1 whitespace-nowrap shadow-2xs transition-colors shrink-0"
                   title="Refresh dan perbarui data dari database cloud"
                 >
                   <span>🔄</span>
-                  <span>Refresh Data</span>
+                  <span>Refresh</span>
                   {sessionPrintedKeys.size > 0 && (
                     <span className="px-1.5 py-0.2 bg-blue-600 text-white text-[10px] font-bold rounded-full">
-                      {sessionPrintedKeys.size} baru dicetak
+                      {sessionPrintedKeys.size}
                     </span>
                   )}
                 </button>
-                <div className="h-6 w-px bg-gray-200 mx-1 hidden sm:block" />
+                <div className="h-5 w-px bg-gray-200 mx-0.5 shrink-0" />
                 
                 {/* Tab Status */}
-                <div className="flex gap-1 flex-wrap">
+                <div className="flex gap-1 shrink-0">
                   <FBtn active={filter === "belum"} onClick={() => setFilter("belum")} color="orange">Belum Terprint</FBtn>
                   <FBtn active={filter === "sudah"} onClick={() => setFilter("sudah")} color="green">Sudah Terprint</FBtn>
                   <FBtn active={filter === "all"} onClick={() => setFilter("all")}>Semua</FBtn>
                   <FBtn active={filter === "double"} onClick={() => setFilter("double")} color="red">Double INV</FBtn>
                 </div>
-                <div className="h-6 w-px bg-gray-200 mx-1 hidden sm:block" />
+                <div className="h-5 w-px bg-gray-200 mx-0.5 shrink-0" />
 
                 {/* Kategori */}
-                <div className="flex gap-1 flex-wrap">
+                <div className="flex gap-1 shrink-0">
                   <FBtn active={katFilter === "all"} onClick={() => setKatFilter("all")}>All Kat</FBtn>
                   <FBtn active={katFilter === "1P"} onClick={() => setKatFilter("1P")} color="blue">1P</FBtn>
                   <FBtn active={katFilter === "2P"} onClick={() => setKatFilter("2P")} color="green">2P</FBtn>
                   <FBtn active={katFilter === "3P"} onClick={() => setKatFilter("3P")} color="purple">3P</FBtn>
                 </div>
-                <div className="h-6 w-px bg-gray-200 mx-1 hidden sm:block" />
+                <div className="h-5 w-px bg-gray-200 mx-0.5 shrink-0" />
 
                 {/* Jenis Transaksi */}
-                <div className="flex gap-1 flex-wrap">
+                <div className="flex gap-1 shrink-0">
                   <FBtn active={jenisFilter === "all"} onClick={() => setJenisFilter("all")}>All Jenis</FBtn>
                   <FBtn active={jenisFilter === "ORA"} onClick={() => setJenisFilter("ORA")} color="blue">ORA</FBtn>
                   <FBtn active={jenisFilter === "DOO"} onClick={() => setJenisFilter("DOO")} color="emerald">DOO</FBtn>
                 </div>
-                <div className="h-6 w-px bg-gray-200 mx-1 hidden md:block" />
+                <div className="h-5 w-px bg-gray-200 mx-0.5 shrink-0" />
 
                 {/* Filter Tanggal */}
                 {availableDates.length > 0 && (
-                  <div className="flex items-center">
+                  <div className="flex items-center shrink-0">
                     <select
                       value={dateFilter}
                       onChange={(e) => setDateFilter(e.target.value)}
-                      className="px-2.5 py-1.5 text-xs font-semibold rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer shadow-xs"
+                      className="px-2 py-1 text-xs font-semibold rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer shadow-2xs"
                       title="Filter berdasarkan tanggal order tertentu"
                     >
                       <option value="all">📅 Semua Tanggal ({availableDates.length})</option>
@@ -1708,8 +1708,8 @@ export default function Home() {
                   </div>
                 )}
 
-                {/* Pengurutan (Sorting) - Pindah ke sebelah Semua Tanggal */}
-                <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-lg border border-gray-300 shadow-xs">
+                {/* Pengurutan (Sorting) - Sebelah Semua Tanggal */}
+                <div className="flex items-center gap-1 bg-gray-100 p-0.5 rounded-md border border-gray-300 shadow-2xs shrink-0">
                   <select
                     value={sortBy}
                     onChange={(e) => setSortBy(e.target.value as "invoice" | "date" | "totalHarga")}
@@ -1722,7 +1722,7 @@ export default function Home() {
                   </select>
                   <button
                     onClick={() => setSortOrder((prev) => (prev === "desc" ? "asc" : "desc"))}
-                    className="px-2 py-1 text-xs font-bold rounded bg-white hover:bg-gray-50 text-blue-700 border border-gray-300 flex items-center gap-1 shadow-xs transition-colors"
+                    className="px-1.5 py-0.5 text-xs font-bold rounded bg-white hover:bg-gray-50 text-blue-700 border border-gray-300 flex items-center gap-0.5 shadow-2xs transition-colors"
                     title="Klik untuk mengubah arah urutan (Ascending / Descending)"
                   >
                     {sortOrder === "desc" ? "⬇ Terbesar" : "⬆ Terkecil"}
