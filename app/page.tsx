@@ -89,39 +89,42 @@ type UploadedFile = {
   time: string;
 };
 
+export type InvoiceProgression = {
+  prev1P?: string | null;
+  new1P?: string | null;
+  range1P?: string | null;
+  prev2P?: string | null;
+  new2P?: string | null;
+  range2P?: string | null;
+  prev3P?: string | null;
+  new3P?: string | null;
+  range3P?: string | null;
+  prevDoo?: string | null;
+  newDoo?: string | null;
+  rangeDoo?: string | null;
+  prevOra?: string | null;
+  newOra?: string | null;
+  rangeOra?: string | null;
+  updatedAt?: string;
+};
+
 function dbRowsToFakturRecords(rows: Array<Record<string, unknown>>): {
   records: FakturRecord[];
   printedSet: Set<string>;
   printedAtMap: Record<string, string>;
-  progression: {
-    prevDoo: string | null;
-    newDoo: string | null;
-    rangeDoo: string | null;
-    prevOra: string | null;
-    newOra: string | null;
-    rangeOra: string | null;
-    updatedAt: string;
-  } | null;
+  progression: InvoiceProgression | null;
 } {
   const records: FakturRecord[] = [];
   const printedSet = new Set<string>();
   const printedAtMap: Record<string, string> = {};
-  let progression: {
-    prevDoo: string | null;
-    newDoo: string | null;
-    rangeDoo: string | null;
-    prevOra: string | null;
-    newOra: string | null;
-    rangeOra: string | null;
-    updatedAt: string;
-  } | null = null;
+  let progression: InvoiceProgression | null = null;
 
   for (const r of rows) {
     const rawInv = String(r.no_faktur || "");
     if (rawInv === "__SYSTEM_METADATA__") {
       const extra = (r.extra as Record<string, unknown>) || {};
       if (extra.invoiceProgression) {
-        progression = extra.invoiceProgression as unknown as typeof progression;
+        progression = extra.invoiceProgression as InvoiceProgression;
       }
       continue;
     }
@@ -224,24 +227,7 @@ export default function Home() {
     time: string;
   } | null>(null);
 
-  const [invoiceProgression, setInvoiceProgression] = useState<{
-    prev1P?: string | null;
-    new1P?: string | null;
-    range1P?: string | null;
-    prev2P?: string | null;
-    new2P?: string | null;
-    range2P?: string | null;
-    prev3P?: string | null;
-    new3P?: string | null;
-    range3P?: string | null;
-    prevDoo?: string | null;
-    newDoo?: string | null;
-    rangeDoo?: string | null;
-    prevOra?: string | null;
-    newOra?: string | null;
-    rangeOra?: string | null;
-    updatedAt: string;
-  } | null>(() => {
+  const [invoiceProgression, setInvoiceProgression] = useState<InvoiceProgression | null>(() => {
     if (typeof window !== "undefined") {
       try {
         const saved = localStorage.getItem("invoiceProgression");
@@ -538,6 +524,7 @@ export default function Home() {
         }
 
         const existingStatusMap = new Map<string, { status_cetak: boolean; printed_at: string | null; extra: Record<string, unknown> | null }>();
+        let existingProgression: InvoiceProgression = {};
         let prev1PNum = -1;
         let prev1PStr = "-";
         let prev2PNum = -1;
@@ -550,7 +537,13 @@ export default function Home() {
         let prevOraStr = "-";
 
         existingDB.forEach((row: Record<string, unknown>) => {
-          if (row.no_faktur === "__SYSTEM_METADATA__") return;
+          if (row.no_faktur === "__SYSTEM_METADATA__") {
+            const extra = (row.extra as Record<string, unknown>) || {};
+            if (extra.invoiceProgression) {
+              existingProgression = extra.invoiceProgression as InvoiceProgression;
+            }
+            return;
+          }
           const rawInv = String(row.no_faktur || "");
           const cleanInv = rawInv.replace(/-1P$/i, "");
           const extra = (row.extra as Record<string, unknown>) || {};
@@ -658,11 +651,19 @@ export default function Home() {
           if (sbErr) console.error("Upload upsert error:", sbErr.message);
         }
 
-        // Calculate max invoices per category (1P, 2P, 3P, ORA, DOO) in uploaded file
+        // Calculate min/max invoices per category (1P, 2P, 3P, ORA, DOO) in uploaded file
+        let minUploaded1PNum = Infinity;
+        let minUploaded1PStr = "-";
         let maxUploaded1PNum = -1;
         let maxUploaded1PStr = "-";
+
+        let minUploaded2PNum = Infinity;
+        let minUploaded2PStr = "-";
         let maxUploaded2PNum = -1;
         let maxUploaded2PStr = "-";
+
+        let minUploaded3PNum = Infinity;
+        let minUploaded3PStr = "-";
         let maxUploaded3PNum = -1;
         let maxUploaded3PStr = "-";
 
@@ -688,17 +689,35 @@ export default function Home() {
           const kat = (extra.kategori as "1P" | "2P" | "3P") || categorize(isOra ? "ORA" : "DOO", cust, isOra ? "ORA" : "DOO");
 
           if (num > 0) {
-            if (kat === "1P" && num > maxUploaded1PNum) {
-              maxUploaded1PNum = num;
-              maxUploaded1PStr = cleanInv;
+            if (kat === "1P") {
+              if (num > maxUploaded1PNum) {
+                maxUploaded1PNum = num;
+                maxUploaded1PStr = cleanInv;
+              }
+              if (num < minUploaded1PNum) {
+                minUploaded1PNum = num;
+                minUploaded1PStr = cleanInv;
+              }
             }
-            if (kat === "2P" && num > maxUploaded2PNum) {
-              maxUploaded2PNum = num;
-              maxUploaded2PStr = cleanInv;
+            if (kat === "2P") {
+              if (num > maxUploaded2PNum) {
+                maxUploaded2PNum = num;
+                maxUploaded2PStr = cleanInv;
+              }
+              if (num < minUploaded2PNum) {
+                minUploaded2PNum = num;
+                minUploaded2PStr = cleanInv;
+              }
             }
-            if (kat === "3P" && num > maxUploaded3PNum) {
-              maxUploaded3PNum = num;
-              maxUploaded3PStr = cleanInv;
+            if (kat === "3P") {
+              if (num > maxUploaded3PNum) {
+                maxUploaded3PNum = num;
+                maxUploaded3PStr = cleanInv;
+              }
+              if (num < minUploaded3PNum) {
+                minUploaded3PNum = num;
+                minUploaded3PStr = cleanInv;
+              }
             }
 
             if (isOra) {
@@ -723,22 +742,108 @@ export default function Home() {
           }
         }
 
-        const progObj = {
-          prev1P: prev1PStr !== "-" ? prev1PStr : null,
-          new1P: maxUploaded1PStr !== "-" ? maxUploaded1PStr : null,
-          range1P: prev1PStr !== "-" && maxUploaded1PStr !== "-" && prev1PStr !== maxUploaded1PStr ? `${prev1PStr} ➔ ${maxUploaded1PStr}` : (maxUploaded1PStr !== "-" ? maxUploaded1PStr : null),
-          prev2P: prev2PStr !== "-" ? prev2PStr : null,
-          new2P: maxUploaded2PStr !== "-" ? maxUploaded2PStr : null,
-          range2P: prev2PStr !== "-" && maxUploaded2PStr !== "-" && prev2PStr !== maxUploaded2PStr ? `${prev2PStr} ➔ ${maxUploaded2PStr}` : (maxUploaded2PStr !== "-" ? maxUploaded2PStr : null),
-          prev3P: prev3PStr !== "-" ? prev3PStr : null,
-          new3P: maxUploaded3PStr !== "-" ? maxUploaded3PStr : null,
-          range3P: prev3PStr !== "-" && maxUploaded3PStr !== "-" && prev3PStr !== maxUploaded3PStr ? `${prev3PStr} ➔ ${maxUploaded3PStr}` : (maxUploaded3PStr !== "-" ? maxUploaded3PStr : null),
-          prevDoo: prevDooStr !== "-" ? prevDooStr : null,
-          newDoo: maxUploadedDooStr !== "-" ? maxUploadedDooStr : null,
-          rangeDoo: prevDooStr !== "-" && maxUploadedDooStr !== "-" && prevDooStr !== maxUploadedDooStr ? `${prevDooStr} ➔ ${maxUploadedDooStr}` : (maxUploadedDooStr !== "-" ? maxUploadedDooStr : null),
-          prevOra: prevOraStr !== "-" ? prevOraStr : null,
-          newOra: maxUploadedOraStr !== "-" ? maxUploadedOraStr : null,
-          rangeOra: prevOraStr !== "-" && maxUploadedOraStr !== "-" && prevOraStr !== maxUploadedOraStr ? `${prevOraStr} ➔ ${maxUploadedOraStr}` : (maxUploadedOraStr !== "-" ? maxUploadedOraStr : null),
+        let range1P = existingProgression.range1P || null;
+        let prev1P = existingProgression.prev1P || null;
+        let new1P = existingProgression.new1P || null;
+        if (maxUploaded1PNum > 0) {
+          new1P = maxUploaded1PStr;
+          if (prev1PNum > 0 && maxUploaded1PNum > prev1PNum) {
+            prev1P = prev1PStr;
+            range1P = `${prev1PStr} ➔ ${maxUploaded1PStr}`;
+          } else if (minUploaded1PNum > 0 && minUploaded1PNum !== maxUploaded1PNum) {
+            prev1P = minUploaded1PStr;
+            range1P = `${minUploaded1PStr} ➔ ${maxUploaded1PStr}`;
+          } else {
+            prev1P = prev1PStr !== "-" ? prev1PStr : maxUploaded1PStr;
+            range1P = maxUploaded1PStr;
+          }
+        }
+
+        let range2P = existingProgression.range2P || null;
+        let prev2P = existingProgression.prev2P || null;
+        let new2P = existingProgression.new2P || null;
+        if (maxUploaded2PNum > 0) {
+          new2P = maxUploaded2PStr;
+          if (prev2PNum > 0 && maxUploaded2PNum > prev2PNum) {
+            prev2P = prev2PStr;
+            range2P = `${prev2PStr} ➔ ${maxUploaded2PStr}`;
+          } else if (minUploaded2PNum > 0 && minUploaded2PNum !== maxUploaded2PNum) {
+            prev2P = minUploaded2PStr;
+            range2P = `${minUploaded2PStr} ➔ ${maxUploaded2PStr}`;
+          } else {
+            prev2P = prev2PStr !== "-" ? prev2PStr : maxUploaded2PStr;
+            range2P = maxUploaded2PStr;
+          }
+        }
+
+        let range3P = existingProgression.range3P || null;
+        let prev3P = existingProgression.prev3P || null;
+        let new3P = existingProgression.new3P || null;
+        if (maxUploaded3PNum > 0) {
+          new3P = maxUploaded3PStr;
+          if (prev3PNum > 0 && maxUploaded3PNum > prev3PNum) {
+            prev3P = prev3PStr;
+            range3P = `${prev3PStr} ➔ ${maxUploaded3PStr}`;
+          } else if (minUploaded3PNum > 0 && minUploaded3PNum !== maxUploaded3PNum) {
+            prev3P = minUploaded3PStr;
+            range3P = `${minUploaded3PStr} ➔ ${maxUploaded3PStr}`;
+          } else {
+            prev3P = prev3PStr !== "-" ? prev3PStr : maxUploaded3PStr;
+            range3P = maxUploaded3PStr;
+          }
+        }
+
+        let rangeOra = existingProgression.rangeOra || null;
+        let prevOra = existingProgression.prevOra || null;
+        let newOra = existingProgression.newOra || null;
+        if (maxUploadedOraNum > 0) {
+          newOra = maxUploadedOraStr;
+          if (prevOraNum > 0 && maxUploadedOraNum > prevOraNum) {
+            prevOra = prevOraStr;
+            rangeOra = `${prevOraStr} ➔ ${maxUploadedOraStr}`;
+          } else if (minUploadedOraNum > 0 && minUploadedOraNum !== maxUploadedOraNum) {
+            prevOra = minUploadedOraStr;
+            rangeOra = `${minUploadedOraStr} ➔ ${maxUploadedOraStr}`;
+          } else {
+            prevOra = prevOraStr !== "-" ? prevOraStr : maxUploadedOraStr;
+            rangeOra = maxUploadedOraStr;
+          }
+        }
+
+        let rangeDoo = existingProgression.rangeDoo || null;
+        let prevDoo = existingProgression.prevDoo || null;
+        let newDoo = existingProgression.newDoo || null;
+        if (maxUploadedDooNum > 0) {
+          newDoo = maxUploadedDooStr;
+          if (prevDooNum > 0 && maxUploadedDooNum > prevDooNum) {
+            prevDoo = prevDooStr;
+            rangeDoo = `${prevDooStr} ➔ ${maxUploadedDooStr}`;
+          } else if (minUploadedDooNum > 0 && minUploadedDooNum !== maxUploadedDooNum) {
+            prevDoo = minUploadedDooStr;
+            rangeDoo = `${minUploadedDooStr} ➔ ${maxUploadedDooStr}`;
+          } else {
+            prevDoo = prevDooStr !== "-" ? prevDooStr : maxUploadedDooStr;
+            rangeDoo = maxUploadedDooStr;
+          }
+        }
+
+        const progObj: InvoiceProgression = {
+          ...existingProgression,
+          prev1P,
+          new1P,
+          range1P,
+          prev2P,
+          new2P,
+          range2P,
+          prev3P,
+          new3P,
+          range3P,
+          prevDoo,
+          newDoo,
+          rangeDoo,
+          prevOra,
+          newOra,
+          rangeOra,
           updatedAt: new Date().toLocaleTimeString("id-ID"),
         };
 
@@ -765,12 +870,12 @@ export default function Home() {
 
         setUploadNotification({
           fileName: file.name,
-          prevOra: prevOraStr !== "-" ? prevOraStr : null,
+          prevOra,
           maxOra: maxUploadedOraStr,
-          rangeOra: prevOraStr !== "-" && maxUploadedOraStr !== "-" && prevOraStr !== maxUploadedOraStr ? `${prevOraStr} ➔ ${maxUploadedOraStr}` : null,
-          prevDoo: prevDooStr !== "-" ? prevDooStr : null,
+          rangeOra,
+          prevDoo,
           maxDoo: maxUploadedDooStr,
-          rangeDoo: prevDooStr !== "-" && maxUploadedDooStr !== "-" && prevDooStr !== maxUploadedDooStr ? `${prevDooStr} ➔ ${maxUploadedDooStr}` : null,
+          rangeDoo,
           totalItems: parsed.length,
           totalInvoices: invMap.size,
           newUnprinted: newUnprintedCount,
@@ -1410,12 +1515,15 @@ export default function Home() {
                     {highestInvoices.max1POra.invoiceNumber !== "-" ? `#${highestInvoices.max1POra.invoiceNumber}` : "-"}
                   </p>
                 </div>
-                <div className="text-[10px] font-mono text-gray-500 truncate mt-1 pt-1 border-t border-blue-50">
-                  {invoiceProgression?.prevOra && invoiceProgression.newOra && invoiceProgression.prevOra !== invoiceProgression.newOra ? (
-                    <span className="text-blue-700 font-bold bg-blue-50 px-1 rounded">{invoiceProgression.prevOra}➔{invoiceProgression.newOra}</span>
+                <div className="flex items-center justify-between gap-1 text-[10px] font-mono mt-1 pt-1 border-t border-blue-50">
+                  {invoiceProgression?.rangeOra ? (
+                    <span className="text-blue-700 font-bold bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded truncate" title={`Rentang Upload: ${invoiceProgression.rangeOra}`}>
+                      {invoiceProgression.rangeOra}
+                    </span>
                   ) : (
-                    <span>📅 {highestInvoices.max1POra.orderDate || "-"}</span>
+                    <span className="text-gray-400">-</span>
                   )}
+                  <span className="text-gray-500 truncate">📅 {highestInvoices.max1POra.orderDate || "-"}</span>
                 </div>
               </div>
 
@@ -1438,12 +1546,15 @@ export default function Home() {
                     {highestInvoices.max2P.invoiceNumber !== "-" ? `#${highestInvoices.max2P.invoiceNumber}` : "-"}
                   </p>
                 </div>
-                <div className="text-[10px] font-mono text-gray-500 truncate mt-1 pt-1 border-t border-emerald-50">
-                  {invoiceProgression?.prev2P && invoiceProgression.new2P && invoiceProgression.prev2P !== invoiceProgression.new2P ? (
-                    <span className="text-emerald-700 font-bold bg-emerald-50 px-1 rounded">{invoiceProgression.prev2P}➔{invoiceProgression.new2P}</span>
+                <div className="flex items-center justify-between gap-1 text-[10px] font-mono mt-1 pt-1 border-t border-emerald-50">
+                  {invoiceProgression?.range2P ? (
+                    <span className="text-emerald-700 font-bold bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded truncate" title={`Rentang Upload: ${invoiceProgression.range2P}`}>
+                      {invoiceProgression.range2P}
+                    </span>
                   ) : (
-                    <span>📅 {highestInvoices.max2P.orderDate || "-"}</span>
+                    <span className="text-gray-400">-</span>
                   )}
+                  <span className="text-gray-500 truncate">📅 {highestInvoices.max2P.orderDate || "-"}</span>
                 </div>
               </div>
 
@@ -1485,12 +1596,15 @@ export default function Home() {
                     {highestInvoices.max1PDoo.invoiceNumber !== "-" ? `#${highestInvoices.max1PDoo.invoiceNumber}` : "-"}
                   </p>
                 </div>
-                <div className="text-[10px] font-mono text-gray-500 truncate mt-1 pt-1 border-t border-teal-50">
-                  {invoiceProgression?.prevDoo && invoiceProgression.newDoo && invoiceProgression.prevDoo !== invoiceProgression.newDoo ? (
-                    <span className="text-teal-700 font-bold bg-teal-50 px-1 rounded">{invoiceProgression.prevDoo}➔{invoiceProgression.newDoo}</span>
+                <div className="flex items-center justify-between gap-1 text-[10px] font-mono mt-1 pt-1 border-t border-teal-50">
+                  {invoiceProgression?.rangeDoo || invoiceProgression?.range1P ? (
+                    <span className="text-teal-700 font-bold bg-teal-50 border border-teal-200 px-1.5 py-0.5 rounded truncate" title={`Rentang Upload: ${invoiceProgression?.rangeDoo || invoiceProgression?.range1P}`}>
+                      {invoiceProgression?.rangeDoo || invoiceProgression?.range1P}
+                    </span>
                   ) : (
-                    <span>📅 {highestInvoices.max1PDoo.orderDate || "-"}</span>
+                    <span className="text-gray-400">-</span>
                   )}
+                  <span className="text-gray-500 truncate">📅 {highestInvoices.max1PDoo.orderDate || "-"}</span>
                 </div>
               </div>
 
@@ -1513,12 +1627,15 @@ export default function Home() {
                     {highestInvoices.max3P.invoiceNumber !== "-" ? `#${highestInvoices.max3P.invoiceNumber}` : "-"}
                   </p>
                 </div>
-                <div className="text-[10px] font-mono text-gray-500 truncate mt-1 pt-1 border-t border-purple-50">
-                  {invoiceProgression?.prev3P && invoiceProgression.new3P && invoiceProgression.prev3P !== invoiceProgression.new3P ? (
-                    <span className="text-purple-700 font-bold bg-purple-50 px-1 rounded">{invoiceProgression.prev3P}➔{invoiceProgression.new3P}</span>
+                <div className="flex items-center justify-between gap-1 text-[10px] font-mono mt-1 pt-1 border-t border-purple-50">
+                  {invoiceProgression?.range3P ? (
+                    <span className="text-purple-700 font-bold bg-purple-50 border border-purple-200 px-1.5 py-0.5 rounded truncate" title={`Rentang Upload: ${invoiceProgression.range3P}`}>
+                      {invoiceProgression.range3P}
+                    </span>
                   ) : (
-                    <span>📅 {highestInvoices.max3P.orderDate || "-"}</span>
+                    <span className="text-gray-400">-</span>
                   )}
+                  <span className="text-gray-500 truncate">📅 {highestInvoices.max3P.orderDate || "-"}</span>
                 </div>
               </div>
             </div>
