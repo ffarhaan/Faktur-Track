@@ -1323,85 +1323,45 @@ export default function Home() {
           </div>
         )}
 
-        {/* Upload Notification Banner */}
+        {/* Upload Notification Banner (Slim & Compact) */}
         {uploadNotification && (
-          <div className="mb-4 bg-gradient-to-r from-emerald-50 via-teal-50 to-blue-50 border border-emerald-300 rounded-xl p-3.5 shadow-sm flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-lg bg-emerald-600 flex items-center justify-center text-white text-lg font-bold shadow-xs">
-                ✓
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="font-bold text-sm text-emerald-950">
-                    File Berhasil Diupload & Tersinkron! ({uploadNotification.fileName})
-                  </span>
-                  <span className="text-[11px] text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded font-mono">
-                    {uploadNotification.time}
-                  </span>
-                </div>
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-gray-700 mt-1.5">
-                  <span className="font-semibold text-gray-900 flex items-center gap-1">
-                    <span>📌</span> Progresi Faktur Terakhir:
-                  </span>
-                  {uploadNotification.maxDoo !== "-" && (
-                    <span className="inline-flex items-center gap-1.5 font-medium bg-emerald-100/90 text-emerald-950 px-2.5 py-1 rounded-md border border-emerald-300">
-                      🏬 DOO:{" "}
-                      {uploadNotification.prevDoo && uploadNotification.prevDoo !== uploadNotification.maxDoo ? (
-                        <>
-                          <span className="font-mono text-emerald-700 line-through decoration-emerald-500">#{uploadNotification.prevDoo}</span>
-                          <span className="text-emerald-600 font-bold">➔</span>
-                          <strong className="font-mono font-bold text-emerald-900 bg-emerald-200/80 px-1 rounded">#{uploadNotification.maxDoo}</strong>
-                        </>
-                      ) : (
-                        <strong className="font-mono font-bold">#{uploadNotification.maxDoo}</strong>
-                      )}
-                      {uploadNotification.rangeDoo && (
-                        <span className="text-[11px] text-emerald-700 font-normal">
-                          (Rentang File: #{uploadNotification.rangeDoo})
-                        </span>
-                      )}
-                    </span>
-                  )}
-                  {uploadNotification.maxOra !== "-" && (
-                    <span className="inline-flex items-center gap-1.5 font-medium bg-blue-100/90 text-blue-950 px-2.5 py-1 rounded-md border border-blue-300">
-                      🏢 ORA (Helios):{" "}
-                      {uploadNotification.prevOra && uploadNotification.prevOra !== uploadNotification.maxOra ? (
-                        <>
-                          <span className="font-mono text-blue-700 line-through decoration-blue-500">#{uploadNotification.prevOra}</span>
-                          <span className="text-blue-600 font-bold">➔</span>
-                          <strong className="font-mono font-bold text-blue-900 bg-blue-200/80 px-1 rounded">#{uploadNotification.maxOra}</strong>
-                        </>
-                      ) : (
-                        <strong className="font-mono font-bold">#{uploadNotification.maxOra}</strong>
-                      )}
-                      {uploadNotification.rangeOra && (
-                        <span className="text-[11px] text-blue-700 font-normal">
-                          (Rentang File: #{uploadNotification.rangeOra})
-                        </span>
-                      )}
-                    </span>
-                  )}
-                  <span className="text-gray-600">
-                    · Total {uploadNotification.totalInvoices.toLocaleString("id-ID")} faktur ({uploadNotification.totalItems.toLocaleString("id-ID")} baris)
-                  </span>
-                  {uploadNotification.newUnprinted > 0 ? (
-                    <span className="font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded border border-amber-300">
-                      🚨 {uploadNotification.newUnprinted} Faktur Baru Belum Terprint
-                    </span>
-                  ) : (
-                    <span className="font-semibold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded">
-                      ✅ Semua sudah berstatus Terprint
-                    </span>
-                  )}
-                </div>
-              </div>
+          <div className="mb-3 bg-emerald-50 border border-emerald-300 rounded-lg px-3 py-1.5 shadow-2xs flex items-center justify-between gap-2 text-xs">
+            <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+              <span className="font-bold text-emerald-950 flex items-center gap-1">
+                <span>✓</span> Upload Sukses: {uploadNotification.fileName}
+              </span>
+              <span className="text-[11px] font-mono text-emerald-700 bg-emerald-100 px-1.5 py-0.2 rounded">
+                {uploadNotification.time}
+              </span>
+              <span className="text-gray-600">
+                ({uploadNotification.totalInvoices.toLocaleString("id-ID")} faktur · {uploadNotification.totalItems.toLocaleString("id-ID")} baris)
+              </span>
+              {uploadNotification.maxDoo !== "-" && (
+                <span className="font-medium bg-emerald-100/90 text-emerald-950 px-1.5 py-0.2 rounded font-mono text-[11px]">
+                  🏬 DOO: {uploadNotification.prevDoo && uploadNotification.prevDoo !== uploadNotification.maxDoo ? `${uploadNotification.prevDoo}➔${uploadNotification.maxDoo}` : `#${uploadNotification.maxDoo}`}
+                </span>
+              )}
+              {uploadNotification.maxOra !== "-" && (
+                <span className="font-medium bg-blue-100/90 text-blue-950 px-1.5 py-0.2 rounded font-mono text-[11px]">
+                  🏢 ORA: {uploadNotification.prevOra && uploadNotification.prevOra !== uploadNotification.maxOra ? `${uploadNotification.prevOra}➔${uploadNotification.maxOra}` : `#${uploadNotification.maxOra}`}
+                </span>
+              )}
+              {uploadNotification.newUnprinted > 0 ? (
+                <span className="font-bold text-amber-800 bg-amber-100 px-1.5 py-0.2 rounded text-[11px]">
+                  🚨 {uploadNotification.newUnprinted} Belum Print
+                </span>
+              ) : (
+                <span className="text-emerald-700 font-semibold text-[11px]">
+                  ✅ Semua Terprint
+                </span>
+              )}
             </div>
             <button
               onClick={() => setUploadNotification(null)}
-              className="text-gray-400 hover:text-gray-700 text-xs px-2 py-1 rounded-lg hover:bg-gray-200 transition-colors ml-2"
+              className="text-gray-400 hover:text-gray-700 font-bold px-1.5 py-0.5 rounded hover:bg-emerald-100 text-xs transition-colors"
               title="Tutup notifikasi"
             >
-              ✕ Tutup
+              ✕
             </button>
           </div>
         )}
@@ -1409,136 +1369,93 @@ export default function Home() {
         {/* Data loaded */}
         {records.length > 0 && (
           <>
-            {/* Row 1: General Summary KPI Cards */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-3">
+            {/* Unified Compact Summary & Category Cards (1 Row) */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 mb-3">
               <Card label="Total SO" value={summary.totalSO.toLocaleString("id-ID")} />
               <Card label="Total Invoice" value={summary.totalInvoices.toLocaleString("id-ID")} />
               <Card label="Belum Terprint" value={summary.belumTerprint.toLocaleString("id-ID")} color="orange" />
               <Card label="Double INV" value={summary.doubleInv.toLocaleString("id-ID")} color="red" />
-              <Card label="Total Harga" value={formatRupiah(summary.totalHarga)} small />
-            </div>
 
-            {/* Row 2: Faktur Terakhir 1P, 2P, 3P Category Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
-              {/* Card Faktur Terakhir 1P */}
-              <div className="bg-white rounded-lg border border-blue-200 p-3.5 shadow-xs relative overflow-hidden flex flex-col justify-between">
-                <div className="absolute top-0 right-0 w-12 h-12 bg-blue-50 rounded-bl-full pointer-events-none" />
+              {/* Card Faktur 1P */}
+              <div className="bg-white rounded-lg border border-blue-200 p-2.5 shadow-2xs flex flex-col justify-between">
                 <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-[11px] font-bold text-blue-800 uppercase tracking-wider flex items-center gap-1.5">
-                      <span>🏢</span> Faktur Terakhir 1P
-                      <span className="px-1.5 py-0.2 bg-blue-100 text-blue-800 text-[10px] rounded font-mono font-bold">1P (Helios/DOO)</span>
+                  <div className="flex items-center justify-between gap-1 mb-0.5">
+                    <span className="text-[10px] font-bold text-blue-800 uppercase flex items-center gap-1 truncate">
+                      <span>🏢</span> Faktur 1P
                     </span>
                     {highestInvoices.max1P.invoiceNumber !== "-" && (
-                      <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] shadow-2xs ${
-                        highestInvoices.max1P.isPrinted ? "bg-green-100 text-green-800 border border-green-300" : "bg-orange-100 text-orange-800 border border-orange-300"
+                      <span className={`px-1.5 py-0.2 rounded text-[9px] font-bold ${
+                        highestInvoices.max1P.isPrinted ? "bg-green-100 text-green-800" : "bg-orange-100 text-orange-800"
                       }`}>
-                        {highestInvoices.max1P.isPrinted ? "✓ Terprint" : "○ Belum Print"}
+                        {highestInvoices.max1P.isPrinted ? "✓" : "○"}
                       </span>
                     )}
                   </div>
-                  <p className="text-2xl font-bold font-mono text-blue-950 mt-1">
+                  <p className="text-base font-bold font-mono text-blue-950 truncate">
                     {highestInvoices.max1P.invoiceNumber !== "-" ? `#${highestInvoices.max1P.invoiceNumber}` : "-"}
                   </p>
                 </div>
-
-                <div className="mt-2.5 pt-1.5 border-t border-blue-50 flex flex-col gap-1 text-[11px] text-gray-500">
-                  <span className="truncate" title={highestInvoices.max1P.customerName || highestInvoices.max1P.orderDate}>
-                    {highestInvoices.max1P.customerName ? `👤 ${highestInvoices.max1P.customerName}` : `📅 ${highestInvoices.max1P.orderDate || "-"}`}
-                  </span>
+                <div className="text-[10px] font-mono text-gray-500 truncate mt-1 pt-1 border-t border-blue-50">
                   {invoiceProgression?.prev1P && invoiceProgression.new1P && invoiceProgression.prev1P !== invoiceProgression.new1P ? (
-                    <span className="text-[11px] font-mono text-blue-800 bg-blue-50 font-semibold px-2 py-0.5 rounded border border-blue-200 flex items-center gap-1">
-                      <span className="text-gray-500 font-sans text-[10px]">Rentang:</span>
-                      <span className="line-through decoration-blue-400 text-blue-600">#{invoiceProgression.prev1P}</span>
-                      <span className="text-blue-600 font-bold">➔</span>
-                      <span className="font-bold text-blue-900">#{invoiceProgression.new1P}</span>
-                    </span>
+                    <span className="text-blue-700 font-bold bg-blue-50 px-1 rounded">{invoiceProgression.prev1P}➔{invoiceProgression.new1P}</span>
                   ) : (
-                    <span className="text-[10px] font-mono text-blue-700/80 font-medium">
-                      📅 {highestInvoices.max1P.orderDate || "-"}
-                    </span>
+                    <span>📅 {highestInvoices.max1P.orderDate || "-"}</span>
                   )}
                 </div>
               </div>
 
-              {/* Card Faktur Terakhir 2P */}
-              <div className="bg-white rounded-lg border border-emerald-200 p-3.5 shadow-xs relative overflow-hidden flex flex-col justify-between">
-                <div className="absolute top-0 right-0 w-12 h-12 bg-emerald-50 rounded-bl-full pointer-events-none" />
+              {/* Card Faktur 2P */}
+              <div className="bg-white rounded-lg border border-emerald-200 p-2.5 shadow-2xs flex flex-col justify-between">
                 <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider flex items-center gap-1.5">
-                      <span>🏪</span> Faktur Terakhir 2P
-                      <span className="px-1.5 py-0.2 bg-emerald-100 text-emerald-800 text-[10px] rounded font-mono font-bold">2P (Mitra)</span>
+                  <div className="flex items-center justify-between gap-1 mb-0.5">
+                    <span className="text-[10px] font-bold text-emerald-800 uppercase flex items-center gap-1 truncate">
+                      <span>🏪</span> Faktur 2P
                     </span>
                     {highestInvoices.max2P.invoiceNumber !== "-" && (
-                      <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] shadow-2xs ${
-                        highestInvoices.max2P.isPrinted ? "bg-green-100 text-green-800 border border-green-300" : "bg-orange-100 text-orange-800 border border-orange-300"
+                      <span className={`px-1.5 py-0.2 rounded text-[9px] font-bold ${
+                        highestInvoices.max2P.isPrinted ? "bg-green-100 text-green-800" : "bg-orange-100 text-orange-800"
                       }`}>
-                        {highestInvoices.max2P.isPrinted ? "✓ Terprint" : "○ Belum Print"}
+                        {highestInvoices.max2P.isPrinted ? "✓" : "○"}
                       </span>
                     )}
                   </div>
-                  <p className="text-2xl font-bold font-mono text-emerald-950 mt-1">
+                  <p className="text-base font-bold font-mono text-emerald-950 truncate">
                     {highestInvoices.max2P.invoiceNumber !== "-" ? `#${highestInvoices.max2P.invoiceNumber}` : "-"}
                   </p>
                 </div>
-
-                <div className="mt-2.5 pt-1.5 border-t border-emerald-50 flex flex-col gap-1 text-[11px] text-gray-500">
-                  <span className="truncate" title={highestInvoices.max2P.customerName || highestInvoices.max2P.orderDate}>
-                    {highestInvoices.max2P.customerName ? `👤 ${highestInvoices.max2P.customerName}` : `📅 ${highestInvoices.max2P.orderDate || "-"}`}
-                  </span>
+                <div className="text-[10px] font-mono text-gray-500 truncate mt-1 pt-1 border-t border-emerald-50">
                   {invoiceProgression?.prev2P && invoiceProgression.new2P && invoiceProgression.prev2P !== invoiceProgression.new2P ? (
-                    <span className="text-[11px] font-mono text-emerald-800 bg-emerald-50 font-semibold px-2 py-0.5 rounded border border-emerald-200 flex items-center gap-1">
-                      <span className="text-gray-500 font-sans text-[10px]">Rentang:</span>
-                      <span className="line-through decoration-emerald-400 text-emerald-600">#{invoiceProgression.prev2P}</span>
-                      <span className="text-emerald-600 font-bold">➔</span>
-                      <span className="font-bold text-emerald-900">#{invoiceProgression.new2P}</span>
-                    </span>
+                    <span className="text-emerald-700 font-bold bg-emerald-50 px-1 rounded">{invoiceProgression.prev2P}➔{invoiceProgression.new2P}</span>
                   ) : (
-                    <span className="text-[10px] font-mono text-emerald-700/80 font-medium">
-                      📅 {highestInvoices.max2P.orderDate || "-"}
-                    </span>
+                    <span>📅 {highestInvoices.max2P.orderDate || "-"}</span>
                   )}
                 </div>
               </div>
 
-              {/* Card Faktur Terakhir 3P */}
-              <div className="bg-white rounded-lg border border-purple-200 p-3.5 shadow-xs relative overflow-hidden flex flex-col justify-between">
-                <div className="absolute top-0 right-0 w-12 h-12 bg-purple-50 rounded-bl-full pointer-events-none" />
+              {/* Card Faktur 3P */}
+              <div className="bg-white rounded-lg border border-purple-200 p-2.5 shadow-2xs flex flex-col justify-between">
                 <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-[11px] font-bold text-purple-800 uppercase tracking-wider flex items-center gap-1.5">
-                      <span>🏬</span> Faktur Terakhir 3P
-                      <span className="px-1.5 py-0.2 bg-purple-100 text-purple-800 text-[10px] rounded font-mono font-bold">3P (Reguler)</span>
+                  <div className="flex items-center justify-between gap-1 mb-0.5">
+                    <span className="text-[10px] font-bold text-purple-800 uppercase flex items-center gap-1 truncate">
+                      <span>🏬</span> Faktur 3P
                     </span>
                     {highestInvoices.max3P.invoiceNumber !== "-" && (
-                      <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] shadow-2xs ${
-                        highestInvoices.max3P.isPrinted ? "bg-green-100 text-green-800 border border-green-300" : "bg-orange-100 text-orange-800 border border-orange-300"
+                      <span className={`px-1.5 py-0.2 rounded text-[9px] font-bold ${
+                        highestInvoices.max3P.isPrinted ? "bg-green-100 text-green-800" : "bg-orange-100 text-orange-800"
                       }`}>
-                        {highestInvoices.max3P.isPrinted ? "✓ Terprint" : "○ Belum Print"}
+                        {highestInvoices.max3P.isPrinted ? "✓" : "○"}
                       </span>
                     )}
                   </div>
-                  <p className="text-2xl font-bold font-mono text-purple-950 mt-1">
+                  <p className="text-base font-bold font-mono text-purple-950 truncate">
                     {highestInvoices.max3P.invoiceNumber !== "-" ? `#${highestInvoices.max3P.invoiceNumber}` : "-"}
                   </p>
                 </div>
-
-                <div className="mt-2.5 pt-1.5 border-t border-purple-50 flex flex-col gap-1 text-[11px] text-gray-500">
-                  <span className="truncate" title={highestInvoices.max3P.customerName || highestInvoices.max3P.orderDate}>
-                    {highestInvoices.max3P.customerName ? `👤 ${highestInvoices.max3P.customerName}` : `📅 ${highestInvoices.max3P.orderDate || "-"}`}
-                  </span>
+                <div className="text-[10px] font-mono text-gray-500 truncate mt-1 pt-1 border-t border-purple-50">
                   {invoiceProgression?.prev3P && invoiceProgression.new3P && invoiceProgression.prev3P !== invoiceProgression.new3P ? (
-                    <span className="text-[11px] font-mono text-purple-800 bg-purple-50 font-semibold px-2 py-0.5 rounded border border-purple-200 flex items-center gap-1">
-                      <span className="text-gray-500 font-sans text-[10px]">Rentang:</span>
-                      <span className="line-through decoration-purple-400 text-purple-600">#{invoiceProgression.prev3P}</span>
-                      <span className="text-purple-600 font-bold">➔</span>
-                      <span className="font-bold text-purple-900">#{invoiceProgression.new3P}</span>
-                    </span>
+                    <span className="text-purple-700 font-bold bg-purple-50 px-1 rounded">{invoiceProgression.prev3P}➔{invoiceProgression.new3P}</span>
                   ) : (
-                    <span className="text-[10px] font-mono text-purple-700/80 font-medium">
-                      📅 {highestInvoices.max3P.orderDate || "-"}
-                    </span>
+                    <span>📅 {highestInvoices.max3P.orderDate || "-"}</span>
                   )}
                 </div>
               </div>
@@ -2037,9 +1954,9 @@ export default function Home() {
 function Card({ label, value, color, small }: { label: string; value: string; color?: "orange" | "red"; small?: boolean }) {
   const colorClass = color === "orange" ? "text-orange-600" : color === "red" ? "text-red-600" : "text-gray-900";
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-4">
-      <p className="text-xs text-gray-500 mb-1">{label}</p>
-      <p className={`${small ? "text-sm" : "text-xl"} font-bold ${colorClass}`}>{value}</p>
+    <div className="bg-white rounded-lg border border-gray-200 p-2.5 shadow-2xs flex flex-col justify-between">
+      <p className="text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-0.5 truncate">{label}</p>
+      <p className={`${small ? "text-sm" : "text-base"} font-bold font-mono ${colorClass} truncate`}>{value}</p>
     </div>
   );
 }
