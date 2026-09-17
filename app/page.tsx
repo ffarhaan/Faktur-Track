@@ -1972,8 +1972,17 @@ export default function Home() {
                               }}
                               className={`px-2 py-2 font-mono text-xs text-gray-900 whitespace-nowrap ${getCellCls(2)}`}
                             >
-                              {g.so}
-                              {g.isDoubleInv && <span className="ml-1 text-red-600 font-bold" title="SO ini memiliki lebih dari 1 faktur">⚠</span>}
+                              <div className="flex items-center gap-1">
+                                <span>{g.so}</span>
+                                {g.isDoubleInv && <span className="text-red-600 font-bold" title="SO ini memiliki lebih dari 1 faktur">⚠</span>}
+                              </div>
+                              {g.totalHarga < 0 && (
+                                <div className="mt-0.5">
+                                  <span className="inline-block text-[9px] font-semibold text-rose-600 bg-rose-50 border border-rose-200 px-1 py-0.2 rounded leading-none">
+                                    Memo Retur
+                                  </span>
+                                </div>
+                              )}
                             </td>
 
                             {/* Col 3: No Invoice */}
@@ -2090,7 +2099,7 @@ export default function Home() {
                               <td colSpan={10} className="px-4 py-3">
                                 <div className="flex flex-wrap items-center justify-between pb-2 mb-2 border-b border-gray-200 gap-2">
                                   <div className="text-xs text-gray-600">
-                                    <span className="font-semibold text-gray-900">Invoice: <span className="font-mono text-blue-700 font-bold">{g.invoiceNumber}</span></span> · SO: <span className="font-semibold text-gray-900">{g.so}</span> · Pelanggan: <span className="font-semibold text-gray-900">{g.customerName}</span>
+                                    <span className="font-semibold text-gray-900">Invoice: <span className="font-mono text-blue-700 font-bold">{g.invoiceNumber}</span></span> · SO: <span className="font-semibold text-gray-900">{g.so}</span> {g.totalHarga < 0 && <span className="text-[10px] font-semibold text-rose-700 bg-rose-100 border border-rose-200 px-1.5 py-0.2 rounded">Memo Retur</span>} · Pelanggan: <span className="font-semibold text-gray-900">{g.customerName}</span>
                                     {g.allPrinted && g.printedAt && (
                                       <span className="ml-2 inline-flex items-center gap-1 font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
                                         <span>⏱ Selesai Print:</span>
