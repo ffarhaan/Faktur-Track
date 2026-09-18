@@ -414,8 +414,6 @@ export default function Home() {
     async (group: FakturGroup) => {
       const willBePrinted = !group.allPrinted;
       const targetKey = group.invoiceKey;
-      const cleanInv = group.invoiceNumber.replace(/-1P$/i, "");
-      const keysToUpdate = Array.from(new Set([targetKey, cleanInv, `${cleanInv}-1P`].filter(Boolean)));
 
       // Debounce rapid toggles on the same invoice (< 300ms)
       if (inFlightToggleRef.current.has(targetKey)) return;
@@ -429,27 +427,21 @@ export default function Home() {
 
       if (willBePrinted) {
         next.add(targetKey);
-        keysToUpdate.forEach((k) => next.add(k));
       } else {
         next.delete(targetKey);
-        keysToUpdate.forEach((k) => next.delete(k));
       }
       setPrintedInvoices(next);
 
       // Record in pending prints for optimistic retention against background sync
-      keysToUpdate.forEach((k) => {
-        pendingPrintsRef.current.set(k, { status: willBePrinted, time: Date.now() });
-      });
+      pendingPrintsRef.current.set(targetKey, { status: willBePrinted, time: Date.now() });
 
       // Track items printed in this session so they persist in Belum Terprint view until manual refresh
       setSessionPrintedKeys((prev) => {
         const sNext = new Set(prev);
         if (willBePrinted) {
           sNext.add(targetKey);
-          keysToUpdate.forEach((k) => sNext.add(k));
         } else {
           sNext.delete(targetKey);
-          keysToUpdate.forEach((k) => sNext.delete(k));
         }
         return sNext;
       });
@@ -457,13 +449,9 @@ export default function Home() {
       setPrintedAtMap((prev) => {
         const nextMap = { ...prev };
         if (willBePrinted) {
-          keysToUpdate.forEach((k) => {
-            nextMap[k] = nowIso;
-          });
+          nextMap[targetKey] = nowIso;
         } else {
-          keysToUpdate.forEach((k) => {
-            delete nextMap[k];
-          });
+          delete nextMap[targetKey];
         }
         try {
           localStorage.setItem("printedAtMap", JSON.stringify(nextMap));
@@ -481,7 +469,7 @@ export default function Home() {
             status_cetak: willBePrinted,
             printed_at: willBePrinted ? nowIso : null,
           })
-          .in("no_faktur", keysToUpdate);
+          .eq("no_faktur", targetKey);
 
         if (updateErr) {
           console.error("Supabase update error:", updateErr.message);
