@@ -616,9 +616,33 @@ export default function Home() {
           if (!invMap.has(noFaktur)) {
             const existingName = String(prevExtra?.nama_pelanggan || "").trim();
             const incomingName = String(r.customerName || "").trim();
+
+            // Smarter Customer Name Resolution:
+            // - If incomingName is generic "PT Helios Alchemist Kesehatan" (or empty/numeric)
+            //   and existingName already has a specific apotek/branch name (e.g. "HAK Gejayan", "Apotek Afifah", "Apotek Medika", etc.),
+            //   DO NOT overwrite it with generic Helios! Preserve existingName.
+            const isIncomingGenericHelios =
+              incomingName.toUpperCase().includes("HELIOS") ||
+              incomingName.toUpperCase() === "PT HELIOS ALCHEMIST KESEHATAN" ||
+              incomingName === "1001" ||
+              !incomingName ||
+              incomingName === "-" ||
+              /^\d+$/.test(incomingName);
+
+            const isExistingSpecificCustomer =
+              existingName &&
+              existingName !== "-" &&
+              !/^\d+$/.test(existingName) &&
+              existingName.toUpperCase() !== "PT HELIOS ALCHEMIST KESEHATAN" &&
+              existingName.toUpperCase() !== "HELIOS";
+
             let finalCustomerName = incomingName;
-            if ((!finalCustomerName || /^\d+$/.test(finalCustomerName)) && existingName && !/^\d+$/.test(existingName)) {
+            if (isExistingSpecificCustomer && isIncomingGenericHelios) {
               finalCustomerName = existingName;
+            } else if (!finalCustomerName || /^\d+$/.test(finalCustomerName)) {
+              if (existingName && !/^\d+$/.test(existingName)) {
+                finalCustomerName = existingName;
+              }
             }
 
             // SO Number selection:
