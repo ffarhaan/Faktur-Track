@@ -253,6 +253,7 @@ export default function Home() {
   const lastSyncHashRef = useRef("");
   const pendingPrintsRef = useRef<Map<string, { status: boolean; time: number }>>(new Map());
   const inFlightToggleRef = useRef<Set<string>>(new Set());
+  const realtimeChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
   // Fetch all records from Supabase (Deterministic & Locked)
   const fetchFromSupabase = useCallback(async (showLoading = false) => {
@@ -334,9 +335,14 @@ export default function Home() {
   useEffect(() => {
     fetchFromSupabase(true);
 
-    // 1. Instant Realtime WebSocket subscription: updates across all devices in <100ms
-    const channel = supabase
-      .channel("faktur-realtime-sync")
+    // 1. Instant Realtime WebSocket subscription with Broadcast + Postgres Changes (<30ms cross-device sync)
+    const channel = supabase.channel("faktur-realtime-sync", {
+      config: {
+        broadcast: { self: false },
+      },
+    });
+
+    channel
       .on(
         "postgres_changes",
         {
@@ -348,9 +354,41 @@ export default function Home() {
           fetchFromSupabase(false);
         }
       )
+      .on("broadcast", { event: "SYNC_TRIGGER" }, () => {
+        fetchFromSupabase(false);
+      })
+      .on("broadcast", { event: "UPLOAD_COMPLETED" }, (payload: { payload?: { progression?: InvoiceProgression } }) => {
+        if (payload?.payload?.progression) {
+          setInvoiceProgression(payload.payload.progression);
+        }
+        fetchFromSupabase(false);
+      })
+      .on("broadcast", { event: "PRINT_TOGGLE" }, (payload: { payload?: { invoiceKey?: string; status?: boolean; printed_at?: string } }) => {
+        const data = payload?.payload;
+        if (data && typeof data.invoiceKey === "string") {
+          const invKey: string = data.invoiceKey;
+          const isStatus = Boolean(data.status);
+          const printedAt = data.printed_at;
+          setPrintedInvoices((prev) => {
+            const next = new Set(prev);
+            if (isStatus) next.add(invKey);
+            else next.delete(invKey);
+            return next;
+          });
+          setPrintedAtMap((prev) => {
+            const next = { ...prev };
+            if (isStatus) next[invKey] = printedAt || new Date().toISOString();
+            else delete next[invKey];
+            return next;
+          });
+        }
+        fetchFromSupabase(false);
+      })
       .subscribe();
 
-    // 2. Auto-sync on Tab Focus or Window Visibility Change
+    realtimeChannelRef.current = channel;
+
+    // 2. Auto-sync on Tab Focus, Window Visibility Change, or Network Reconnect
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") {
         fetchFromSupabase(false);
@@ -359,18 +397,24 @@ export default function Home() {
     const handleFocus = () => {
       fetchFromSupabase(false);
     };
+    const handleOnline = () => {
+      fetchFromSupabase(false);
+    };
 
     window.addEventListener("focus", handleFocus);
+    window.addEventListener("online", handleOnline);
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
-    // 3. Fallback sync interval every 15 seconds (Realtime WebSocket handles instant <100ms updates)
+    // 3. Fallback ultra-fast background sync interval every 1 second (1000ms) for zero-lag consistency
     const syncInterval = setInterval(() => {
       fetchFromSupabase(false);
-    }, 15000);
+    }, 1000);
 
     return () => {
       supabase.removeChannel(channel);
+      realtimeChannelRef.current = null;
       window.removeEventListener("focus", handleFocus);
+      window.removeEventListener("online", handleOnline);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       clearInterval(syncInterval);
     };
@@ -463,6 +507,17 @@ export default function Home() {
       } catch {}
 
       try {
+        // Broadcast instant state change to all devices in <30ms over WebSocket
+        realtimeChannelRef.current?.send({
+          type: "broadcast",
+          event: "PRINT_TOGGLE",
+          payload: {
+            invoiceKey: targetKey,
+            status: willBePrinted,
+            printed_at: willBePrinted ? nowIso : null,
+          },
+        });
+
         const { error: updateErr } = await supabase
           .from("faktur_records")
           .update({
@@ -960,6 +1015,16 @@ export default function Home() {
         ]);
         setPage(0);
 
+        // Instant broadcast to all connected devices in <30ms over WebSocket
+        realtimeChannelRef.current?.send({
+          type: "broadcast",
+          event: "UPLOAD_COMPLETED",
+          payload: {
+            timestamp: Date.now(),
+            progression: progObj,
+          },
+        });
+
         await fetchFromSupabase(false);
       } catch (e) {
         setError(e instanceof Error ? e.message : "Gagal membaca file.");
@@ -1010,6 +1075,14 @@ export default function Home() {
     } catch {}
 
     await supabase.from("faktur_records").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+
+    // Broadcast reset event immediately
+    realtimeChannelRef.current?.send({
+      type: "broadcast",
+      event: "SYNC_TRIGGER",
+      payload: { timestamp: Date.now(), action: "reset" },
+    });
+
     setLoading(false);
   };
 
