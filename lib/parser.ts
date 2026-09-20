@@ -84,9 +84,10 @@ master2P.forEach((item) => {
   if (item.namaMerchant) master2PNameSet.add(normalize(item.namaMerchant));
 });
 
-// Product Category lookup structures (FARMA / ALKES / PREKURSOR)
+// Product Category lookup structures (FARMA / ALKES / PREKURSOR / OOT)
 const productCodeMap: Record<string, string> = {};
 const productNameMap: Record<string, string> = {};
+const productList: Array<{ norm: string; cat: string }> = [];
 
 (masterProduct as Array<{ kodeBarang: string; namaBarang: string; kategori: string }>).forEach((p) => {
   const cat = String(p.kategori || "").trim().toUpperCase();
@@ -97,7 +98,11 @@ const productNameMap: Record<string, string> = {};
     if (numOnly) productCodeMap[numOnly] = cat;
   }
   if (p.namaBarang) {
-    productNameMap[normalize(p.namaBarang)] = cat;
+    const norm = normalize(p.namaBarang);
+    productNameMap[norm] = cat;
+    if (norm.length >= 8) {
+      productList.push({ norm, cat });
+    }
   }
 });
 
@@ -111,6 +116,13 @@ export function getProductCategory(itemCode?: string, itemDescription?: string):
   if (itemDescription) {
     const normDesc = normalize(itemDescription);
     if (productNameMap[normDesc]) return productNameMap[normDesc];
+    if (normDesc.length >= 8) {
+      for (const item of productList) {
+        if (normDesc.includes(item.norm) || item.norm.includes(normDesc)) {
+          return item.cat;
+        }
+      }
+    }
   }
   return null;
 }
