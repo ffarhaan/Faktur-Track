@@ -1509,37 +1509,60 @@ export default function Home() {
       return;
     }
 
-    // Filter all groups that have valid invoice numbers
-    const validGroups = grouped.filter((g) =>
-      g.invoiceNumber && g.invoiceNumber !== "0" && g.invoiceNumber !== "-"
-    );
-
-    if (validGroups.length === 0) {
-      alert("Tidak ada faktur dengan nomor invoice yang valid untuk diekspor.");
-      return;
-    }
-
-    // Sort strictly ASCENDING dari nomor faktur terkecil sampai terbesar
-    const sorted = [...validGroups].sort((a, b) => {
+    // Sort strictly ASCENDING dari nomor faktur terkecil sampai terbesar (semua faktur tanpa ada yang terbuang)
+    const sortedGroups = [...grouped].sort((a, b) => {
       const invA = parseInvNum(a.invoiceNumber);
       const invB = parseInvNum(b.invoiceNumber);
-      if (invA !== invB) return invA - invB;
+      if (invA > 0 && invB > 0 && invA !== invB) return invA - invB;
+      if (invA > 0 && invB <= 0) return -1;
+      if (invB > 0 && invA <= 0) return 1;
       return parseDateMs(a.orderDate) - parseDateMs(b.orderDate);
     });
 
-    // Format 1 Sheet: Rekap Faktur (No, Order Date, No SO, No Invoice, Kategori Produk, Pelanggan, Total Harga)
-    const rekapData = sorted.map((g, idx) => ({
+    // Sheet 1: Rekap Faktur Lengkap
+    const rekapData = sortedGroups.map((g, idx) => ({
       "No": idx + 1,
       "Order Date": g.orderDate || "-",
       "No SO": g.so || "-",
-      "No Invoice": g.invoiceNumber,
+      "No Invoice": g.invoiceNumber || "Menunggu Faktur",
       "Kategori Produk": g.kategoriProduk || "-",
+      "Jenis Transaksi": g.jenisTransaksi || "-",
+      "Kategori": g.kategori || "-",
       "Pelanggan": g.customerName || "-",
+      "Status Cetak": g.allPrinted ? "Sudah Terprint" : g.anyPrinted ? "Sebagian Terprint" : "Belum Terprint",
+      "Waktu Selesai Cetak": g.printedAt ? formatPrintTime(g.printedAt) : "-",
+      "Jumlah Item": g.totalItems || g.items.length || 1,
       "Total Harga": g.totalHarga,
     }));
 
+    // Sheet 2: Detail Rincian Barang per Baris
+    const detailItemsData: Array<Record<string, unknown>> = [];
+    let itemIdx = 1;
+    for (const g of sortedGroups) {
+      for (const it of g.items) {
+        detailItemsData.push({
+          "No": itemIdx++,
+          "No Invoice": g.invoiceNumber || "Menunggu Faktur",
+          "No SO": it.orderNumber || g.so || "-",
+          "Kode Barang": it.itemCode || "-",
+          "Kategori Produk": it.kategoriProduk || getProductCategory(it.itemCode, it.itemDescription) || "-",
+          "Nama Barang / Deskripsi": it.itemDescription || "-",
+          "Qty": it.qty,
+          "UOM": it.uom || "-",
+          "LOT / Batch Number": it.lotNumber || "-",
+          "Total Harga Barang": it.totalHarga,
+          "Pelanggan": g.customerName || "-",
+          "Order Date": g.orderDate || "-",
+          "Jenis Transaksi": g.jenisTransaksi || "-",
+          "Kategori": g.kategori || "-",
+          "Status Cetak": g.allPrinted ? "Sudah Terprint" : "Belum Terprint",
+        });
+      }
+    }
+
     const workbook = XLSX.utils.book_new();
 
+    // 1. Append Sheet Rekap Faktur
     const wsRekap = XLSX.utils.json_to_sheet(rekapData);
     wsRekap["!cols"] = [
       { wch: 6 },  // No
@@ -1547,16 +1570,44 @@ export default function Home() {
       { wch: 18 }, // No SO
       { wch: 16 }, // No Invoice
       { wch: 20 }, // Kategori Produk
+      { wch: 16 }, // Jenis Transaksi
+      { wch: 10 }, // Kategori
       { wch: 35 }, // Pelanggan
+      { wch: 18 }, // Status Cetak
+      { wch: 22 }, // Waktu Selesai Cetak
+      { wch: 14 }, // Jumlah Item
       { wch: 18 }, // Total Harga
     ];
     XLSX.utils.book_append_sheet(workbook, wsRekap, "Rekap Faktur");
 
+    // 2. Append Sheet Detail Barang
+    if (detailItemsData.length > 0) {
+      const wsDetail = XLSX.utils.json_to_sheet(detailItemsData);
+      wsDetail["!cols"] = [
+        { wch: 6 },  // No
+        { wch: 16 }, // No Invoice
+        { wch: 18 }, // No SO
+        { wch: 14 }, // Kode Barang
+        { wch: 18 }, // Kategori Produk
+        { wch: 45 }, // Nama Barang / Deskripsi
+        { wch: 10 }, // Qty
+        { wch: 10 }, // UOM
+        { wch: 20 }, // LOT / Batch Number
+        { wch: 18 }, // Total Harga Barang
+        { wch: 35 }, // Pelanggan
+        { wch: 14 }, // Order Date
+        { wch: 16 }, // Jenis Transaksi
+        { wch: 10 }, // Kategori
+        { wch: 18 }, // Status Cetak
+      ];
+      XLSX.utils.book_append_sheet(workbook, wsDetail, "Detail Barang");
+    }
+
     const now = new Date();
     const pad = (n: number) => String(n).padStart(2, "0");
     const dateStr = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
-    XLSX.writeFile(workbook, `Rekap_Faktur_Ascending_${dateStr}.xlsx`);
-  }, [records, grouped]);
+    XLSX.writeFile(workbook, `Rekap_Faktur_Lengkap_${dateStr}.xlsx`);
+  }, [grouped]);
 
   return (
     <main className="min-h-screen bg-gray-50">
