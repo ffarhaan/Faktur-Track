@@ -1,0 +1,946 @@
+[
+  {
+    "kodeAccurate": "9189",
+    "kodeOracle": "9189",
+    "namaBarang": "BODREX FLU DAN BATUK TIDAK BERDAHAK PE SIRUP 60 ML - TEMPO",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "OOT",
+    "kategoriWarehouse": "OOT"
+  },
+  {
+    "kodeAccurate": "17462",
+    "kodeOracle": "17462",
+    "namaBarang": "GRANTUSIF 10 CATCH COVER @ 10 KAPLET - GRAHA FARMA",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "OOT",
+    "kategoriWarehouse": "OOT"
+  },
+  {
+    "kodeAccurate": "22738",
+    "kodeOracle": "22738",
+    "namaBarang": "IFARSYL 10 AMPLOP @ 10 KAPLET - IFARS",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "OOT",
+    "kategoriWarehouse": "OOT"
+  },
+  {
+    "kodeAccurate": "9967",
+    "kodeOracle": "9967",
+    "namaBarang": "MIXAGRIP FLU DAN BATUK 25 STRIP @ 4 KAPLET - KALBE",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "OOT",
+    "kategoriWarehouse": "OOT"
+  },
+  {
+    "kodeAccurate": "18682",
+    "kodeOracle": "18682",
+    "namaBarang": "PANADOL FLU & BATUK 10 BLISTER @ 10 KAPLET - STERLING",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "OOT",
+    "kategoriWarehouse": "OOT"
+  },
+  {
+    "kodeAccurate": "48318",
+    "kodeOracle": "24500",
+    "namaBarang": "PROMEDEX 10 STRIP @ 10 TABLET - INTERBAT",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "OOT",
+    "kategoriWarehouse": "OOT"
+  },
+  {
+    "kodeAccurate": "26589",
+    "kodeOracle": "26589",
+    "namaBarang": "SILADEX ANTITUSSIVE SIRUP 100 ML - KONIMEX",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "OOT",
+    "kategoriWarehouse": "OOT"
+  },
+  {
+    "kodeAccurate": "25245",
+    "kodeOracle": "25245",
+    "namaBarang": "SILADEX ANTITUSSIVE SIRUP 60 ML - KONIMEX",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "OOT",
+    "kategoriWarehouse": "OOT"
+  },
+  {
+    "kodeAccurate": "25244",
+    "kodeOracle": "25244",
+    "namaBarang": "SILADEX DMP SIRUP 60 ML - KONIMEX",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "OOT",
+    "kategoriWarehouse": "OOT"
+  },
+  {
+    "kodeAccurate": "7842",
+    "kodeOracle": "7842",
+    "namaBarang": "VICKS FORMULA 44 ANAK SIRUP 27 ML - PROCTER & GAMBLE (P&G)",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "OOT",
+    "kategoriWarehouse": "OOT"
+  },
+  {
+    "kodeAccurate": "9593",
+    "kodeOracle": "9593",
+    "namaBarang": "VICKS FORMULA 44 ANAK SIRUP 54 ML - PROCTER & GAMBLE (P&G)",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "OOT",
+    "kategoriWarehouse": "OOT"
+  },
+  {
+    "kodeAccurate": "9596",
+    "kodeOracle": "9596",
+    "namaBarang": "VICKS FORMULA 44 SIRUP 100 ML - PROCTER & GAMBLE (P&G)",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "OOT",
+    "kategoriWarehouse": "OOT"
+  },
+  {
+    "kodeAccurate": "9595",
+    "kodeOracle": "9595",
+    "namaBarang": "VICKS FORMULA 44 SIRUP 54 ML - PROCTER & GAMBLE (P&G)",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "OOT",
+    "kategoriWarehouse": "OOT"
+  },
+  {
+    "kodeAccurate": "8931",
+    "kodeOracle": "8931",
+    "namaBarang": "LAPISIV-T 10 AMPLOP @ 1 STRIP @ 10 TABLET - LAPI",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "OOT",
+    "kategoriWarehouse": "OOT"
+  },
+  {
+    "kodeAccurate": "1890",
+    "kodeOracle": "1890",
+    "namaBarang": "WOODS PEPPERMINT ANTITUSSIVE SIRUP 100 ML - KALBE FARMA",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "OOT",
+    "kategoriWarehouse": "OOT"
+  },
+  {
+    "kodeAccurate": "63511",
+    "kodeOracle": "63511",
+    "namaBarang": "OB COMBI ANTITUSSIVE RASA MENTHOL 60 ML - COMBIPHAR",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "OOT",
+    "kategoriWarehouse": "OOT"
+  },
+  {
+    "kodeAccurate": "9922",
+    "kodeOracle": "9922",
+    "namaBarang": "PROCOLD FLU DAN BATUK 24 BLISTER @ 6 KAPLET - KALBE FARMA",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "OOT",
+    "kategoriWarehouse": "OOT"
+  },
+  {
+    "kodeAccurate": "2002",
+    "kodeOracle": "2002",
+    "namaBarang": "PROMEDEX SIRUP 60 ML - INTERBAT",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "OOT",
+    "kategoriWarehouse": "OOT"
+  },
+  {
+    "kodeAccurate": "1906",
+    "kodeOracle": "1906",
+    "namaBarang": "WOODS PEPPERMINT ANTITUSSIVE SIRUP 60 ML - KALBE",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "OOT",
+    "kategoriWarehouse": "OOT"
+  },
+  {
+    "kodeAccurate": "8915",
+    "kodeOracle": "8915",
+    "namaBarang": "LODECON FORTE 10 STRIP @ 10 KAPLET - SOLAS LANGGENG",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "OOT",
+    "kategoriWarehouse": "OOT"
+  },
+  {
+    "kodeAccurate": "9718",
+    "kodeOracle": "9718",
+    "namaBarang": "KONIDIN 25 CATCH COVER @ 1 STRIP @ 4 TABLET - KONIMEX",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "OOT",
+    "kategoriWarehouse": "OOT"
+  },
+  {
+    "kodeAccurate": "8874",
+    "kodeOracle": "8874",
+    "namaBarang": "DECOLSIN 25 CATCH COVER @ 1 STRIP @ 4 KAPSUL - DARYA VARIA",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "2142",
+    "kodeOracle": "2142",
+    "namaBarang": "LAPIFED DM SIRUP 100 ML - LAPI",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "2140",
+    "kodeOracle": "2140",
+    "namaBarang": "LAPISIV SIRUP 100 ML - LAPI",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "5388",
+    "kodeOracle": "5388",
+    "namaBarang": "OBH COMBI ANAK BATUK PLUS FLU APEL 60 ML - COMBIPHAR",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "21465",
+    "kodeOracle": "21465",
+    "namaBarang": "TERA F 10 STRIP @ 10 KAPLET - RAMA EMERALD MULTI SUKSES",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "1752",
+    "kodeOracle": "1752",
+    "namaBarang": "ACTIFED PLUS COUGH SUPRESSANT SIRUP 60 ML (MERAH) - GLAXOSMITHKLINE INDONESIA",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "1754",
+    "kodeOracle": "1754",
+    "namaBarang": "ACTIFED PLUS EXPECTORANT SIRUP 60 ML (HIJAU) - GLAXOSMITHKLINE INDONESIA",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "6162",
+    "kodeOracle": "6162",
+    "namaBarang": "ACTIFED SIRUP 60 ML (KUNING) - GLAXOSMITHKLINE INDONESIA",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "1741",
+    "kodeOracle": "1741",
+    "namaBarang": "ALCO DROPS 15 ML - INTERBAT",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "1761NEW",
+    "kodeOracle": "1761",
+    "namaBarang": "ALCO FLU + BATUK SIRUP 100 ML - INTERBAT",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "1760NEW",
+    "kodeOracle": "1760",
+    "namaBarang": "ALCO FLU SIRUP 100 ML - INTERBAT",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "1761",
+    "kodeOracle": "",
+    "namaBarang": "ALCO PLUS DMP SIRUP 100 ML - INTERBAT",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "1760",
+    "kodeOracle": "",
+    "namaBarang": "ALCO PLUS SIRUP 100 ML - INTERBAT",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "3963",
+    "kodeOracle": "3963",
+    "namaBarang": "ALLERIN EXPECTORANT SIRUP 120 ML - DARYA VARIA",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "8872",
+    "kodeOracle": "8872",
+    "namaBarang": "ALPARA 15 CATCH COVER @ 1 STRIP @ 10 KAPLET - MOLEX AYUS",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "27208",
+    "kodeOracle": "27208",
+    "namaBarang": "ANADEX 10 AMPLOP @ 1 STRIP @ 10 KAPLET - INTERBAT",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "9243",
+    "kodeOracle": "9243",
+    "namaBarang": "ANAKONIDIN OBH SIRUP 60 ML - KONIMEX",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "17383",
+    "kodeOracle": "17383",
+    "namaBarang": "CALORTUSIN 10 STRIP @ 10 KAPLET - RAMA EMERALD MULTI SUKSES",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "20851",
+    "kodeOracle": "20851",
+    "namaBarang": "COPARCETIN 10 AMPLOP @ 10 TABLET - SAMPHARINDO PERDANA",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "10794",
+    "kodeOracle": "10794",
+    "namaBarang": "DEMACOLIN 10 AMPLOP @ 1 STRIP @ 10 TABLET - CORONET CROWN",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "36903",
+    "kodeOracle": "36903",
+    "namaBarang": "DICOM 30/2.5 MG 10 CATCH COVER @ 10 TABLET - NOVELL PHARMACEUTICAL LABORATORIES",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "4813",
+    "kodeOracle": "4813",
+    "namaBarang": "DISUDRIN-PED ORAL DROPS 10 ML - DARYA VARIA LABORATORIA",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "17440",
+    "kodeOracle": "17440",
+    "namaBarang": "FLUTOP C SIRUP 60 ML - IFARS",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "39546",
+    "kodeOracle": "39546",
+    "namaBarang": "FLUVIR 75 MG 1 STRIP @10 KAPSUL - HETERO",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": ""
+  },
+  {
+    "kodeAccurate": "3487",
+    "kodeOracle": "3487",
+    "namaBarang": "CROFED 10 CATCH COVER @ 1 STRIP @ 10 TABLET - CORONET CROWN",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "1771",
+    "kodeOracle": "1771",
+    "namaBarang": "DECOLGEN 25 CATCH COVER @1 STRIP @4 TABLET - DARYA VARIA",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "9572",
+    "kodeOracle": "9572",
+    "namaBarang": "INTUNAL F 25 CATCH COVER @ 1 STRIP @ 4 TABLET - MEPROFARM",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "9576",
+    "kodeOracle": "9576",
+    "namaBarang": "INTUNAL SIRUP 60 ML - MEPROFARM",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "36839",
+    "kodeOracle": "36839",
+    "namaBarang": "INTUNAL-F 10 CATCH COVER @ 1 STRIP @ 10 TABLET - MEPROFARM",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "9180",
+    "kodeOracle": "9180",
+    "namaBarang": "DECOLGEN FX 10 AMPLOP @ 1 BLISTER @ 10 KAPLET - DARYA VARIA",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "10793",
+    "kodeOracle": "10793",
+    "namaBarang": "DEMACOLIN SIRUP 60 ML - CORONET CROWN",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "7011",
+    "kodeOracle": "7011",
+    "namaBarang": "LACOLDIN 10 TABLET 10 AMPLOP @ 10 TABLET - LAPI LABORATORIES",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "64514",
+    "kodeOracle": "64514",
+    "namaBarang": "LANOS DROPS 15 ML - LAPI LABORATORIES",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "64513",
+    "kodeOracle": "64513",
+    "namaBarang": "LANOS PLUS SIRUP 60 ML - LAPI LABORATORIES",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "17622",
+    "kodeOracle": "17622",
+    "namaBarang": "DEXTRAL 15 CATCH COVER @ 1 STRIP @ 10 KAPLET SALUT SELAPUT - MOLEX AYUS",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "2143",
+    "kodeOracle": "2143",
+    "namaBarang": "LAPIFED EXPECTORANT SIRUP 60 ML - LAPI LABORATORIES",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "2121",
+    "kodeOracle": "2121",
+    "namaBarang": "MOLEXFLU 15 STRIP @ 10 KAPLET - MOLEX AYUS PHARMACEUTICAL",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "6994",
+    "kodeOracle": "6994",
+    "namaBarang": "FLUCADEX 10 CATCH COVER @ 1 STRIP @ 10 KAPLET - GRAHA FARMA",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "8878",
+    "kodeOracle": "8878",
+    "namaBarang": "NEOZEP FORTE 25 CATCH COVER @ 1 STRIP @ 4 TABLET - DARYA VARIA LABORATORIA",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "5389",
+    "kodeOracle": "5389",
+    "namaBarang": "OBH COMBI ANAK BATUK PLUS FLU JERUK 60 ML - COMBIPHAR",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "5390",
+    "kodeOracle": "5390",
+    "namaBarang": "OBH COMBI ANAK BATUK PLUS FLU STRAWBERRY 60 ML - COMBIPHAR",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "5384",
+    "kodeOracle": "5384",
+    "namaBarang": "OBH COMBI PLUS BATUK FLU MENTHOL 100 ML - COMBIPHAR",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "8890",
+    "kodeOracle": "8890",
+    "namaBarang": "PANADOL COLD & FLU 10 STRIP @10 KAPLET - STERLING",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "2190",
+    "kodeOracle": "2190",
+    "namaBarang": "PARATUSIN 20 STRIP @ 10 TABLET - DARYA VARIA",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "1922",
+    "kodeOracle": "1922",
+    "namaBarang": "PARATUSIN SIRUP 60 ML - DARYA VARIA",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "84730",
+    "kodeOracle": "84730",
+    "namaBarang": "HUFAGRIPP BP BATUK BERDAHAK & PILEK ANAK SIRUP 60 ML - GRATIA HUSADA FARMA",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "9554",
+    "kodeOracle": "9554",
+    "namaBarang": "HUFAGRIPP BP BATUK KERING & PILEK ANAK SIRUP 60 ML - GRATIA HUSADA FARMA",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "9552",
+    "kodeOracle": "9552",
+    "namaBarang": "HUFAGRIPP FLU & BATUK SIRUP 60 ML - GRATIA HUSADA FARMA",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "9551",
+    "kodeOracle": "9551",
+    "namaBarang": "HUFAGRIPP PILEK SIRUP 60 ML - GRATIA HUSADA FARMA",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "83646",
+    "kodeOracle": "83646",
+    "namaBarang": "RHINOFED 30 MG/2.5 MG 5 AMPLOP 1 STRIP @ 10 TABLET - DEXA",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "15152",
+    "kodeOracle": "15152",
+    "namaBarang": "RHINOFED 60 MG 5 AMPLOP @ 1 STRIP @ 10 TABLET - DEXA",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "1825",
+    "kodeOracle": "1825",
+    "namaBarang": "RHINOFED SIRUP 60 ML - DEXA",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "1826",
+    "kodeOracle": "1826",
+    "namaBarang": "RHINOS JUNIOR SIRUP 60 ML - DEXA MEDICA",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "1827",
+    "kodeOracle": "1827",
+    "namaBarang": "RHINOS NEO DROPS 10 ML - DEXA MEDICA",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "15154",
+    "kodeOracle": "15154",
+    "namaBarang": "RHINOS SR 5 BLISTER @ 10 KAPSUL - DEXA MEDICA",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "18864",
+    "kodeOracle": "18864",
+    "namaBarang": "RYVEL PLUS 3 BLISTER @ 10 TABLET PELEPASAN LAMBAT - NOVELL PHARMACEUTICAL LABORATORIES",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "59504",
+    "kodeOracle": "",
+    "namaBarang": "NON AKTIF' SILADEX FLU 60 ML - KONIMEX PHARMACEUTICAL",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "1959",
+    "kodeOracle": "1959",
+    "namaBarang": "TELFAST PLUS 10 BLISTER @ 10 TABLET PELEPASAN LAMBAT - KALVENTIS SINERGI FARMA",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "1838",
+    "kodeOracle": "1838",
+    "namaBarang": "TRIAMINIC BATUK PILEK 60 ML - GLAXOSMITHKLINE INDONESIA",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "1839",
+    "kodeOracle": "1839",
+    "namaBarang": "TRIAMINIC EKSPEKTORAN & PILEK SIRUP 60 ML - STERLING",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "1928",
+    "kodeOracle": "1928",
+    "namaBarang": "TRIFED 5 STRIP @ 10 TABLET -INTERBAT",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "2273",
+    "kodeOracle": "2273",
+    "namaBarang": "LAPIFED 10 STRIP @ 10 TABLET - LAPI",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "9196",
+    "kodeOracle": "9196",
+    "namaBarang": "TRIFEDRIN 3 CATCH COVER @ 1 STRIP @ 10 TABLET - OTTO",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "1931",
+    "kodeOracle": "1931",
+    "namaBarang": "TRIFEDRIN SIRUP 60 ML - OTTO",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "25775",
+    "kodeOracle": "25775",
+    "namaBarang": "LAPIFED SIRUP 60 ML - LAPI",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "8876",
+    "kodeOracle": "8876",
+    "namaBarang": "NALGESTAN 25 STRIP @ 4 TABLET - DARYA VARIA",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "24494",
+    "kodeOracle": "24494",
+    "namaBarang": "OBH COMBI ANAK BATUK PLUS FLU MADU 60 ML - COMBIPHAR",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "11527",
+    "kodeOracle": "11527",
+    "namaBarang": "OBH COMBI BATUK PLUS FLU JAHE 100 ML - COMBIPHAR",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "23305",
+    "kodeOracle": "23305",
+    "namaBarang": "OBH COMBI PLUS BATUK FLU MADU SIRUP 100 ML - COMBIPHAR",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "5387",
+    "kodeOracle": "5387",
+    "namaBarang": "OBH COMBI PLUS BATUK FLU MENTHOL 60 ML - COMBIPHAR",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "24519",
+    "kodeOracle": "24519",
+    "namaBarang": "SILADEX COUGH & COLD 100 ML - KONIMEX",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "59504CF",
+    "kodeOracle": "59504",
+    "namaBarang": "SILADEX COUGH & FLU 60 ML - KONIMEX PHARMACEUTICAL",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "1962",
+    "kodeOracle": "1962",
+    "namaBarang": "STOP COLD 15 CATCH COVER @ 1 STRIP @ 4 TABLET - DARYA VARIA",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "1932",
+    "kodeOracle": "1932",
+    "namaBarang": "TRIFED SIRUP 60 ML - INTERBAT",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "9575",
+    "kodeOracle": "9575",
+    "namaBarang": "INTUNAL 25 CATCH COVER @ 1 STRIP @ 4 KAPLET - MEPROFARM",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "87179",
+    "kodeOracle": "87179",
+    "namaBarang": "ACTIFED PLUS COUGH SUPRESSANT SIRUP 25 ML (MERAH) - GLAXOSMITHKLINE INDONESIA",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "87363",
+    "kodeOracle": "87363",
+    "namaBarang": "ACTIFED PLUS EXPECTORANT SIRUP 25 ML (HIJAU) - GLAXOSMITHKLINE INDONESIA",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "1806",
+    "kodeOracle": "1806",
+    "namaBarang": "DECOLSIN SIRUP 60 ML - DARYA VARIA",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "11601",
+    "kodeOracle": "11601",
+    "namaBarang": "PIM-TRA-KOL SIRUP CHERRY 60 ML - PIM PHARMACEUTICALA",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "20612",
+    "kodeOracle": "20612",
+    "namaBarang": "FLUTROP 10 STRIP @ 10 TABLET - TROPICA MAS PHARMACEUTICAL",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "11499",
+    "kodeOracle": "11499",
+    "namaBarang": "NOZA 25 CATCH COVER @ 1 STRIP @ 4 KAPLET - PHAPROS",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "1883",
+    "kodeOracle": "1883",
+    "namaBarang": "TRIAMINIC PILEK SIRUP 60 ML - STERLING",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": ""
+  },
+  {
+    "kodeAccurate": "9579",
+    "kodeOracle": "9579",
+    "namaBarang": "INZA 25 CATCH COVER @ 1 STRIP @ 4 KAPLET - KONIMEX",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "74801",
+    "kodeOracle": "74801",
+    "namaBarang": "COMTUSI PILEK & ALERGI SIRUP 60 ML - COMBIPHAR",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "17334",
+    "kodeOracle": "",
+    "namaBarang": "EFLIN 10 STRIP @ 10 TABLET - MEPROFARM",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "6010",
+    "kodeOracle": "6010",
+    "namaBarang": "ERICAF 10 STRIP @ 10 TABLET - TEMPO SCAN PACIFIC",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "2146",
+    "kodeOracle": "2146",
+    "namaBarang": "LACOLDIN SIRUP 60 ML - LAPI LABORATORIES",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "9242",
+    "kodeOracle": "9242",
+    "namaBarang": "ANAKONIDIN SIRUP 60 ML - KONIMEX",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "5385",
+    "kodeOracle": "5385",
+    "namaBarang": "OBH COMBI BATUK PLUS FLU JAHE 60 ML - COMBIPHAR",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "1762",
+    "kodeOracle": "1762",
+    "namaBarang": "ALPARA SIRUP 60 ML - MOLEX AYUS",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "24520",
+    "kodeOracle": "24520",
+    "namaBarang": "SILADEX COUGH & COLD 30 ML - KONIMEX",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "88395",
+    "kodeOracle": "88395",
+    "namaBarang": "PARATUSIN DMP 10 TABLET 20 AMPLOP @ 1 STRIP @ 10 TABLET - DARYA VARIA",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "17334BX",
+    "kodeOracle": "17334",
+    "namaBarang": "EFLIN 10 STRIP @ 10 TABLET - MEPROFARM",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "18089",
+    "kodeOracle": "18089",
+    "namaBarang": "SILADEX COUGH & COLD 60 ML - KONIMEX",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "1784",
+    "kodeOracle": "1784",
+    "namaBarang": "DECOLGEN KIDS FLU SIRUP 60 ML - DARYA VARIA",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "",
+    "kodeOracle": "",
+    "namaBarang": "DEXTRAL SIRUP 100 ML - MOLEX AYUS",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  },
+  {
+    "kodeAccurate": "",
+    "kodeOracle": "",
+    "namaBarang": "PIM-TRA-KOL SIRUP RASA LEMON 60 ML - PIM PHARMACEUTICALS",
+    "kategoriFarmaAlkes": "Farma",
+    "klasifikasi": "Prekursor",
+    "kategoriWarehouse": "Prekursor"
+  }
+]

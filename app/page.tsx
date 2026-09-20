@@ -2,13 +2,14 @@
 
 import { useState, useMemo, useEffect, useCallback, useRef, Fragment } from "react";
 import * as XLSX from "xlsx";
-import { parseExcelFile, categorize, isOraCustomer, getProductCategory } from "@/lib/parser";
+import { parseExcelFile, categorize, isOraCustomer, getProductCategory, getPrekursorOOTClassification } from "@/lib/parser";
 import { FakturRecord } from "@/lib/types";
 import { supabase } from "@/lib/supabaseClient";
 
 type Filter = "all" | "belum" | "sudah" | "double";
 type KatFilter = "all" | "1P" | "2P" | "3P";
 type JenisFilter = "all" | "ORA" | "DOO";
+type KlasFilter = "all" | "prekursor" | "oot";
 
 const ROWS_PER_PAGE = 50;
 
@@ -77,6 +78,8 @@ type FakturGroup = {
   kategori: "1P" | "2P" | "3P";
   kategoriProdukList: string[];
   kategoriProduk: string;
+  hasPrekursor: boolean;
+  hasOOT: boolean;
   isDoubleInv: boolean;
   totalHarga: number;
   totalItems: number;
@@ -155,6 +158,7 @@ function dbRowsToFakturRecords(rows: Array<Record<string, unknown>>): {
         const itemCode = String(it.item_code || "");
         const itemDesc = String(it.item_description || "");
         const katProd = (it.kategori_produk as string) || getProductCategory(itemCode, itemDesc) || undefined;
+        const klasObat = (it.klasifikasi_obat as "Prekursor" | "OOT") || getPrekursorOOTClassification(itemDesc) || undefined;
 
         records.push({
           orderDate: date,
@@ -171,6 +175,7 @@ function dbRowsToFakturRecords(rows: Array<Record<string, unknown>>): {
           totalHarga: typeof it.total_harga === "number" ? it.total_harga : parseFloat(String(it.total_harga || 0)) || 0,
           kategori,
           kategoriProduk: katProd,
+          klasifikasiObat: klasObat,
           isDoubleInv: false,
           rowIndex: idx,
         });
@@ -217,6 +222,7 @@ export default function Home() {
   const [filter, setFilter] = useState<Filter>("belum");
   const [katFilter, setKatFilter] = useState<KatFilter>("all");
   const [jenisFilter, setJenisFilter] = useState<JenisFilter>("all");
+  const [klasFilter, setKlasFilter] = useState<KlasFilter>("all");
   const [sortBy, setSortBy] = useState<"invoice" | "date" | "totalHarga">("invoice");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [dateFilter, setDateFilter] = useState<string>("all");
@@ -1158,13 +1164,24 @@ export default function Home() {
         const pAt = printedAtMap[invKey] || null;
         const isPrinted = printedInvoices.has(invKey);
 
-        const prodCats = Array.from(
-          new Set(
-            items
-              .map((i) => i.kategoriProduk || getProductCategory(i.itemCode, i.itemDescription))
-              .filter(Boolean)
-          )
-        ) as string[];
+        const prodCatsSet = new Set<string>();
+        let hasPrekursor = false;
+        let hasOOT = false;
+
+        items.forEach((i) => {
+          const klas = i.klasifikasiObat || getPrekursorOOTClassification(i.itemDescription);
+          if (klas === "Prekursor") {
+            hasPrekursor = true;
+            prodCatsSet.add("PREKURSOR");
+          } else if (klas === "OOT") {
+            hasOOT = true;
+            prodCatsSet.add("OOT");
+          } else if (i.kategoriProduk) {
+            prodCatsSet.add(i.kategoriProduk.toUpperCase());
+          }
+        });
+
+        const prodCats = Array.from(prodCatsSet);
 
         return {
           key,
@@ -1178,6 +1195,8 @@ export default function Home() {
           kategori: items[0].kategori,
           kategoriProdukList: prodCats,
           kategoriProduk: prodCats.join(", "),
+          hasPrekursor,
+          hasOOT,
           isDoubleInv: isDouble,
           totalHarga: items.reduce((sum, i) => sum + i.totalHarga, 0),
           totalItems: items.length,
@@ -1300,6 +1319,8 @@ export default function Home() {
 
       if (katFilter !== "all") tabMatches = tabMatches.filter((g) => g.kategori === katFilter);
       if (jenisFilter !== "all") tabMatches = tabMatches.filter((g) => g.jenisTransaksi === jenisFilter);
+      if (klasFilter === "prekursor") tabMatches = tabMatches.filter((g) => g.hasPrekursor);
+      if (klasFilter === "oot") tabMatches = tabMatches.filter((g) => g.hasOOT);
 
       // If matches exist in current tab, show them; otherwise fallback to allMatches so user is never misled
       return tabMatches.length > 0 ? tabMatches : allMatches;
@@ -1316,9 +1337,11 @@ export default function Home() {
     }
     if (katFilter !== "all") result = result.filter((g) => g.kategori === katFilter);
     if (jenisFilter !== "all") result = result.filter((g) => g.jenisTransaksi === jenisFilter);
+    if (klasFilter === "prekursor") result = result.filter((g) => g.hasPrekursor);
+    if (klasFilter === "oot") result = result.filter((g) => g.hasOOT);
 
     return result;
-  }, [grouped, filter, katFilter, jenisFilter, dateFilter, search, sessionPrintedKeys]);
+  }, [grouped, filter, katFilter, jenisFilter, klasFilter, dateFilter, search, sessionPrintedKeys]);
 
   const totalPages = Math.ceil(filtered.length / ROWS_PER_PAGE);
   const pageData = filtered.slice(page * ROWS_PER_PAGE, (page + 1) * ROWS_PER_PAGE);
@@ -1326,7 +1349,7 @@ export default function Home() {
   useEffect(() => {
     setPage(0);
     setSelectedRowIndex(0);
-  }, [filter, katFilter, jenisFilter, dateFilter, search, sortBy, sortOrder]);
+  }, [filter, katFilter, jenisFilter, klasFilter, dateFilter, search, sortBy, sortOrder]);
 
   // Clamp selection on page change
   useEffect(() => {
@@ -1952,6 +1975,13 @@ export default function Home() {
                 </div>
                 <div className="h-5 w-px bg-gray-200 mx-0.5 shrink-0" />
 
+                {/* Prekursor & OOT */}
+                <div className="flex gap-1 shrink-0">
+                  <FBtn active={klasFilter === "prekursor"} onClick={() => setKlasFilter((prev) => (prev === "prekursor" ? "all" : "prekursor"))} color="amber">💊 Prekursor</FBtn>
+                  <FBtn active={klasFilter === "oot"} onClick={() => setKlasFilter((prev) => (prev === "oot" ? "all" : "oot"))} color="purple">🧪 OOT</FBtn>
+                </div>
+                <div className="h-5 w-px bg-gray-200 mx-0.5 shrink-0" />
+
                 {/* Filter Tanggal */}
                 {availableDates.length > 0 && (
                   <div className="flex items-center shrink-0">
@@ -2402,23 +2432,25 @@ export default function Home() {
                                         <td className="px-2 py-1 font-mono text-gray-900 whitespace-nowrap">{item.invoiceNumber}</td>
                                         <td className="px-2 py-1 font-mono text-gray-600 whitespace-nowrap">{item.itemCode}</td>
                                         <td className="px-2 py-1 whitespace-nowrap">
-                                          {item.kategoriProduk ? (
-                                            <span
-                                              className={`inline-block px-1.5 py-0.2 rounded text-[10px] font-bold border ${
-                                                item.kategoriProduk === "PREKURSOR"
-                                                  ? "bg-amber-100 text-amber-900 border-amber-300"
-                                                  : item.kategoriProduk === "OOT"
-                                                  ? "bg-rose-100 text-rose-900 border-rose-300"
-                                                  : item.kategoriProduk === "ALKES"
-                                                  ? "bg-teal-100 text-teal-800 border-teal-300"
-                                                  : "bg-indigo-100 text-indigo-800 border-indigo-200"
-                                              }`}
-                                            >
-                                              {item.kategoriProduk}
-                                            </span>
-                                          ) : (
-                                            <span className="text-gray-300 text-xs">-</span>
-                                          )}
+                                          {(() => {
+                                            const itemKlas = (item.klasifikasiObat || getPrekursorOOTClassification(item.itemDescription) || item.kategoriProduk || "").toUpperCase();
+                                            if (!itemKlas) return <span className="text-gray-300 text-xs">-</span>;
+                                            return (
+                                              <span
+                                                className={`inline-block px-1.5 py-0.2 rounded text-[10px] font-bold border ${
+                                                  itemKlas === "PREKURSOR"
+                                                    ? "bg-amber-100 text-amber-900 border-amber-300"
+                                                    : itemKlas === "OOT"
+                                                    ? "bg-purple-100 text-purple-900 border-purple-300"
+                                                    : itemKlas === "ALKES"
+                                                    ? "bg-teal-100 text-teal-800 border-teal-300"
+                                                    : "bg-indigo-100 text-indigo-800 border-indigo-200"
+                                                }`}
+                                              >
+                                                {itemKlas}
+                                              </span>
+                                            );
+                                          })()}
                                         </td>
                                         <td className="px-2 py-1 text-gray-700">{item.itemDescription}</td>
                                         <td className="px-2 py-1 text-right text-gray-900">{item.qty}</td>
@@ -2571,7 +2603,7 @@ function Card({ label, value, color, small }: { label: string; value: string; co
 
 function FBtn({ active, onClick, children, color = "gray" }: {
   active: boolean; onClick: () => void; children: React.ReactNode;
-  color?: "gray" | "orange" | "red" | "blue" | "green" | "purple" | "emerald";
+  color?: "gray" | "orange" | "red" | "blue" | "green" | "purple" | "emerald" | "amber";
 }) {
   const colors: Record<string, string> = {
     gray: active ? "bg-gray-800 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200",
@@ -2581,9 +2613,10 @@ function FBtn({ active, onClick, children, color = "gray" }: {
     green: active ? "bg-green-600 text-white" : "bg-green-100 text-green-700 hover:bg-green-200",
     purple: active ? "bg-purple-600 text-white" : "bg-purple-100 text-purple-700 hover:bg-purple-200",
     emerald: active ? "bg-emerald-600 text-white" : "bg-emerald-100 text-emerald-700 hover:bg-emerald-200",
+    amber: active ? "bg-amber-600 text-white" : "bg-amber-100 text-amber-800 hover:bg-amber-200",
   };
   return (
-    <button onClick={onClick} className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${colors[color]}`}>
+    <button onClick={onClick} className={`px-2 py-1 text-[11px] font-semibold rounded-md transition-colors whitespace-nowrap shadow-2xs ${colors[color]}`}>
       {children}
     </button>
   );

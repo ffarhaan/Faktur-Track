@@ -13,6 +13,7 @@ export type FakturRecord = {
   totalHarga: number;
   kategori: "1P" | "2P" | "3P";
   kategoriProduk?: string;
+  klasifikasiObat?: "Prekursor" | "OOT" | null;
   isDoubleInv: boolean;
   rowIndex: number;
 };
