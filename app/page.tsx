@@ -2171,6 +2171,8 @@ export default function Home() {
                                       className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-bold tracking-wider border shadow-2xs ${
                                         cat === "PREKURSOR"
                                           ? "bg-amber-100 text-amber-900 border-amber-300"
+                                          : cat === "OOT"
+                                          ? "bg-rose-100 text-rose-900 border-rose-300"
                                           : cat === "ALKES"
                                           ? "bg-teal-100 text-teal-800 border-teal-300"
                                           : "bg-indigo-100 text-indigo-800 border-indigo-200"
@@ -2293,6 +2295,8 @@ export default function Home() {
                                             className={`inline-block px-1.5 py-0.2 rounded text-[10px] font-bold border ${
                                               cat === "PREKURSOR"
                                                 ? "bg-amber-100 text-amber-900 border-amber-300"
+                                                : cat === "OOT"
+                                                ? "bg-rose-100 text-rose-900 border-rose-300"
                                                 : cat === "ALKES"
                                                 ? "bg-teal-100 text-teal-800 border-teal-300"
                                                 : "bg-indigo-100 text-indigo-800 border-indigo-200"
@@ -2352,6 +2356,8 @@ export default function Home() {
                                               className={`inline-block px-1.5 py-0.2 rounded text-[10px] font-bold border ${
                                                 item.kategoriProduk === "PREKURSOR"
                                                   ? "bg-amber-100 text-amber-900 border-amber-300"
+                                                  : item.kategoriProduk === "OOT"
+                                                  ? "bg-rose-100 text-rose-900 border-rose-300"
                                                   : item.kategoriProduk === "ALKES"
                                                   ? "bg-teal-100 text-teal-800 border-teal-300"
                                                   : "bg-indigo-100 text-indigo-800 border-indigo-200"
