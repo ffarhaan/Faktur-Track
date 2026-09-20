@@ -158,7 +158,7 @@ function dbRowsToFakturRecords(rows: Array<Record<string, unknown>>): {
         const itemCode = String(it.item_code || "");
         const itemDesc = String(it.item_description || "");
         const katProd = (it.kategori_produk as string) || getProductCategory(itemCode, itemDesc) || undefined;
-        const klasObat = (it.klasifikasi_obat as "Prekursor" | "OOT") || getPrekursorOOTClassification(itemDesc) || undefined;
+        const klasObat = getPrekursorOOTClassification(itemDesc) || (it.klasifikasi_obat as "Prekursor" | "OOT") || undefined;
 
         records.push({
           orderDate: date,
@@ -1169,15 +1169,13 @@ export default function Home() {
         let hasOOT = false;
 
         items.forEach((i) => {
-          const klas = i.klasifikasiObat || getPrekursorOOTClassification(i.itemDescription);
+          const klas = getPrekursorOOTClassification(i.itemDescription) || i.klasifikasiObat;
           if (klas === "Prekursor") {
             hasPrekursor = true;
             prodCatsSet.add("PREKURSOR");
           } else if (klas === "OOT") {
             hasOOT = true;
             prodCatsSet.add("OOT");
-          } else if (i.kategoriProduk) {
-            prodCatsSet.add(i.kategoriProduk.toUpperCase());
           }
         });
 
@@ -1296,12 +1294,12 @@ export default function Home() {
           g.so.toLowerCase().includes(s) ||
           g.invoiceNumber.toLowerCase().includes(s) ||
           g.customerName.toLowerCase().includes(s) ||
-          (g.kategoriProduk && g.kategoriProduk.toLowerCase().includes(s)) ||
+          g.kategoriProdukList.some((k) => k.toLowerCase().includes(s)) ||
           g.items.some(
             (i) =>
               i.itemDescription.toLowerCase().includes(s) ||
               i.itemCode.toLowerCase().includes(s) ||
-              (i.kategoriProduk && i.kategoriProduk.toLowerCase().includes(s))
+              (i.klasifikasiObat && i.klasifikasiObat.toLowerCase().includes(s))
           )
       );
 
@@ -2099,7 +2097,7 @@ export default function Home() {
                       <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 whitespace-nowrap">Print</th>
                       <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 whitespace-nowrap">No SO</th>
                       <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 whitespace-nowrap">No Invoice</th>
-                      <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 whitespace-nowrap">Kat Produk</th>
+                      <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 whitespace-nowrap">Klasifikasi</th>
                       <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 whitespace-nowrap">Jenis Transaksi</th>
                       <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 whitespace-nowrap">Pelanggan</th>
                       <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 whitespace-nowrap">Order Date</th>
@@ -2235,7 +2233,7 @@ export default function Home() {
                               )}
                             </td>
 
-                            {/* Col 4: Kat Produk */}
+                            {/* Col 4: Klasifikasi */}
                             <td
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -2252,11 +2250,7 @@ export default function Home() {
                                       className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-bold tracking-wider border shadow-2xs ${
                                         cat === "PREKURSOR"
                                           ? "bg-amber-100 text-amber-900 border-amber-300"
-                                          : cat === "OOT"
-                                          ? "bg-rose-100 text-rose-900 border-rose-300"
-                                          : cat === "ALKES"
-                                          ? "bg-teal-100 text-teal-800 border-teal-300"
-                                          : "bg-indigo-100 text-indigo-800 border-indigo-200"
+                                          : "bg-purple-100 text-purple-900 border-purple-300"
                                       }`}
                                     >
                                       {cat}
@@ -2369,18 +2363,14 @@ export default function Home() {
                                     <span className="font-semibold text-gray-900">Invoice: <span className="font-mono text-blue-700 font-bold">{g.invoiceNumber}</span></span> · SO: <span className="font-semibold text-gray-900">{g.so}</span> {g.totalHarga < 0 && <span className="text-[10px] font-semibold text-rose-700 bg-rose-100 border border-rose-200 px-1.5 py-0.2 rounded">Memo Retur</span>} · Pelanggan: <span className="font-semibold text-gray-900">{g.customerName}</span>
                                     {g.kategoriProdukList && g.kategoriProdukList.length > 0 && (
                                       <span className="ml-2 inline-flex items-center gap-1">
-                                        <span className="font-medium text-gray-500">Kat Produk:</span>
+                                        <span className="font-medium text-gray-500">Klasifikasi:</span>
                                         {g.kategoriProdukList.map((cat) => (
                                           <span
                                             key={cat}
                                             className={`inline-block px-1.5 py-0.2 rounded text-[10px] font-bold border ${
                                               cat === "PREKURSOR"
                                                 ? "bg-amber-100 text-amber-900 border-amber-300"
-                                                : cat === "OOT"
-                                                ? "bg-rose-100 text-rose-900 border-rose-300"
-                                                : cat === "ALKES"
-                                                ? "bg-teal-100 text-teal-800 border-teal-300"
-                                                : "bg-indigo-100 text-indigo-800 border-indigo-200"
+                                                : "bg-purple-100 text-purple-900 border-purple-300"
                                             }`}
                                           >
                                             {cat}
@@ -2418,7 +2408,7 @@ export default function Home() {
                                     <tr className="border-b border-gray-200">
                                       <th className="px-2 py-1 text-left font-medium text-gray-500">No Invoice</th>
                                       <th className="px-2 py-1 text-left font-medium text-gray-500">Item Code</th>
-                                      <th className="px-2 py-1 text-left font-medium text-gray-500">Kat Produk</th>
+                                      <th className="px-2 py-1 text-left font-medium text-gray-500">Klasifikasi</th>
                                       <th className="px-2 py-1 text-left font-medium text-gray-500">Item Description</th>
                                       <th className="px-2 py-1 text-right font-medium text-gray-500">Qty</th>
                                       <th className="px-2 py-1 text-left font-medium text-gray-500">UOM</th>
@@ -2433,18 +2423,14 @@ export default function Home() {
                                         <td className="px-2 py-1 font-mono text-gray-600 whitespace-nowrap">{item.itemCode}</td>
                                         <td className="px-2 py-1 whitespace-nowrap">
                                           {(() => {
-                                            const itemKlas = (item.klasifikasiObat || getPrekursorOOTClassification(item.itemDescription) || item.kategoriProduk || "").toUpperCase();
+                                            const itemKlas = (getPrekursorOOTClassification(item.itemDescription) || item.klasifikasiObat || "").toUpperCase();
                                             if (!itemKlas) return <span className="text-gray-300 text-xs">-</span>;
                                             return (
                                               <span
                                                 className={`inline-block px-1.5 py-0.2 rounded text-[10px] font-bold border ${
                                                   itemKlas === "PREKURSOR"
                                                     ? "bg-amber-100 text-amber-900 border-amber-300"
-                                                    : itemKlas === "OOT"
-                                                    ? "bg-purple-100 text-purple-900 border-purple-300"
-                                                    : itemKlas === "ALKES"
-                                                    ? "bg-teal-100 text-teal-800 border-teal-300"
-                                                    : "bg-indigo-100 text-indigo-800 border-indigo-200"
+                                                    : "bg-purple-100 text-purple-900 border-purple-300"
                                                 }`}
                                               >
                                                 {itemKlas}

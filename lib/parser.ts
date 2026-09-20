@@ -5,57 +5,71 @@ import master2P from "./master2P.json";
 import masterProduct from "./masterProduct.json";
 import masterPrekursorOOT from "./masterPrekursorOOT.json";
 
-interface PrekursorOOTItem {
-  kodeAccurate: string;
-  kodeOracle: string;
-  namaBarang: string;
-  kategoriFarmaAlkes: string;
-  klasifikasi: string;
-  kategoriWarehouse: string;
-}
-
-const prekursorOOTList = (masterPrekursorOOT as PrekursorOOTItem[]).map((m) => ({
-  norm: normalize(m.namaBarang),
-  raw: m.namaBarang.toUpperCase(),
-  klasifikasi: m.klasifikasi as "Prekursor" | "OOT",
-}));
-
 export function getPrekursorOOTClassification(itemDescription?: string): "Prekursor" | "OOT" | null {
-  if (!itemDescription || itemDescription === "-") return null;
-  const upper = String(itemDescription).toUpperCase().replace(/\s+/g, " ");
-  const norm = normalize(itemDescription);
+  if (!itemDescription || itemDescription === "-" || itemDescription === "Data DOO") return null;
+  const s = " " + String(itemDescription).toUpperCase().replace(/[\t\r\n\s]+/g, " ") + " ";
 
-  // 1. Direct master match against all 118 items from masterPrekursorOOT
-  for (const m of prekursorOOTList) {
-    if (norm.includes(m.norm) || m.norm.includes(norm)) {
-      return m.klasifikasi;
-    }
-  }
+  // 1. OOT Matchers (Check OOT first to handle overlapping brands like Lapisiv-T, Panadol Flu & Batuk, Siladex Antitussive/DMP)
+  if (/\bLAPISIV[- ]?T\b/.test(s)) return "OOT";
+  if (/\bSILADEX\s+(ANTITUSSIVE|DMP)\b/.test(s)) return "OOT";
+  if (/\bPANADOL\s+(FLU\s*(&|\+|DAN)\s*BATUK|BATUK\s*(&|\+|DAN)\s*FLU)\b/.test(s)) return "OOT";
+  if (/\bWOODS(\s+PEPPERMINT)?\s+ANTITUSSIVE\b/.test(s)) return "OOT";
+  if (/\bOB[H]?\s+COMBI\s+ANTITUSSIVE\b/.test(s)) return "OOT";
+  if (/\b(GRANTUSIF|IFARSYL|PROMEDEX|LODECON\s+FORTE)\b/.test(s)) return "OOT";
+  if (/\bBODREX\s+FLU\s+(DAN|&|\+)\s*BATUK\b/.test(s)) return "OOT";
+  if (/\bMIXAGRIP\s+FLU\s+(DAN|&|\+)\s*BATUK\b/.test(s)) return "OOT";
+  if (/\bPROCOLD\s+FLU(\s+(DAN|&|\+)\s*BATUK)?\b/.test(s)) return "OOT";
+  if (/\bVICKS\s+FORMULA\s+44\b/.test(s) || /\bFORMULA\s+44\b/.test(s)) return "OOT";
+  if (/\bKONIDIN\b/.test(s) && !/\bANAKONIDIN\b/.test(s)) return "OOT";
 
-  // 2. Specific rule-based matcher for precision on variations in item descriptions
-  // OOT specific checks
-  if (upper.includes("LAPISIV-T") || upper.includes("LAPISIV T")) return "OOT";
-  if (upper.includes("SILADEX ANTITUSSIVE") || upper.includes("SILADEX DMP")) return "OOT";
-  if (upper.includes("PANADOL FLU") || (upper.includes("PANADOL") && upper.includes("BATUK") && !upper.includes("COLD"))) return "OOT";
-  if (upper.includes("WOODS") && upper.includes("ANTITUSSIVE")) return "OOT";
-  if (upper.includes("OB COMBI ANTITUSSIVE") || upper.includes("OBH COMBI ANTITUSSIVE")) return "OOT";
-  if (upper.includes("PROMEDEX") || upper.includes("GRANTUSIF") || upper.includes("IFARSYL") || upper.includes("LODECON FORTE")) return "OOT";
-  if (upper.includes("MIXAGRIP FLU") || upper.includes("PROCOLD FLU") || upper.includes("BODREX FLU") || upper.includes("VICKS FORMULA 44") || upper.includes("KONIDIN")) return "OOT";
-
-  // Prekursor specific checks
-  if (upper.includes("ACTIFED") || upper.includes("ALCO") || upper.includes("ALLERIN") || upper.includes("ALPARA")) return "Prekursor";
-  if (upper.includes("ANADEX") || upper.includes("ANAKONIDIN") || upper.includes("CALORTUSIN") || upper.includes("COPARCETIN")) return "Prekursor";
-  if (upper.includes("DEMACOLIN") || upper.includes("DICOM") || upper.includes("DISUDRIN") || upper.includes("FLUTOP") || upper.includes("FLUVIR")) return "Prekursor";
-  if (upper.includes("CROFED") || upper.includes("DECOLGEN") || upper.includes("DECOLSIN") || upper.includes("INTUNAL") || upper.includes("LACOLDIN")) return "Prekursor";
-  if (upper.includes("LANOS") || upper.includes("DEXTRAL") || upper.includes("LAPIFED") || upper.includes("LAPISIV")) return "Prekursor";
-  if (upper.includes("MOLEXFLU") || upper.includes("FLUCADEX") || upper.includes("NEOZEP") || upper.includes("PARATUSIN")) return "Prekursor";
-  if (upper.includes("HUFAGRIPP") || upper.includes("RHINOFED") || upper.includes("RHINOS") || upper.includes("RYVEL PLUS") || upper.includes("TELFAST PLUS")) return "Prekursor";
-  if (upper.includes("TRIAMINIC") || upper.includes("TRIFED") || upper.includes("TRIFEDRIN") || upper.includes("NALGESTAN") || upper.includes("STOP COLD")) return "Prekursor";
-  if (upper.includes("PIM-TRA-KOL") || upper.includes("PIMTRAKOL") || upper.includes("FLUTROP") || upper.includes("NOZA") || upper.includes("INZA")) return "Prekursor";
-  if (upper.includes("COMTUSI") || upper.includes("EFLIN") || upper.includes("ERICAF") || upper.includes("TERA F") || upper.includes("TERA-F")) return "Prekursor";
-  if (upper.includes("PANADOL COLD")) return "Prekursor";
-  if (upper.includes("SILADEX COUGH") || upper.includes("SILADEX FLU")) return "Prekursor";
-  if (upper.includes("OBH COMBI") && (upper.includes("BATUK") || upper.includes("FLU"))) return "Prekursor";
+  // 2. Prekursor Matchers (Exact Brand checks with word boundaries & exclusions)
+  if (/\bACTIFED\b/.test(s)) return "Prekursor";
+  if (/\bALCO\b(?!\s*(HOL|KOHOL|N\b))/.test(s) && !/\bVALCOR\b/.test(s) && !/\bALCON\b/.test(s)) return "Prekursor";
+  if (/\bALLERIN\b/.test(s)) return "Prekursor";
+  if (/\bALPARA\b/.test(s)) return "Prekursor";
+  if (/\bANADEX\b/.test(s) && !/\bLANADEXON\b/.test(s)) return "Prekursor";
+  if (/\bANAKONIDIN\b/.test(s)) return "Prekursor";
+  if (/\bCALORTUSIN\b/.test(s)) return "Prekursor";
+  if (/\bCOPARCETIN\b/.test(s)) return "Prekursor";
+  if (/\bDEMACOLIN\b/.test(s)) return "Prekursor";
+  if (/\bDICOM\b/.test(s)) return "Prekursor";
+  if (/\bDISUDRIN\b/.test(s)) return "Prekursor";
+  if (/\bFLUTOP\b/.test(s)) return "Prekursor";
+  if (/\bFLUVIR\b/.test(s)) return "Prekursor";
+  if (/\bCROFED\b/.test(s)) return "Prekursor";
+  if (/\bDECOLGEN\b/.test(s)) return "Prekursor";
+  if (/\bINTUNAL\b/.test(s)) return "Prekursor";
+  if (/\bLACOLDIN\b/.test(s)) return "Prekursor";
+  if (/\bLANOS\b/.test(s) && !/\bLANOXIN\b/.test(s)) return "Prekursor";
+  if (/\bDEXTRAL\b/.test(s) && !/\bDEXTROSE\b/.test(s)) return "Prekursor";
+  if (/\bLAPIFED\b/.test(s)) return "Prekursor";
+  if (/\bLAPISIV\b/.test(s) && !/\bLAPISIV[- ]?T\b/.test(s)) return "Prekursor";
+  if (/\bMOLEXFLU\b/.test(s)) return "Prekursor";
+  if (/\bFLUCADEX\b/.test(s)) return "Prekursor";
+  if (/\bNEOZEP\b/.test(s)) return "Prekursor";
+  if (/\bOBH\s+COMBI\b/.test(s) && /\b(BATUK\s*(PLUS|\&|\+)\s*FLU|BATUK\s*FLU|FLU)\b/.test(s)) return "Prekursor";
+  if (/\bPANADOL\b.*\bCOLD\b/.test(s)) return "Prekursor";
+  if (/\bPARATUSIN\b/.test(s)) return "Prekursor";
+  if (/\bHUFAGRIPP\b.*\b(BP|BATUK\s*BERDAHAK\s*&\s*PILEK|BATUK\s*KERING\s*&\s*PILEK|FLU|PILEK)\b/.test(s)) return "Prekursor";
+  if (/\bRHINOFED\b/.test(s)) return "Prekursor";
+  if (/\bRHINOS\b/.test(s)) return "Prekursor";
+  if (/\bRYVEL\s+PLUS\b/.test(s)) return "Prekursor";
+  if (/\bSILADEX\b.*\b(COUGH\s*(&|\+|AND)\s*(COLD|FLU)|FLU)\b/.test(s) && !/\bHERBAL\b/.test(s)) return "Prekursor";
+  if (/\bTELFAST\s+PLUS\b/.test(s)) return "Prekursor";
+  if (/\bTRIAMINIC\b/.test(s)) return "Prekursor";
+  if (/\bTRIFED\b/.test(s)) return "Prekursor";
+  if (/\bTRIFEDRIN\b/.test(s)) return "Prekursor";
+  if (/\bNALGESTAN\b/.test(s)) return "Prekursor";
+  if (/\bSTOP\s+COLD\b/.test(s)) return "Prekursor";
+  if (/\bDECOLSIN\b/.test(s)) return "Prekursor";
+  if (/\bPIM[- ]?TRA[- ]?KOL\b/.test(s)) return "Prekursor";
+  if (/\bFLUTROP\b/.test(s)) return "Prekursor";
+  if (/\bNOZA\b/.test(s)) return "Prekursor";
+  if (/\bINZA\b/.test(s)) return "Prekursor";
+  if (/\bCOMTUSI\b.*\b(PILEK|ALERGI)\b/.test(s)) return "Prekursor";
+  if (/\bEFLIN\b/.test(s)) return "Prekursor";
+  if (/\bERICAF\b/.test(s)) return "Prekursor";
+  if (/\bTERA[- ]?F\b/.test(s)) return "Prekursor";
 
   return null;
 }
