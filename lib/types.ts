@@ -12,6 +12,7 @@ export type FakturRecord = {
   lotNumber: string;
   totalHarga: number;
   kategori: "1P" | "2P" | "3P";
+  kategoriProduk?: string;
   isDoubleInv: boolean;
   rowIndex: number;
 };

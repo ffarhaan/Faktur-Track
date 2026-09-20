@@ -2,6 +2,7 @@ import * as XLSX from "xlsx";
 import { FakturRecord } from "./types";
 import masterApotek from "./masterApotek.json";
 import master2P from "./master2P.json";
+import masterProduct from "./masterProduct.json";
 
 const apotekMap = masterApotek as Record<string, string>;
 
@@ -26,6 +27,37 @@ master2P.forEach((item) => {
   if (item.namaApotekMBI) master2PNameSet.add(normalize(item.namaApotekMBI));
   if (item.namaMerchant) master2PNameSet.add(normalize(item.namaMerchant));
 });
+
+// Product Category lookup structures (FARMA / ALKES / PREKURSOR)
+const productCodeMap: Record<string, string> = {};
+const productNameMap: Record<string, string> = {};
+
+(masterProduct as Array<{ kodeBarang: string; namaBarang: string; kategori: string }>).forEach((p) => {
+  const cat = String(p.kategori || "").trim().toUpperCase();
+  if (p.kodeBarang) {
+    const cleanCode = String(p.kodeBarang).trim();
+    productCodeMap[cleanCode] = cat;
+    const numOnly = cleanCode.replace(/[^0-9]/g, "");
+    if (numOnly) productCodeMap[numOnly] = cat;
+  }
+  if (p.namaBarang) {
+    productNameMap[normalize(p.namaBarang)] = cat;
+  }
+});
+
+export function getProductCategory(itemCode?: string, itemDescription?: string): string | null {
+  if (itemCode) {
+    const cleanCode = String(itemCode).trim();
+    if (productCodeMap[cleanCode]) return productCodeMap[cleanCode];
+    const numOnly = cleanCode.replace(/[^0-9]/g, "");
+    if (numOnly && productCodeMap[numOnly]) return productCodeMap[numOnly];
+  }
+  if (itemDescription) {
+    const normDesc = normalize(itemDescription);
+    if (productNameMap[normDesc]) return productNameMap[normDesc];
+  }
+  return null;
+}
 
 /**
  * ATURAN BAKU KLASIFIKASI TRANSAKSI (LOCKED):
@@ -161,6 +193,10 @@ function parseXXCUST(data: unknown[][], headerIdx: number): FakturRecord[] {
     const kategori = categorize(jenisTransaksi, customerName, jenisTransaksi);
     const invoiceKey = isOra ? `${invoiceNumber}-1P` : invoiceNumber;
 
+    const itemCode = String(row[idx.itemCode] ?? "").trim();
+    const itemDescription = String(row[idx.itemDescription] ?? "").trim();
+    const kategoriProduk = getProductCategory(itemCode, itemDescription) || undefined;
+
     records.push({
       orderDate: String(row[idx.orderDate] ?? "").trim(),
       orderNumber,
@@ -168,13 +204,14 @@ function parseXXCUST(data: unknown[][], headerIdx: number): FakturRecord[] {
       invoiceKey,
       jenisTransaksi,
       customerName,
-      itemCode: String(row[idx.itemCode] ?? "").trim(),
-      itemDescription: String(row[idx.itemDescription] ?? "").trim(),
+      itemCode,
+      itemDescription,
       qty: (row[idx.qty] as number | string) ?? 0,
       uom: String(row[idx.uom] ?? "").trim(),
       lotNumber: String(row[idx.lotNumber] ?? "").trim(),
       totalHarga: Number(row[idx.totalHarga] ?? 0),
       kategori,
+      kategoriProduk,
       isDoubleInv: false,
       rowIndex: i,
     });

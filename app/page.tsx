@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect, useCallback, useRef, Fragment } from "react";
 import * as XLSX from "xlsx";
-import { parseExcelFile, categorize, isOraCustomer } from "@/lib/parser";
+import { parseExcelFile, categorize, isOraCustomer, getProductCategory } from "@/lib/parser";
 import { FakturRecord } from "@/lib/types";
 import { supabase } from "@/lib/supabaseClient";
 
@@ -75,6 +75,8 @@ type FakturGroup = {
   jenisTransaksi: string;
   customerName: string;
   kategori: "1P" | "2P" | "3P";
+  kategoriProdukList: string[];
+  kategoriProduk: string;
   isDoubleInv: boolean;
   totalHarga: number;
   totalItems: number;
@@ -150,6 +152,10 @@ function dbRowsToFakturRecords(rows: Array<Record<string, unknown>>): {
     if (items.length > 0) {
       for (let idx = 0; idx < items.length; idx++) {
         const it = items[idx];
+        const itemCode = String(it.item_code || "");
+        const itemDesc = String(it.item_description || "");
+        const katProd = (it.kategori_produk as string) || getProductCategory(itemCode, itemDesc) || undefined;
+
         records.push({
           orderDate: date,
           orderNumber: String(it.order_number || r.no_sales_order || cleanInv),
@@ -157,13 +163,14 @@ function dbRowsToFakturRecords(rows: Array<Record<string, unknown>>): {
           invoiceKey: invKey,
           jenisTransaksi: cleanJenis,
           customerName: cust,
-          itemCode: String(it.item_code || ""),
-          itemDescription: String(it.item_description || ""),
+          itemCode,
+          itemDescription: itemDesc,
           qty: (it.qty as number | string) || 0,
           uom: String(it.uom || ""),
           lotNumber: String(it.lot_number || ""),
           totalHarga: typeof it.total_harga === "number" ? it.total_harga : parseFloat(String(it.total_harga || 0)) || 0,
           kategori,
+          kategoriProduk: katProd,
           isDoubleInv: false,
           rowIndex: idx,
         });
@@ -774,9 +781,11 @@ export default function Home() {
               (existing._soSet as Set<string>).add(r.orderNumber);
             }
             const itList = (existing.extra as Record<string, unknown>).items as Array<Record<string, unknown>>;
+            const katProd = r.kategoriProduk || getProductCategory(r.itemCode, r.itemDescription) || null;
             itList.push({
               item_code: r.itemCode,
               item_description: r.itemDescription,
+              kategori_produk: katProd,
               qty: r.qty,
               uom: r.uom,
               lot_number: r.lotNumber,
@@ -786,9 +795,11 @@ export default function Home() {
           } else if (!existing._hasPreservedItems) {
             const itList = (existing.extra as Record<string, unknown>).items as Array<Record<string, unknown>>;
             if (itList.length === 0) {
+              const katProd = r.kategoriProduk || getProductCategory(r.itemCode, r.itemDescription) || null;
               itList.push({
                 item_code: r.itemCode,
                 item_description: r.itemDescription,
+                kategori_produk: katProd,
                 qty: r.qty,
                 uom: r.uom,
                 lot_number: r.lotNumber,
@@ -1147,6 +1158,14 @@ export default function Home() {
         const pAt = printedAtMap[invKey] || null;
         const isPrinted = printedInvoices.has(invKey);
 
+        const prodCats = Array.from(
+          new Set(
+            items
+              .map((i) => i.kategoriProduk || getProductCategory(i.itemCode, i.itemDescription))
+              .filter(Boolean)
+          )
+        ) as string[];
+
         return {
           key,
           invoiceNumber: invNum,
@@ -1157,6 +1176,8 @@ export default function Home() {
           jenisTransaksi: items[0].jenisTransaksi,
           customerName: items[0].customerName,
           kategori: items[0].kategori,
+          kategoriProdukList: prodCats,
+          kategoriProduk: prodCats.join(", "),
           isDoubleInv: isDouble,
           totalHarga: items.reduce((sum, i) => sum + i.totalHarga, 0),
           totalItems: items.length,
@@ -1256,10 +1277,12 @@ export default function Home() {
           g.so.toLowerCase().includes(s) ||
           g.invoiceNumber.toLowerCase().includes(s) ||
           g.customerName.toLowerCase().includes(s) ||
+          (g.kategoriProduk && g.kategoriProduk.toLowerCase().includes(s)) ||
           g.items.some(
             (i) =>
               i.itemDescription.toLowerCase().includes(s) ||
-              i.itemCode.toLowerCase().includes(s)
+              i.itemCode.toLowerCase().includes(s) ||
+              (i.kategoriProduk && i.kategoriProduk.toLowerCase().includes(s))
           )
       );
 
@@ -1356,7 +1379,7 @@ export default function Home() {
         });
       } else if (e.key === "ArrowRight") {
         e.preventDefault();
-        setSelectedColIdx((prev) => Math.min(9, prev + 1));
+        setSelectedColIdx((prev) => Math.min(10, prev + 1));
       } else if (e.key === "ArrowLeft") {
         e.preventDefault();
         setSelectedColIdx((prev) => Math.max(0, prev - 1));
@@ -1399,6 +1422,7 @@ export default function Home() {
                   currentGroup.allPrinted ? "✓" : "○",
                   currentGroup.so,
                   currentGroup.invoiceNumber,
+                  currentGroup.kategoriProduk || "-",
                   currentGroup.jenisTransaksi,
                   currentGroup.customerName,
                   currentGroup.orderDate,
@@ -1416,22 +1440,25 @@ export default function Home() {
               case 3: // No Invoice
                 textToCopy = currentGroup.invoiceNumber;
                 break;
-              case 4: // Jenis Transaksi
+              case 4: // Kategori Produk
+                textToCopy = currentGroup.kategoriProduk || "-";
+                break;
+              case 5: // Jenis Transaksi
                 textToCopy = currentGroup.jenisTransaksi;
                 break;
-              case 5: // Pelanggan
+              case 6: // Pelanggan
                 textToCopy = currentGroup.customerName;
                 break;
-              case 6: // Order Date
+              case 7: // Order Date
                 textToCopy = currentGroup.orderDate;
                 break;
-              case 7: // Kategori
+              case 8: // Kategori 1P/2P/3P
                 textToCopy = currentGroup.kategori;
                 break;
-              case 8: // Done Print
+              case 9: // Done Print
                 textToCopy = currentGroup.printedAt ? formatPrintTime(currentGroup.printedAt) : "-";
                 break;
-              case 9: // Total Harga
+              case 10: // Total Harga
                 textToCopy = String(currentGroup.totalHarga);
                 break;
               default:
@@ -1459,20 +1486,25 @@ export default function Home() {
     const belumTerprint = [...uniqueInvoices].filter(
       (key) => !printedInvoices.has(key)
     ).length;
+    const sudahTerprint = [...uniqueInvoices].filter((key) =>
+      printedInvoices.has(key)
+    ).length;
     const doubleInv = grouped.filter((g) => g.isDoubleInv).length;
-    const totalHarga = grouped.reduce((sum, g) => sum + g.totalHarga, 0);
+    const totalHarga = records.reduce((sum, r) => sum + r.totalHarga, 0);
+
     return {
-      totalSO: uniqueSO.size,
       totalInvoices: uniqueInvoices.size,
+      totalSO: uniqueSO.size,
       totalItems: records.length,
       belumTerprint,
+      sudahTerprint,
       doubleInv,
       totalHarga,
     };
   }, [records, printedInvoices, grouped]);
 
   const exportToExcel = useCallback(() => {
-    if (records.length === 0) {
+    if (grouped.length === 0) {
       alert("Tidak ada data untuk diekspor.");
       return;
     }
@@ -1495,12 +1527,13 @@ export default function Home() {
       return parseDateMs(a.orderDate) - parseDateMs(b.orderDate);
     });
 
-    // Format 1 Sheet: Rekap Faktur (No, Order Date, No SO, No Invoice, Pelanggan, Total Harga)
+    // Format 1 Sheet: Rekap Faktur (No, Order Date, No SO, No Invoice, Kategori Produk, Pelanggan, Total Harga)
     const rekapData = sorted.map((g, idx) => ({
       "No": idx + 1,
       "Order Date": g.orderDate || "-",
       "No SO": g.so || "-",
       "No Invoice": g.invoiceNumber,
+      "Kategori Produk": g.kategoriProduk || "-",
       "Pelanggan": g.customerName || "-",
       "Total Harga": g.totalHarga,
     }));
@@ -1513,6 +1546,7 @@ export default function Home() {
       { wch: 14 }, // Order Date
       { wch: 18 }, // No SO
       { wch: 16 }, // No Invoice
+      { wch: 20 }, // Kategori Produk
       { wch: 35 }, // Pelanggan
       { wch: 18 }, // Total Harga
     ];
@@ -1984,6 +2018,7 @@ export default function Home() {
                       <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 whitespace-nowrap">Print</th>
                       <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 whitespace-nowrap">No SO</th>
                       <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 whitespace-nowrap">No Invoice</th>
+                      <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 whitespace-nowrap">Kat Produk</th>
                       <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 whitespace-nowrap">Jenis Transaksi</th>
                       <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 whitespace-nowrap">Pelanggan</th>
                       <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 whitespace-nowrap">Order Date</th>
@@ -2119,7 +2154,7 @@ export default function Home() {
                               )}
                             </td>
 
-                            {/* Col 4: Jenis Transaksi */}
+                            {/* Col 4: Kat Produk */}
                             <td
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -2127,6 +2162,37 @@ export default function Home() {
                                 setSelectedColIdx(4);
                               }}
                               className={`px-2 py-2 whitespace-nowrap ${getCellCls(4)}`}
+                            >
+                              {g.kategoriProdukList && g.kategoriProdukList.length > 0 ? (
+                                <div className="flex flex-wrap gap-1 items-center">
+                                  {g.kategoriProdukList.map((cat) => (
+                                    <span
+                                      key={cat}
+                                      className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-bold tracking-wider border shadow-2xs ${
+                                        cat === "PREKURSOR"
+                                          ? "bg-amber-100 text-amber-900 border-amber-300"
+                                          : cat === "ALKES"
+                                          ? "bg-teal-100 text-teal-800 border-teal-300"
+                                          : "bg-indigo-100 text-indigo-800 border-indigo-200"
+                                      }`}
+                                    >
+                                      {cat}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : (
+                                <span className="text-gray-300 text-xs">-</span>
+                              )}
+                            </td>
+
+                            {/* Col 5: Jenis Transaksi */}
+                            <td
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedRowIndex(rowIdx);
+                                setSelectedColIdx(5);
+                              }}
+                              className={`px-2 py-2 whitespace-nowrap ${getCellCls(5)}`}
                             >
                               <span className={`inline-block px-2 py-0.5 rounded text-xs font-bold ${
                                 g.jenisTransaksi === "ORA"
@@ -2137,38 +2203,38 @@ export default function Home() {
                               </span>
                             </td>
 
-                            {/* Col 5: Pelanggan */}
-                            <td
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSelectedRowIndex(rowIdx);
-                                setSelectedColIdx(5);
-                              }}
-                              className={`px-2 py-2 text-gray-700 whitespace-nowrap max-w-xs truncate ${getCellCls(5)}`}
-                            >
-                              {g.customerName}
-                            </td>
-
-                            {/* Col 6: Order Date */}
+                            {/* Col 6: Pelanggan */}
                             <td
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setSelectedRowIndex(rowIdx);
                                 setSelectedColIdx(6);
                               }}
-                              className={`px-2 py-2 text-gray-600 whitespace-nowrap text-xs ${getCellCls(6)}`}
+                              className={`px-2 py-2 text-gray-700 whitespace-nowrap max-w-xs truncate ${getCellCls(6)}`}
                             >
-                              {g.orderDate}
+                              {g.customerName}
                             </td>
 
-                            {/* Col 7: Kategori */}
+                            {/* Col 7: Order Date */}
                             <td
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setSelectedRowIndex(rowIdx);
                                 setSelectedColIdx(7);
                               }}
-                              className={`px-2 py-2 ${getCellCls(7)}`}
+                              className={`px-2 py-2 text-gray-600 whitespace-nowrap text-xs ${getCellCls(7)}`}
+                            >
+                              {g.orderDate}
+                            </td>
+
+                            {/* Col 8: Kategori */}
+                            <td
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedRowIndex(rowIdx);
+                                setSelectedColIdx(8);
+                              }}
+                              className={`px-2 py-2 ${getCellCls(8)}`}
                             >
                               <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${
                                 g.kategori === "1P" ? "bg-blue-100 text-blue-700"
@@ -2179,14 +2245,14 @@ export default function Home() {
                               </span>
                             </td>
 
-                            {/* Col 8: Done Print Time */}
+                            {/* Col 9: Done Print Time */}
                             <td
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setSelectedRowIndex(rowIdx);
-                                setSelectedColIdx(8);
+                                setSelectedColIdx(9);
                               }}
-                              className={`px-2 py-2 whitespace-nowrap ${getCellCls(8)}`}
+                              className={`px-2 py-2 whitespace-nowrap ${getCellCls(9)}`}
                             >
                               {g.allPrinted && g.printedAt ? (
                                 <span className="inline-flex items-center gap-1 text-[11px] font-mono font-medium text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200" title={`Selesai diprint pada: ${formatPrintTime(g.printedAt)}`}>
@@ -2200,24 +2266,43 @@ export default function Home() {
                               )}
                             </td>
 
-                            {/* Col 9: Total Harga */}
+                            {/* Col 10: Total Harga */}
                             <td
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setSelectedRowIndex(rowIdx);
-                                setSelectedColIdx(9);
+                                setSelectedColIdx(10);
                               }}
-                              className={`px-2 py-2 text-right text-gray-900 whitespace-nowrap font-medium text-xs ${getCellCls(9)}`}
+                              className={`px-2 py-2 text-right text-gray-900 whitespace-nowrap font-medium text-xs ${getCellCls(10)}`}
                             >
                               {formatRupiah(g.totalHarga)}
                             </td>
                           </tr>
                           {expanded && (
                             <tr className="bg-gray-50">
-                              <td colSpan={10} className="px-4 py-3">
+                              <td colSpan={11} className="px-4 py-3">
                                 <div className="flex flex-wrap items-center justify-between pb-2 mb-2 border-b border-gray-200 gap-2">
                                   <div className="text-xs text-gray-600">
                                     <span className="font-semibold text-gray-900">Invoice: <span className="font-mono text-blue-700 font-bold">{g.invoiceNumber}</span></span> · SO: <span className="font-semibold text-gray-900">{g.so}</span> {g.totalHarga < 0 && <span className="text-[10px] font-semibold text-rose-700 bg-rose-100 border border-rose-200 px-1.5 py-0.2 rounded">Memo Retur</span>} · Pelanggan: <span className="font-semibold text-gray-900">{g.customerName}</span>
+                                    {g.kategoriProdukList && g.kategoriProdukList.length > 0 && (
+                                      <span className="ml-2 inline-flex items-center gap-1">
+                                        <span className="font-medium text-gray-500">Kat Produk:</span>
+                                        {g.kategoriProdukList.map((cat) => (
+                                          <span
+                                            key={cat}
+                                            className={`inline-block px-1.5 py-0.2 rounded text-[10px] font-bold border ${
+                                              cat === "PREKURSOR"
+                                                ? "bg-amber-100 text-amber-900 border-amber-300"
+                                                : cat === "ALKES"
+                                                ? "bg-teal-100 text-teal-800 border-teal-300"
+                                                : "bg-indigo-100 text-indigo-800 border-indigo-200"
+                                            }`}
+                                          >
+                                            {cat}
+                                          </span>
+                                        ))}
+                                      </span>
+                                    )}
                                     {g.allPrinted && g.printedAt && (
                                       <span className="ml-2 inline-flex items-center gap-1 font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
                                         <span>⏱ Selesai Print:</span>
@@ -2248,6 +2333,7 @@ export default function Home() {
                                     <tr className="border-b border-gray-200">
                                       <th className="px-2 py-1 text-left font-medium text-gray-500">No Invoice</th>
                                       <th className="px-2 py-1 text-left font-medium text-gray-500">Item Code</th>
+                                      <th className="px-2 py-1 text-left font-medium text-gray-500">Kat Produk</th>
                                       <th className="px-2 py-1 text-left font-medium text-gray-500">Item Description</th>
                                       <th className="px-2 py-1 text-right font-medium text-gray-500">Qty</th>
                                       <th className="px-2 py-1 text-left font-medium text-gray-500">UOM</th>
@@ -2260,6 +2346,23 @@ export default function Home() {
                                       <tr key={i} className="hover:bg-gray-100">
                                         <td className="px-2 py-1 font-mono text-gray-900 whitespace-nowrap">{item.invoiceNumber}</td>
                                         <td className="px-2 py-1 font-mono text-gray-600 whitespace-nowrap">{item.itemCode}</td>
+                                        <td className="px-2 py-1 whitespace-nowrap">
+                                          {item.kategoriProduk ? (
+                                            <span
+                                              className={`inline-block px-1.5 py-0.2 rounded text-[10px] font-bold border ${
+                                                item.kategoriProduk === "PREKURSOR"
+                                                  ? "bg-amber-100 text-amber-900 border-amber-300"
+                                                  : item.kategoriProduk === "ALKES"
+                                                  ? "bg-teal-100 text-teal-800 border-teal-300"
+                                                  : "bg-indigo-100 text-indigo-800 border-indigo-200"
+                                              }`}
+                                            >
+                                              {item.kategoriProduk}
+                                            </span>
+                                          ) : (
+                                            <span className="text-gray-300 text-xs">-</span>
+                                          )}
+                                        </td>
                                         <td className="px-2 py-1 text-gray-700">{item.itemDescription}</td>
                                         <td className="px-2 py-1 text-right text-gray-900">{item.qty}</td>
                                         <td className="px-2 py-1 text-gray-600">{item.uom}</td>
