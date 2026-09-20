@@ -2068,22 +2068,6 @@ export default function Home() {
                     </span>
                   )}
                 </button>
-                <button
-                  onClick={() => setShowApotekModal(true)}
-                  className="px-2 py-1 text-xs font-semibold rounded-md border border-emerald-400 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 flex items-center gap-1 whitespace-nowrap shadow-2xs transition-colors shrink-0"
-                  title="Lihat Database Master Apotek (1P, 2P, 3P)"
-                >
-                  <span>🏪</span>
-                  <span>Master Apotek</span>
-                </button>
-                <button
-                  onClick={() => setShowProductModal(true)}
-                  className="px-2 py-1 text-xs font-semibold rounded-md border border-purple-400 bg-purple-50 text-purple-800 hover:bg-purple-100 flex items-center gap-1 whitespace-nowrap shadow-2xs transition-colors shrink-0"
-                  title="Lihat Database Master Produk (Farma, Alkes, CCP, Prekursor, OOT)"
-                >
-                  <span>📦</span>
-                  <span>Master Produk</span>
-                </button>
                 <div className="h-5 w-px bg-gray-200 mx-0.5 shrink-0" />
                 
                 {/* Tab Status */}
