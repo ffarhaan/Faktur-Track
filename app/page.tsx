@@ -162,8 +162,8 @@ function dbRowsToFakturRecords(rows: Array<Record<string, unknown>>): {
         const it = items[idx];
         const itemCode = String(it.item_code || "");
         const itemDesc = String(it.item_description || "");
-        const katProd = (it.kategori_produk as string) || getProductCategory(itemCode, itemDesc) || undefined;
-        const klasObat = getPrekursorOOTClassification(itemDesc) || (it.klasifikasi_obat as "Prekursor" | "OOT") || undefined;
+        const katProd = getProductCategory(itemCode, itemDesc);
+        const klasObat = getPrekursorOOTClassification(itemDesc, itemCode) || (katProd === "PREKURSOR" ? "Prekursor" : katProd === "OOT" ? "OOT" : undefined);
 
         records.push({
           orderDate: date,
@@ -796,7 +796,7 @@ export default function Home() {
               (existing._soSet as Set<string>).add(r.orderNumber);
             }
             const itList = (existing.extra as Record<string, unknown>).items as Array<Record<string, unknown>>;
-            const katProd = r.kategoriProduk || getProductCategory(r.itemCode, r.itemDescription) || null;
+            const katProd = getProductCategory(r.itemCode, r.itemDescription) || r.kategoriProduk || "FARMA";
             itList.push({
               item_code: r.itemCode,
               item_description: r.itemDescription,
@@ -810,7 +810,7 @@ export default function Home() {
           } else if (!existing._hasPreservedItems) {
             const itList = (existing.extra as Record<string, unknown>).items as Array<Record<string, unknown>>;
             if (itList.length === 0) {
-              const katProd = r.kategoriProduk || getProductCategory(r.itemCode, r.itemDescription) || null;
+              const katProd = getProductCategory(r.itemCode, r.itemDescription) || r.kategoriProduk || "FARMA";
               itList.push({
                 item_code: r.itemCode,
                 item_description: r.itemDescription,

@@ -5,75 +5,6 @@ import master2P from "./master2P.json";
 import masterProduct from "./masterProduct.json";
 import masterPrekursorOOT from "./masterPrekursorOOT.json";
 
-export function getPrekursorOOTClassification(itemDescription?: string): "Prekursor" | "OOT" | null {
-  if (!itemDescription || itemDescription === "-" || itemDescription === "Data DOO") return null;
-  const s = " " + String(itemDescription).toUpperCase().replace(/[\t\r\n\s]+/g, " ") + " ";
-
-  // 1. OOT Matchers (Check OOT first to handle overlapping brands like Lapisiv-T, Panadol Flu & Batuk, Siladex Antitussive/DMP)
-  if (/\bLAPISIV[- ]?T\b/.test(s)) return "OOT";
-  if (/\bSILADEX\s+(ANTITUSSIVE|DMP)\b/.test(s)) return "OOT";
-  if (/\bPANADOL\s+(FLU\s*(&|\+|DAN)\s*BATUK|BATUK\s*(&|\+|DAN)\s*FLU)\b/.test(s)) return "OOT";
-  if (/\bWOODS(\s+PEPPERMINT)?\s+ANTITUSSIVE\b/.test(s)) return "OOT";
-  if (/\bOB[H]?\s+COMBI\s+ANTITUSSIVE\b/.test(s)) return "OOT";
-  if (/\b(GRANTUSIF|IFARSYL|PROMEDEX|LODECON\s+FORTE)\b/.test(s)) return "OOT";
-  if (/\bBODREX\s+FLU\s+(DAN|&|\+)\s*BATUK\b/.test(s)) return "OOT";
-  if (/\bMIXAGRIP\s+FLU\s+(DAN|&|\+)\s*BATUK\b/.test(s)) return "OOT";
-  if (/\bPROCOLD\s+FLU(\s+(DAN|&|\+)\s*BATUK)?\b/.test(s)) return "OOT";
-  if (/\bVICKS\s+FORMULA\s+44\b/.test(s) || /\bFORMULA\s+44\b/.test(s)) return "OOT";
-  if (/\bKONIDIN\b/.test(s) && !/\bANAKONIDIN\b/.test(s)) return "OOT";
-
-  // 2. Prekursor Matchers (Exact Brand checks with word boundaries & exclusions)
-  if (/\bACTIFED\b/.test(s)) return "Prekursor";
-  if (/\bALCO\b(?!\s*(HOL|KOHOL|N\b))/.test(s) && !/\bVALCOR\b/.test(s) && !/\bALCON\b/.test(s)) return "Prekursor";
-  if (/\bALLERIN\b/.test(s)) return "Prekursor";
-  if (/\bALPARA\b/.test(s)) return "Prekursor";
-  if (/\bANADEX\b/.test(s) && !/\bLANADEXON\b/.test(s)) return "Prekursor";
-  if (/\bANAKONIDIN\b/.test(s)) return "Prekursor";
-  if (/\bCALORTUSIN\b/.test(s)) return "Prekursor";
-  if (/\bCOPARCETIN\b/.test(s)) return "Prekursor";
-  if (/\bDEMACOLIN\b/.test(s)) return "Prekursor";
-  if (/\bDICOM\b/.test(s)) return "Prekursor";
-  if (/\bDISUDRIN\b/.test(s)) return "Prekursor";
-  if (/\bFLUTOP\b/.test(s)) return "Prekursor";
-  if (/\bFLUVIR\b/.test(s)) return "Prekursor";
-  if (/\bCROFED\b/.test(s)) return "Prekursor";
-  if (/\bDECOLGEN\b/.test(s)) return "Prekursor";
-  if (/\bINTUNAL\b/.test(s)) return "Prekursor";
-  if (/\bLACOLDIN\b/.test(s)) return "Prekursor";
-  if (/\bLANOS\b/.test(s) && !/\bLANOXIN\b/.test(s)) return "Prekursor";
-  if (/\bDEXTRAL\b/.test(s) && !/\bDEXTROSE\b/.test(s)) return "Prekursor";
-  if (/\bLAPIFED\b/.test(s)) return "Prekursor";
-  if (/\bLAPISIV\b/.test(s) && !/\bLAPISIV[- ]?T\b/.test(s)) return "Prekursor";
-  if (/\bMOLEXFLU\b/.test(s)) return "Prekursor";
-  if (/\bFLUCADEX\b/.test(s)) return "Prekursor";
-  if (/\bNEOZEP\b/.test(s)) return "Prekursor";
-  if (/\bOBH\s+COMBI\b/.test(s) && /\b(BATUK\s*(PLUS|\&|\+)\s*FLU|BATUK\s*FLU|FLU)\b/.test(s)) return "Prekursor";
-  if (/\bPANADOL\b.*\bCOLD\b/.test(s)) return "Prekursor";
-  if (/\bPARATUSIN\b/.test(s)) return "Prekursor";
-  if (/\bHUFAGRIPP\b.*\b(BP|BATUK\s*BERDAHAK\s*&\s*PILEK|BATUK\s*KERING\s*&\s*PILEK|FLU|PILEK)\b/.test(s)) return "Prekursor";
-  if (/\bRHINOFED\b/.test(s)) return "Prekursor";
-  if (/\bRHINOS\b/.test(s)) return "Prekursor";
-  if (/\bRYVEL\s+PLUS\b/.test(s)) return "Prekursor";
-  if (/\bSILADEX\b.*\b(COUGH\s*(&|\+|AND)\s*(COLD|FLU)|FLU)\b/.test(s) && !/\bHERBAL\b/.test(s)) return "Prekursor";
-  if (/\bTELFAST\s+PLUS\b/.test(s)) return "Prekursor";
-  if (/\bTRIAMINIC\b/.test(s)) return "Prekursor";
-  if (/\bTRIFED\b/.test(s)) return "Prekursor";
-  if (/\bTRIFEDRIN\b/.test(s)) return "Prekursor";
-  if (/\bNALGESTAN\b/.test(s)) return "Prekursor";
-  if (/\bSTOP\s+COLD\b/.test(s)) return "Prekursor";
-  if (/\bDECOLSIN\b/.test(s)) return "Prekursor";
-  if (/\bPIM[- ]?TRA[- ]?KOL\b/.test(s)) return "Prekursor";
-  if (/\bFLUTROP\b/.test(s)) return "Prekursor";
-  if (/\bNOZA\b/.test(s)) return "Prekursor";
-  if (/\bINZA\b/.test(s)) return "Prekursor";
-  if (/\bCOMTUSI\b.*\b(PILEK|ALERGI)\b/.test(s)) return "Prekursor";
-  if (/\bEFLIN\b/.test(s)) return "Prekursor";
-  if (/\bERICAF\b/.test(s)) return "Prekursor";
-  if (/\bTERA[- ]?F\b/.test(s)) return "Prekursor";
-
-  return null;
-}
-
 const apotekMap = masterApotek as Record<string, string>;
 
 function normalize(s: string): string {
@@ -130,15 +61,96 @@ const productList: Array<{ norm: string; cat: string }> = [];
   }
 });
 
-export function getProductCategory(itemCode?: string, itemDescription?: string): string {
-  // 1. Prekursor & OOT have absolute regulatory priority
-  if (itemDescription) {
-    const prekOot = getPrekursorOOTClassification(itemDescription);
-    if (prekOot === "Prekursor") return "PREKURSOR";
-    if (prekOot === "OOT") return "OOT";
+export function getPrekursorOOTClassification(itemDescription?: string, itemCode?: string): "Prekursor" | "OOT" | null {
+  // 1. Direct masterProduct check
+  if (itemCode) {
+    const cleanCode = String(itemCode).trim();
+    const cat = productCodeMap[cleanCode] || productCodeMap[cleanCode.replace(/[^0-9]/g, "")];
+    if (cat === "PREKURSOR") return "Prekursor";
+    if (cat === "OOT") return "OOT";
+    if (cat === "FARMA" || cat === "ALKES" || cat === "CCP") return null;
   }
 
-  // 2. Direct code lookup (Oracle Code / Accurate Code / Item Code)
+  if (itemDescription) {
+    const norm = normalize(itemDescription);
+    if (productNameMap[norm]) {
+      const cat = productNameMap[norm];
+      if (cat === "PREKURSOR") return "Prekursor";
+      if (cat === "OOT") return "OOT";
+      if (cat === "FARMA" || cat === "ALKES" || cat === "CCP") return null;
+    }
+  }
+
+  if (!itemDescription || itemDescription === "-" || itemDescription === "Data DOO") return null;
+  const s = " " + String(itemDescription).toUpperCase().replace(/[\t\r\n\s]+/g, " ") + " ";
+
+  // 2. Strict OOT Matchers
+  if (/\bLAPISIV[- ]?T\b/.test(s)) return "OOT";
+  if (/\bSILADEX\s+(ANTITUSSIVE|DMP)\b/.test(s)) return "OOT";
+  if (/\bPANADOL\s+(FLU\s*(&|\+|DAN)\s*BATUK|BATUK\s*(&|\+|DAN)\s*FLU)\b/.test(s)) return "OOT";
+  if (/\bWOODS(\s+PEPPERMINT)?\s+ANTITUSSIVE\b/.test(s)) return "OOT";
+  if (/\bOB[H]?\s+COMBI\s+ANTITUSSIVE\b/.test(s)) return "OOT";
+  if (/\b(GRANTUSIF|IFARSYL|PROMEDEX|LODECON\s+FORTE)\b/.test(s)) return "OOT";
+  if (/\bBODREX\s+FLU\s+(DAN|&|\+)\s*BATUK\b/.test(s)) return "OOT";
+  if (/\bMIXAGRIP\s+FLU\s+(DAN|&|\+)\s*BATUK\b/.test(s)) return "OOT";
+  if (/\bPROCOLD\s+FLU\s+(DAN|&|\+)\s*BATUK\b/.test(s)) return "OOT";
+  if (/\bVICKS\s+FORMULA\s+44\b/.test(s) || /\bFORMULA\s+44\b/.test(s)) return "OOT";
+  if (/\bKONIDIN\b/.test(s) && !/\bANAKONIDIN\b/.test(s)) return "OOT";
+
+  // 3. Strict Prekursor Matchers
+  if (/\bACTIFED\b/.test(s)) return "Prekursor";
+  if (/\bALCO\b(?!\s*(HOL|KOHOL|N\b))/.test(s) && !/\bVALCOR\b/.test(s) && !/\bALCON\b/.test(s)) return "Prekursor";
+  if (/\bALLERIN\b/.test(s)) return "Prekursor";
+  if (/\bALPARA\b/.test(s)) return "Prekursor";
+  if (/\bANADEX\b/.test(s) && !/\bLANADEXON\b/.test(s)) return "Prekursor";
+  if (/\bANAKONIDIN\b/.test(s)) return "Prekursor";
+  if (/\bCALORTUSIN\b/.test(s)) return "Prekursor";
+  if (/\bCOPARCETIN\b/.test(s)) return "Prekursor";
+  if (/\bDEMACOLIN\b/.test(s)) return "Prekursor";
+  if (/\bDICOM\b/.test(s)) return "Prekursor";
+  if (/\bDISUDRIN\b/.test(s)) return "Prekursor";
+  if (/\bFLUTOP\b/.test(s)) return "Prekursor";
+  if (/\bFLUVIR\b/.test(s)) return "Prekursor";
+  if (/\bCROFED\b/.test(s)) return "Prekursor";
+  if (/\bDECOLGEN\b/.test(s)) return "Prekursor";
+  if (/\bINTUNAL\b/.test(s)) return "Prekursor";
+  if (/\bLACOLDIN\b/.test(s)) return "Prekursor";
+  if (/\bLANOS\b/.test(s) && !/\bLANOXIN\b/.test(s)) return "Prekursor";
+  if (/\bDEXTRAL\b/.test(s) && !/\bDEXTROSE\b/.test(s)) return "Prekursor";
+  if (/\bLAPIFED\b/.test(s)) return "Prekursor";
+  if (/\bLAPISIV\b/.test(s) && !/\bLAPISIV[- ]?T\b/.test(s)) return "Prekursor";
+  if (/\bMOLEXFLU\b/.test(s)) return "Prekursor";
+  if (/\bFLUCADEX\b/.test(s)) return "Prekursor";
+  if (/\bNEOZEP\b/.test(s)) return "Prekursor";
+  if (/\bOBH\s+COMBI\b/.test(s) && /\b(BATUK\s*(PLUS|\&|\+)\s*FLU|BATUK\s*FLU|FLU)\b/.test(s)) return "Prekursor";
+  if (/\bPANADOL\b.*\bCOLD\b/.test(s)) return "Prekursor";
+  if (/\bPARATUSIN\b/.test(s)) return "Prekursor";
+  if (/\bHUFAGRIPP\b.*\b(BP|BATUK\s*BERDAHAK\s*&\s*PILEK|BATUK\s*KERING\s*&\s*PILEK|FLU|PILEK)\b/.test(s)) return "Prekursor";
+  if (/\bRHINOFED\b/.test(s)) return "Prekursor";
+  if (/\bRHINOS\b/.test(s)) return "Prekursor";
+  if (/\bRYVEL\s+PLUS\b/.test(s)) return "Prekursor";
+  if (/\bSILADEX\b.*\b(COUGH\s*(&|\+|AND)\s*(COLD|FLU)|FLU)\b/.test(s) && !/\bHERBAL\b/.test(s)) return "Prekursor";
+  if (/\bTELFAST\s+PLUS\b/.test(s)) return "Prekursor";
+  if (/\bTRIAMINIC\b/.test(s)) return "Prekursor";
+  if (/\bTRIFED\b/.test(s)) return "Prekursor";
+  if (/\bTRIFEDRIN\b/.test(s)) return "Prekursor";
+  if (/\bNALGESTAN\b/.test(s)) return "Prekursor";
+  if (/\bSTOP\s+COLD\b/.test(s)) return "Prekursor";
+  if (/\bDECOLSIN\b/.test(s)) return "Prekursor";
+  if (/\bPIM[- ]?TRA[- ]?KOL\b/.test(s)) return "Prekursor";
+  if (/\bFLUTROP\b/.test(s)) return "Prekursor";
+  if (/\bNOZA\b/.test(s)) return "Prekursor";
+  if (/\bINZA\b/.test(s)) return "Prekursor";
+  if (/\bCOMTUSI\b.*\b(PILEK|ALERGI)\b/.test(s)) return "Prekursor";
+  if (/\bEFLIN\b/.test(s)) return "Prekursor";
+  if (/\bERICAF\b/.test(s)) return "Prekursor";
+  if (/\bTERA[- ]?F\b/.test(s)) return "Prekursor";
+
+  return null;
+}
+
+export function getProductCategory(itemCode?: string, itemDescription?: string): string {
+  // 1. Direct code lookup (Oracle Code / Accurate Code / Item Code)
   if (itemCode) {
     const cleanCode = String(itemCode).trim();
     if (productCodeMap[cleanCode]) return productCodeMap[cleanCode];
@@ -146,12 +158,22 @@ export function getProductCategory(itemCode?: string, itemDescription?: string):
     if (numOnly && productCodeMap[numOnly]) return productCodeMap[numOnly];
   }
 
-  // 3. Product name exact match
+  // 2. Direct product name exact match
   if (itemDescription) {
     const normDesc = normalize(itemDescription);
     if (productNameMap[normDesc]) return productNameMap[normDesc];
+  }
 
-    // 4. Substring / partial match with master catalog items (>= 8 chars)
+  // 3. Prekursor & OOT regulatory classification
+  if (itemDescription || itemCode) {
+    const prekOot = getPrekursorOOTClassification(itemDescription, itemCode);
+    if (prekOot === "Prekursor") return "PREKURSOR";
+    if (prekOot === "OOT") return "OOT";
+  }
+
+  // 4. Substring / partial match with master catalog items (>= 8 chars)
+  if (itemDescription) {
+    const normDesc = normalize(itemDescription);
     if (normDesc.length >= 8) {
       for (const item of productList) {
         if (normDesc.includes(item.norm) || item.norm.includes(normDesc)) {
