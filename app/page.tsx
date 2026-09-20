@@ -9,7 +9,7 @@ import { supabase } from "@/lib/supabaseClient";
 type Filter = "all" | "belum" | "sudah" | "double";
 type KatFilter = "all" | "1P" | "2P" | "3P";
 type JenisFilter = "all" | "ORA" | "DOO";
-type KlasFilter = "all" | "prekursor" | "oot";
+type KlasFilter = "all" | "prekursor" | "oot" | "ccp" | "alkes" | "farma";
 
 const ROWS_PER_PAGE = 50;
 
@@ -80,6 +80,9 @@ type FakturGroup = {
   kategoriProdukCounts?: Record<string, number>;
   hasPrekursor: boolean;
   hasOOT: boolean;
+  hasCCP: boolean;
+  hasAlkes: boolean;
+  hasFarma: boolean;
   isDoubleInv: boolean;
   totalHarga: number;
   totalItems: number;
@@ -1167,26 +1170,30 @@ export default function Home() {
         const catCounts: Record<string, number> = {};
         let hasPrekursor = false;
         let hasOOT = false;
+        let hasCCP = false;
+        let hasAlkes = false;
+        let hasFarma = false;
 
         items.forEach((i) => {
-          const klas = getPrekursorOOTClassification(i.itemDescription) || i.klasifikasiObat;
-          let itemCat = "FARMA";
-          if (klas === "Prekursor") {
-            hasPrekursor = true;
-            itemCat = "PREKURSOR";
-          } else if (klas === "OOT") {
-            hasOOT = true;
-            itemCat = "OOT";
-          } else {
-            const prodCat = getProductCategory(i.itemCode, i.itemDescription) || i.kategoriProduk;
-            itemCat = prodCat === "ALKES" ? "ALKES" : "FARMA";
-          }
+          const itemCat = (i.kategoriProduk || getProductCategory(i.itemCode, i.itemDescription) || "FARMA").toUpperCase();
+          if (itemCat === "PREKURSOR") hasPrekursor = true;
+          else if (itemCat === "OOT") hasOOT = true;
+          else if (itemCat === "CCP") hasCCP = true;
+          else if (itemCat === "ALKES") hasAlkes = true;
+          else hasFarma = true;
+
           catCounts[itemCat] = (catCounts[itemCat] || 0) + 1;
         });
 
-        // Tentukan kategori dominan (kategori dengan jumlah item terbanyak dalam SO)
-        const sortedCats = Object.entries(catCounts).sort((a, b) => b[1] - a[1]);
-        const dominantCategory = sortedCats.length > 0 ? sortedCats[0][0] : "FARMA";
+        // Tentukan kategori dominan (prioritas pengawasan: PREKURSOR > OOT > CCP > ALKES > FARMA jika ada)
+        const prioOrder = ["PREKURSOR", "OOT", "CCP", "ALKES", "FARMA"];
+        let dominantCategory = "FARMA";
+        for (const p of prioOrder) {
+          if (catCounts[p]) {
+            dominantCategory = p;
+            break;
+          }
+        }
 
         return {
           key,
@@ -1202,6 +1209,9 @@ export default function Home() {
           kategoriProdukCounts: catCounts,
           hasPrekursor,
           hasOOT,
+          hasCCP,
+          hasAlkes,
+          hasFarma,
           isDoubleInv: isDouble,
           totalHarga: items.reduce((sum, i) => sum + i.totalHarga, 0),
           totalItems: items.length,
@@ -1327,6 +1337,9 @@ export default function Home() {
       if (jenisFilter !== "all") tabMatches = tabMatches.filter((g) => g.jenisTransaksi === jenisFilter);
       if (klasFilter === "prekursor") tabMatches = tabMatches.filter((g) => g.hasPrekursor);
       if (klasFilter === "oot") tabMatches = tabMatches.filter((g) => g.hasOOT);
+      if (klasFilter === "ccp") tabMatches = tabMatches.filter((g) => g.hasCCP);
+      if (klasFilter === "alkes") tabMatches = tabMatches.filter((g) => g.hasAlkes);
+      if (klasFilter === "farma") tabMatches = tabMatches.filter((g) => g.hasFarma);
 
       // If matches exist in current tab, show them; otherwise fallback to allMatches so user is never misled
       return tabMatches.length > 0 ? tabMatches : allMatches;
@@ -1345,6 +1358,9 @@ export default function Home() {
     if (jenisFilter !== "all") result = result.filter((g) => g.jenisTransaksi === jenisFilter);
     if (klasFilter === "prekursor") result = result.filter((g) => g.hasPrekursor);
     if (klasFilter === "oot") result = result.filter((g) => g.hasOOT);
+    if (klasFilter === "ccp") result = result.filter((g) => g.hasCCP);
+    if (klasFilter === "alkes") result = result.filter((g) => g.hasAlkes);
+    if (klasFilter === "farma") result = result.filter((g) => g.hasFarma);
 
     return result;
   }, [grouped, filter, katFilter, jenisFilter, klasFilter, dateFilter, search, sessionPrintedKeys]);
@@ -1981,10 +1997,13 @@ export default function Home() {
                 </div>
                 <div className="h-5 w-px bg-gray-200 mx-0.5 shrink-0" />
 
-                {/* Prekursor & OOT */}
+                {/* Kategori Produk & Regulasi */}
                 <div className="flex gap-1 shrink-0">
                   <FBtn active={klasFilter === "prekursor"} onClick={() => setKlasFilter((prev) => (prev === "prekursor" ? "all" : "prekursor"))} color="amber">💊 Prekursor</FBtn>
                   <FBtn active={klasFilter === "oot"} onClick={() => setKlasFilter((prev) => (prev === "oot" ? "all" : "oot"))} color="purple">🧪 OOT</FBtn>
+                  <FBtn active={klasFilter === "ccp"} onClick={() => setKlasFilter((prev) => (prev === "ccp" ? "all" : "ccp"))} color="sky">❄️ CCP</FBtn>
+                  <FBtn active={klasFilter === "alkes"} onClick={() => setKlasFilter((prev) => (prev === "alkes" ? "all" : "alkes"))} color="teal">🩺 Alkes</FBtn>
+                  <FBtn active={klasFilter === "farma"} onClick={() => setKlasFilter((prev) => (prev === "farma" ? "all" : "farma"))} color="indigo">💊 Farma</FBtn>
                 </div>
                 <div className="h-5 w-px bg-gray-200 mx-0.5 shrink-0" />
 
@@ -2255,6 +2274,8 @@ export default function Home() {
                                   className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-bold tracking-wider border shadow-2xs ${
                                     g.kategoriProduk === "ALKES"
                                       ? "bg-teal-100 text-teal-800 border-teal-300"
+                                      : g.kategoriProduk === "CCP"
+                                      ? "bg-sky-100 text-sky-900 border-sky-300"
                                       : g.kategoriProduk === "PREKURSOR"
                                       ? "bg-amber-100 text-amber-900 border-amber-300"
                                       : g.kategoriProduk === "OOT"
@@ -2262,7 +2283,7 @@ export default function Home() {
                                       : "bg-indigo-50 text-indigo-700 border-indigo-200"
                                   }`}
                                 >
-                                  {g.kategoriProduk}
+                                  {g.kategoriProduk === "CCP" ? "❄️ CCP" : g.kategoriProduk}
                                 </span>
                                 {g.hasPrekursor && g.kategoriProduk !== "PREKURSOR" && (
                                   <span className="inline-block px-1 py-0.2 rounded text-[9px] font-bold bg-amber-50 text-amber-800 border border-amber-300" title="Mengandung item Prekursor">
@@ -2272,6 +2293,11 @@ export default function Home() {
                                 {g.hasOOT && g.kategoriProduk !== "OOT" && (
                                   <span className="inline-block px-1 py-0.2 rounded text-[9px] font-bold bg-purple-50 text-purple-800 border border-purple-300" title="Mengandung item OOT">
                                     🧪 OOT
+                                  </span>
+                                )}
+                                {g.hasCCP && g.kategoriProduk !== "CCP" && (
+                                  <span className="inline-block px-1 py-0.2 rounded text-[9px] font-bold bg-sky-50 text-sky-800 border border-sky-300" title="Mengandung item CCP (Cold Chain)">
+                                    ❄️ CCP
                                   </span>
                                 )}
                               </div>
@@ -2437,19 +2463,14 @@ export default function Home() {
                                         <td className="px-2 py-1 font-mono text-gray-600 whitespace-nowrap">{item.itemCode}</td>
                                         <td className="px-2 py-1 whitespace-nowrap">
                                           {(() => {
-                                            const klas = getPrekursorOOTClassification(item.itemDescription) || item.klasifikasiObat;
-                                            let itemCat = "FARMA";
-                                            if (klas === "Prekursor") itemCat = "PREKURSOR";
-                                            else if (klas === "OOT") itemCat = "OOT";
-                                            else {
-                                              const prodCat = getProductCategory(item.itemCode, item.itemDescription) || item.kategoriProduk;
-                                              itemCat = prodCat === "ALKES" ? "ALKES" : "FARMA";
-                                            }
+                                            const itemCat = (item.kategoriProduk || getProductCategory(item.itemCode, item.itemDescription) || "FARMA").toUpperCase();
                                             return (
                                               <span
                                                 className={`inline-block px-1.5 py-0.2 rounded text-[10px] font-bold border ${
                                                   itemCat === "ALKES"
                                                     ? "bg-teal-100 text-teal-800 border-teal-300"
+                                                    : itemCat === "CCP"
+                                                    ? "bg-sky-100 text-sky-900 border-sky-300"
                                                     : itemCat === "PREKURSOR"
                                                     ? "bg-amber-100 text-amber-900 border-amber-300"
                                                     : itemCat === "OOT"
@@ -2457,7 +2478,7 @@ export default function Home() {
                                                     : "bg-indigo-50 text-indigo-700 border-indigo-200"
                                                 }`}
                                               >
-                                                {itemCat}
+                                                {itemCat === "CCP" ? "❄️ CCP" : itemCat}
                                               </span>
                                             );
                                           })()}
@@ -2613,7 +2634,7 @@ function Card({ label, value, color, small }: { label: string; value: string; co
 
 function FBtn({ active, onClick, children, color = "gray" }: {
   active: boolean; onClick: () => void; children: React.ReactNode;
-  color?: "gray" | "orange" | "red" | "blue" | "green" | "purple" | "emerald" | "amber";
+  color?: "gray" | "orange" | "red" | "blue" | "green" | "purple" | "emerald" | "amber" | "sky" | "teal" | "indigo";
 }) {
   const colors: Record<string, string> = {
     gray: active ? "bg-gray-800 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200",
@@ -2624,6 +2645,9 @@ function FBtn({ active, onClick, children, color = "gray" }: {
     purple: active ? "bg-purple-600 text-white" : "bg-purple-100 text-purple-700 hover:bg-purple-200",
     emerald: active ? "bg-emerald-600 text-white" : "bg-emerald-100 text-emerald-700 hover:bg-emerald-200",
     amber: active ? "bg-amber-600 text-white" : "bg-amber-100 text-amber-800 hover:bg-amber-200",
+    sky: active ? "bg-sky-600 text-white" : "bg-sky-100 text-sky-800 hover:bg-sky-200",
+    teal: active ? "bg-teal-600 text-white" : "bg-teal-100 text-teal-800 hover:bg-teal-200",
+    indigo: active ? "bg-indigo-600 text-white" : "bg-indigo-100 text-indigo-700 hover:bg-indigo-200",
   };
   return (
     <button onClick={onClick} className={`px-2 py-1 text-[11px] font-semibold rounded-md transition-colors whitespace-nowrap shadow-2xs ${colors[color]}`}>

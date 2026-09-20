@@ -98,19 +98,29 @@ master2P.forEach((item) => {
   if (item.namaMerchant) master2PNameSet.add(normalize(item.namaMerchant));
 });
 
-// Product Category lookup structures (FARMA / ALKES / PREKURSOR / OOT)
+// Product Category lookup structures (FARMA / ALKES / CCP / PREKURSOR / OOT)
 const productCodeMap: Record<string, string> = {};
 const productNameMap: Record<string, string> = {};
 const productList: Array<{ norm: string; cat: string }> = [];
 
-(masterProduct as Array<{ kodeBarang: string; namaBarang: string; kategori: string }>).forEach((p) => {
+(masterProduct as Array<{
+  kodeBarang?: string;
+  kodeOracle?: string | number;
+  kodeAccurate?: string | number;
+  namaBarang: string;
+  kategori: string;
+}>).forEach((p) => {
   const cat = String(p.kategori || "").trim().toUpperCase();
-  if (p.kodeBarang) {
-    const cleanCode = String(p.kodeBarang).trim();
-    productCodeMap[cleanCode] = cat;
-    const numOnly = cleanCode.replace(/[^0-9]/g, "");
-    if (numOnly) productCodeMap[numOnly] = cat;
-  }
+  const codes = [p.kodeBarang, p.kodeOracle, p.kodeAccurate].filter(Boolean);
+  codes.forEach((c) => {
+    const cleanCode = String(c).trim();
+    if (cleanCode) {
+      productCodeMap[cleanCode] = cat;
+      const numOnly = cleanCode.replace(/[^0-9]/g, "");
+      if (numOnly) productCodeMap[numOnly] = cat;
+    }
+  });
+
   if (p.namaBarang) {
     const norm = normalize(p.namaBarang);
     productNameMap[norm] = cat;
@@ -121,15 +131,27 @@ const productList: Array<{ norm: string; cat: string }> = [];
 });
 
 export function getProductCategory(itemCode?: string, itemDescription?: string): string {
+  // 1. Prekursor & OOT have absolute regulatory priority
+  if (itemDescription) {
+    const prekOot = getPrekursorOOTClassification(itemDescription);
+    if (prekOot === "Prekursor") return "PREKURSOR";
+    if (prekOot === "OOT") return "OOT";
+  }
+
+  // 2. Direct code lookup (Oracle Code / Accurate Code / Item Code)
   if (itemCode) {
     const cleanCode = String(itemCode).trim();
     if (productCodeMap[cleanCode]) return productCodeMap[cleanCode];
     const numOnly = cleanCode.replace(/[^0-9]/g, "");
     if (numOnly && productCodeMap[numOnly]) return productCodeMap[numOnly];
   }
+
+  // 3. Product name exact match
   if (itemDescription) {
     const normDesc = normalize(itemDescription);
     if (productNameMap[normDesc]) return productNameMap[normDesc];
+
+    // 4. Substring / partial match with master catalog items (>= 8 chars)
     if (normDesc.length >= 8) {
       for (const item of productList) {
         if (normDesc.includes(item.norm) || item.norm.includes(normDesc)) {
@@ -137,11 +159,14 @@ export function getProductCategory(itemCode?: string, itemDescription?: string):
         }
       }
     }
+
+    // 5. Keyword fallbacks for Alkes equipment
     const s = " " + String(itemDescription).toUpperCase() + " ";
     if (/\b(ALCOHOL|ALKOHOL|KASA|SPUIT|SYRINGE|JARUM|UNDERPAD|MASKER|INFUSION\s+SET|IV\s+CATHETER|HANDSCOON|GLOVES|TEST\s+PACK|URINE\s+BAG|THERMOMETER|TENSIMETER|SURGICAL|COTTON\s+BALL|KAPAS\s+PEMBALUT|SAFETY\s+BOX|ABOCATH|WINGS\s+NEEDLE|SURGICAL\s+TAPE|DERMAFIX|HYPAFIX|MICROPORE)\b/.test(s)) {
       return "ALKES";
     }
   }
+
   return "FARMA";
 }
 
