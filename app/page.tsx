@@ -5,6 +5,8 @@ import * as XLSX from "xlsx";
 import { parseExcelFile, categorize, isOraCustomer, getProductCategory, getPrekursorOOTClassification } from "@/lib/parser";
 import { FakturRecord } from "@/lib/types";
 import { supabase } from "@/lib/supabaseClient";
+import masterApotekList from "@/lib/masterApotekList.json";
+import masterProductList from "@/lib/masterProduct.json";
 
 type Filter = "all" | "belum" | "sudah" | "double";
 type KatFilter = "all" | "1P" | "2P" | "3P";
@@ -256,14 +258,16 @@ export default function Home() {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
   const [printedInvoices, setPrintedInvoices] = useState<Set<string>>(new Set());
+  const [sessionPrintedKeys, setSessionPrintedKeys] = useState<Set<string>>(new Set());
   const [printedAtMap, setPrintedAtMap] = useState<Record<string, string>>({});
   const [dragOver, setDragOver] = useState(false);
   const [expandedInvoices, setExpandedInvoices] = useState<Set<string>>(new Set());
   const [selectedRowIndex, setSelectedRowIndex] = useState(0);
   const [selectedColIdx, setSelectedColIdx] = useState(3); // Default: No Invoice
   const [copyToast, setCopyToast] = useState<string | null>(null);
-  const [sessionPrintedKeys, setSessionPrintedKeys] = useState<Set<string>>(new Set());
   const [showHelpModal, setShowHelpModal] = useState(false);
+  const [showApotekModal, setShowApotekModal] = useState(false);
+  const [showProductModal, setShowProductModal] = useState(false);
 
   const isFetchingRef = useRef(false);
   const lastSyncHashRef = useRef("");
@@ -1767,6 +1771,22 @@ export default function Home() {
                 </span>
               )}
             </button>
+            <button
+              onClick={() => setShowApotekModal(true)}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 px-3 py-1.5 rounded-lg shadow-sm transition-colors"
+              title="Buka Database Master Apotek (1P, 2P, 3P)"
+            >
+              <span>🏪</span>
+              <span>Master Apotek</span>
+            </button>
+            <button
+              onClick={() => setShowProductModal(true)}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-purple-800 bg-purple-50 hover:bg-purple-100 border border-purple-300 px-3 py-1.5 rounded-lg shadow-sm transition-colors"
+              title="Buka Database Master Produk (Farma, Alkes, CCP, Prekursor, OOT)"
+            >
+              <span>📦</span>
+              <span>Master Produk</span>
+            </button>
             {records.length > 0 && (
               <button
                 onClick={exportToExcel}
@@ -2047,6 +2067,22 @@ export default function Home() {
                       {sessionPrintedKeys.size}
                     </span>
                   )}
+                </button>
+                <button
+                  onClick={() => setShowApotekModal(true)}
+                  className="px-2 py-1 text-xs font-semibold rounded-md border border-emerald-400 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 flex items-center gap-1 whitespace-nowrap shadow-2xs transition-colors shrink-0"
+                  title="Lihat Database Master Apotek (1P, 2P, 3P)"
+                >
+                  <span>🏪</span>
+                  <span>Master Apotek</span>
+                </button>
+                <button
+                  onClick={() => setShowProductModal(true)}
+                  className="px-2 py-1 text-xs font-semibold rounded-md border border-purple-400 bg-purple-50 text-purple-800 hover:bg-purple-100 flex items-center gap-1 whitespace-nowrap shadow-2xs transition-colors shrink-0"
+                  title="Lihat Database Master Produk (Farma, Alkes, CCP, Prekursor, OOT)"
+                >
+                  <span>📦</span>
+                  <span>Master Produk</span>
                 </button>
                 <div className="h-5 w-px bg-gray-200 mx-0.5 shrink-0" />
                 
@@ -2610,6 +2646,12 @@ export default function Home() {
 
       {/* Keyboard Shortcuts Modal */}
       <HelpModal isOpen={showHelpModal} onClose={() => setShowHelpModal(false)} />
+
+      {/* Master Apotek Modal */}
+      <MasterApotekModal isOpen={showApotekModal} onClose={() => setShowApotekModal(false)} />
+
+      {/* Master Product Modal */}
+      <MasterProductModal isOpen={showProductModal} onClose={() => setShowProductModal(false)} />
     </main>
   );
 }
@@ -2696,6 +2738,398 @@ function HelpModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }
           >
             Mengerti & Tutup
           </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MasterApotekModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
+  const [search, setSearch] = useState("");
+  const [katFilter, setKatFilter] = useState<"all" | "1P" | "2P" | "3P">("all");
+  const [page, setPage] = useState(0);
+  const rowsPerPage = 30;
+
+  const filtered = useMemo(() => {
+    let list = masterApotekList as Array<{
+      namaApotek: string;
+      kodeCustomer: string;
+      namaMerchant: string;
+      kategori: string;
+      keterangan: string;
+    }>;
+
+    if (katFilter !== "all") {
+      list = list.filter((a) => a.kategori === katFilter);
+    }
+
+    if (search.trim()) {
+      const s = search.toLowerCase().trim();
+      list = list.filter(
+        (a) =>
+          a.namaApotek.toLowerCase().includes(s) ||
+          a.kodeCustomer.toLowerCase().includes(s) ||
+          a.namaMerchant.toLowerCase().includes(s) ||
+          a.keterangan.toLowerCase().includes(s)
+      );
+    }
+
+    return list;
+  }, [search, katFilter]);
+
+  const totalPages = Math.ceil(filtered.length / rowsPerPage);
+  const pagedData = useMemo(() => {
+    const start = page * rowsPerPage;
+    return filtered.slice(start, start + rowsPerPage);
+  }, [filtered, page]);
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs animate-in fade-in duration-150">
+      <div className="bg-white rounded-2xl max-w-4xl w-full p-6 shadow-2xl border border-gray-100 relative flex flex-col max-h-[90vh]">
+        {/* Header */}
+        <div className="flex items-center justify-between pb-3 border-b border-gray-200 shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center text-xl shadow-xs">
+              🏪
+            </div>
+            <div>
+              <h2 className="text-base font-bold text-gray-900">Database Master Apotek & Pelanggan</h2>
+              <p className="text-xs text-gray-500">
+                Total {masterApotekList.length.toLocaleString("id-ID")} apotek terdaftar (Acuan Klasifikasi 1P / 2P / 3P)
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-700 w-8 h-8 rounded-full flex items-center justify-center hover:bg-gray-100 transition-colors text-lg"
+            title="Tutup"
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Toolbar & Filters */}
+        <div className="py-3 flex flex-wrap items-center justify-between gap-2 shrink-0 border-b border-gray-100">
+          <div className="flex items-center gap-1.5 overflow-x-auto">
+            <FBtn active={katFilter === "all"} onClick={() => { setKatFilter("all"); setPage(0); }}>
+              Semua ({masterApotekList.length})
+            </FBtn>
+            <FBtn active={katFilter === "1P"} onClick={() => { setKatFilter("1P"); setPage(0); }} color="blue">
+              🏪 1P Prioritas 1 (45)
+            </FBtn>
+            <FBtn active={katFilter === "2P"} onClick={() => { setKatFilter("2P"); setPage(0); }} color="green">
+              🏪 2P Mitra Merchant (252)
+            </FBtn>
+            <FBtn active={katFilter === "3P"} onClick={() => { setKatFilter("3P"); setPage(0); }} color="purple">
+              🏢 3P Reguler (2.400)
+            </FBtn>
+          </div>
+
+          <div className="relative w-72">
+            <span className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-gray-400 text-xs">
+              🔍
+            </span>
+            <input
+              type="text"
+              placeholder="Cari apotek, kode, merchant, zona..."
+              value={search}
+              onChange={(e) => { setSearch(e.target.value); setPage(0); }}
+              className="w-full pl-7 pr-7 py-1 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white shadow-2xs"
+            />
+            {search && (
+              <button
+                onClick={() => { setSearch(""); setPage(0); }}
+                className="absolute inset-y-0 right-0 pr-2 flex items-center text-gray-400 hover:text-gray-600 font-bold text-xs"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Table Body */}
+        <div className="overflow-y-auto flex-1 my-2 border border-gray-200 rounded-lg">
+          <table className="w-full text-xs">
+            <thead className="bg-gray-50 border-b border-gray-200 sticky top-0 z-10 select-none">
+              <tr>
+                <th className="px-2.5 py-2 text-center text-gray-500 w-10">#</th>
+                <th className="px-2.5 py-2 text-left text-gray-500 w-24">Kategori</th>
+                <th className="px-2.5 py-2 text-left text-gray-500 w-28">Kode Customer</th>
+                <th className="px-2.5 py-2 text-left text-gray-500">Nama Apotek</th>
+                <th className="px-2.5 py-2 text-left text-gray-500">Nama Merchant / Platform</th>
+                <th className="px-2.5 py-2 text-left text-gray-500">Zona / Keterangan</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {pagedData.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="text-center py-8 text-gray-400">
+                    Tidak ditemukan apotek yang sesuai pencarian.
+                  </td>
+                </tr>
+              ) : (
+                pagedData.map((a, idx) => (
+                  <tr key={idx} className="hover:bg-gray-50">
+                    <td className="px-2.5 py-1.5 text-center text-gray-400 font-mono">
+                      {page * rowsPerPage + idx + 1}
+                    </td>
+                    <td className="px-2.5 py-1.5 whitespace-nowrap">
+                      <span
+                        className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${
+                          a.kategori === "1P"
+                            ? "bg-blue-100 text-blue-800"
+                            : a.kategori === "2P"
+                            ? "bg-green-100 text-green-800"
+                            : "bg-purple-100 text-purple-800"
+                        }`}
+                      >
+                        {a.kategori}
+                      </span>
+                    </td>
+                    <td className="px-2.5 py-1.5 font-mono text-gray-700 whitespace-nowrap">
+                      {a.kodeCustomer !== "-" ? a.kodeCustomer : <span className="text-gray-400">-</span>}
+                    </td>
+                    <td className="px-2.5 py-1.5 font-medium text-gray-900">{a.namaApotek}</td>
+                    <td className="px-2.5 py-1.5 text-gray-600 font-mono text-[11px]">{a.namaMerchant}</td>
+                    <td className="px-2.5 py-1.5 text-gray-500">{a.keterangan}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Footer Pagination */}
+        <div className="pt-3 border-t border-gray-200 flex items-center justify-between text-xs shrink-0">
+          <span className="text-gray-500">
+            Menampilkan {filtered.length.toLocaleString("id-ID")} apotek · Halaman {page + 1} / {totalPages || 1}
+          </span>
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => setPage((p) => Math.max(0, p - 1))}
+              disabled={page === 0}
+              className="px-2.5 py-1 border border-gray-300 rounded bg-white hover:bg-gray-50 disabled:opacity-30 shadow-2xs"
+            >
+              ← Prev
+            </button>
+            <span className="font-semibold text-gray-700 px-1">
+              {page + 1} / {totalPages || 1}
+            </span>
+            <button
+              onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+              disabled={page >= totalPages - 1}
+              className="px-2.5 py-1 border border-gray-300 rounded bg-white hover:bg-gray-50 disabled:opacity-30 shadow-2xs"
+            >
+              Next →
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MasterProductModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
+  const [search, setSearch] = useState("");
+  const [catFilter, setCatFilter] = useState<string>("all");
+  const [page, setPage] = useState(0);
+  const rowsPerPage = 30;
+
+  const filtered = useMemo(() => {
+    let list = masterProductList as Array<{
+      kodeBarang?: string;
+      kodeOracle?: string | number;
+      kodeAccurate?: string | number;
+      namaBarang: string;
+      kategori: string;
+      klasifikasi?: string;
+      kategoriWarehouse?: string;
+    }>;
+
+    if (catFilter !== "all") {
+      list = list.filter((p) => p.kategori.toUpperCase() === catFilter.toUpperCase());
+    }
+
+    if (search.trim()) {
+      const s = search.toLowerCase().trim();
+      list = list.filter(
+        (p) =>
+          p.namaBarang.toLowerCase().includes(s) ||
+          String(p.kodeOracle || "").toLowerCase().includes(s) ||
+          String(p.kodeAccurate || "").toLowerCase().includes(s) ||
+          String(p.kodeBarang || "").toLowerCase().includes(s) ||
+          String(p.klasifikasi || "").toLowerCase().includes(s) ||
+          String(p.kategoriWarehouse || "").toLowerCase().includes(s)
+      );
+    }
+
+    return list;
+  }, [search, catFilter]);
+
+  const totalPages = Math.ceil(filtered.length / rowsPerPage);
+  const pagedData = useMemo(() => {
+    const start = page * rowsPerPage;
+    return filtered.slice(start, start + rowsPerPage);
+  }, [filtered, page]);
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs animate-in fade-in duration-150">
+      <div className="bg-white rounded-2xl max-w-5xl w-full p-6 shadow-2xl border border-gray-100 relative flex flex-col max-h-[90vh]">
+        {/* Header */}
+        <div className="flex items-center justify-between pb-3 border-b border-gray-200 shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-purple-100 text-purple-800 flex items-center justify-center text-xl shadow-xs">
+              📦
+            </div>
+            <div>
+              <h2 className="text-base font-bold text-gray-900">Database Master Produk & Obat</h2>
+              <p className="text-xs text-gray-500">
+                Total {masterProductList.length.toLocaleString("id-ID")} produk terdaftar (Acuan FARMA, ALKES, CCP, PREKURSOR, OOT)
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-700 w-8 h-8 rounded-full flex items-center justify-center hover:bg-gray-100 transition-colors text-lg"
+            title="Tutup"
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Toolbar & Filters */}
+        <div className="py-3 flex flex-wrap items-center justify-between gap-2 shrink-0 border-b border-gray-100">
+          <div className="flex items-center gap-1.5 overflow-x-auto">
+            <FBtn active={catFilter === "all"} onClick={() => { setCatFilter("all"); setPage(0); }}>
+              Semua ({masterProductList.length})
+            </FBtn>
+            <FBtn active={catFilter === "PREKURSOR"} onClick={() => { setCatFilter("PREKURSOR"); setPage(0); }} color="amber">
+              💊 Prekursor (96)
+            </FBtn>
+            <FBtn active={catFilter === "OOT"} onClick={() => { setCatFilter("OOT"); setPage(0); }} color="purple">
+              🧪 OOT (21)
+            </FBtn>
+            <FBtn active={catFilter === "CCP"} onClick={() => { setCatFilter("CCP"); setPage(0); }} color="sky">
+              ❄️ CCP (70)
+            </FBtn>
+            <FBtn active={catFilter === "ALKES"} onClick={() => { setCatFilter("ALKES"); setPage(0); }} color="teal">
+              🩺 Alkes (821)
+            </FBtn>
+            <FBtn active={catFilter === "FARMA"} onClick={() => { setCatFilter("FARMA"); setPage(0); }} color="indigo">
+              💊 Farma (6.143)
+            </FBtn>
+          </div>
+
+          <div className="relative w-72">
+            <span className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-gray-400 text-xs">
+              🔍
+            </span>
+            <input
+              type="text"
+              placeholder="Cari obat, kode Oracle/Accurate..."
+              value={search}
+              onChange={(e) => { setSearch(e.target.value); setPage(0); }}
+              className="w-full pl-7 pr-7 py-1 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 bg-white shadow-2xs"
+            />
+            {search && (
+              <button
+                onClick={() => { setSearch(""); setPage(0); }}
+                className="absolute inset-y-0 right-0 pr-2 flex items-center text-gray-400 hover:text-gray-600 font-bold text-xs"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Table Body */}
+        <div className="overflow-y-auto flex-1 my-2 border border-gray-200 rounded-lg">
+          <table className="w-full text-xs">
+            <thead className="bg-gray-50 border-b border-gray-200 sticky top-0 z-10 select-none">
+              <tr>
+                <th className="px-2.5 py-2 text-center text-gray-500 w-10">#</th>
+                <th className="px-2.5 py-2 text-left text-gray-500 w-28">Kategori</th>
+                <th className="px-2.5 py-2 text-left text-gray-500 w-28">Kode Oracle</th>
+                <th className="px-2.5 py-2 text-left text-gray-500 w-28">Kode Accurate</th>
+                <th className="px-2.5 py-2 text-left text-gray-500">Nama Barang / Deskripsi</th>
+                <th className="px-2.5 py-2 text-left text-gray-500 w-36">Klasifikasi</th>
+                <th className="px-2.5 py-2 text-left text-gray-500 w-36">Warehouse Cat</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {pagedData.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="text-center py-8 text-gray-400">
+                    Tidak ditemukan produk yang sesuai pencarian.
+                  </td>
+                </tr>
+              ) : (
+                pagedData.map((p, idx) => (
+                  <tr key={idx} className="hover:bg-gray-50">
+                    <td className="px-2.5 py-1.5 text-center text-gray-400 font-mono">
+                      {page * rowsPerPage + idx + 1}
+                    </td>
+                    <td className="px-2.5 py-1.5 whitespace-nowrap">
+                      <span
+                        className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold border ${
+                          p.kategori === "ALKES"
+                            ? "bg-teal-100 text-teal-800 border-teal-300"
+                            : p.kategori === "CCP"
+                            ? "bg-sky-100 text-sky-900 border-sky-300"
+                            : p.kategori === "PREKURSOR"
+                            ? "bg-amber-100 text-amber-900 border-amber-300"
+                            : p.kategori === "OOT"
+                            ? "bg-purple-100 text-purple-900 border-purple-300"
+                            : "bg-indigo-50 text-indigo-700 border-indigo-200"
+                        }`}
+                      >
+                        {p.kategori === "CCP" ? "❄️ CCP" : p.kategori}
+                      </span>
+                    </td>
+                    <td className="px-2.5 py-1.5 font-mono text-gray-800 whitespace-nowrap">
+                      {p.kodeOracle ? String(p.kodeOracle) : <span className="text-gray-400">-</span>}
+                    </td>
+                    <td className="px-2.5 py-1.5 font-mono text-gray-600 whitespace-nowrap">
+                      {p.kodeAccurate ? String(p.kodeAccurate) : <span className="text-gray-400">-</span>}
+                    </td>
+                    <td className="px-2.5 py-1.5 font-medium text-gray-900">{p.namaBarang}</td>
+                    <td className="px-2.5 py-1.5 text-gray-600">{p.klasifikasi || "-"}</td>
+                    <td className="px-2.5 py-1.5 text-gray-500">{p.kategoriWarehouse || "-"}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Footer Pagination */}
+        <div className="pt-3 border-t border-gray-200 flex items-center justify-between text-xs shrink-0">
+          <span className="text-gray-500">
+            Menampilkan {filtered.length.toLocaleString("id-ID")} produk · Halaman {page + 1} / {totalPages || 1}
+          </span>
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => setPage((p) => Math.max(0, p - 1))}
+              disabled={page === 0}
+              className="px-2.5 py-1 border border-gray-300 rounded bg-white hover:bg-gray-50 disabled:opacity-30 shadow-2xs"
+            >
+              ← Prev
+            </button>
+            <span className="font-semibold text-gray-700 px-1">
+              {page + 1} / {totalPages || 1}
+            </span>
+            <button
+              onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+              disabled={page >= totalPages - 1}
+              className="px-2.5 py-1 border border-gray-300 rounded bg-white hover:bg-gray-50 disabled:opacity-30 shadow-2xs"
+            >
+              Next →
+            </button>
+          </div>
         </div>
       </div>
     </div>
