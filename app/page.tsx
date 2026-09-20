@@ -76,8 +76,8 @@ type FakturGroup = {
   jenisTransaksi: string;
   customerName: string;
   kategori: "1P" | "2P" | "3P";
-  kategoriProdukList: string[];
   kategoriProduk: string;
+  kategoriProdukCounts?: Record<string, number>;
   hasPrekursor: boolean;
   hasOOT: boolean;
   isDoubleInv: boolean;
@@ -1164,22 +1164,29 @@ export default function Home() {
         const pAt = printedAtMap[invKey] || null;
         const isPrinted = printedInvoices.has(invKey);
 
-        const prodCatsSet = new Set<string>();
+        const catCounts: Record<string, number> = {};
         let hasPrekursor = false;
         let hasOOT = false;
 
         items.forEach((i) => {
           const klas = getPrekursorOOTClassification(i.itemDescription) || i.klasifikasiObat;
+          let itemCat = "FARMA";
           if (klas === "Prekursor") {
             hasPrekursor = true;
-            prodCatsSet.add("PREKURSOR");
+            itemCat = "PREKURSOR";
           } else if (klas === "OOT") {
             hasOOT = true;
-            prodCatsSet.add("OOT");
+            itemCat = "OOT";
+          } else {
+            const prodCat = getProductCategory(i.itemCode, i.itemDescription) || i.kategoriProduk;
+            itemCat = prodCat === "ALKES" ? "ALKES" : "FARMA";
           }
+          catCounts[itemCat] = (catCounts[itemCat] || 0) + 1;
         });
 
-        const prodCats = Array.from(prodCatsSet);
+        // Tentukan kategori dominan (kategori dengan jumlah item terbanyak dalam SO)
+        const sortedCats = Object.entries(catCounts).sort((a, b) => b[1] - a[1]);
+        const dominantCategory = sortedCats.length > 0 ? sortedCats[0][0] : "FARMA";
 
         return {
           key,
@@ -1191,8 +1198,8 @@ export default function Home() {
           jenisTransaksi: items[0].jenisTransaksi,
           customerName: items[0].customerName,
           kategori: items[0].kategori,
-          kategoriProdukList: prodCats,
-          kategoriProduk: prodCats.join(", "),
+          kategoriProduk: dominantCategory,
+          kategoriProdukCounts: catCounts,
           hasPrekursor,
           hasOOT,
           isDoubleInv: isDouble,
@@ -1294,11 +1301,12 @@ export default function Home() {
           g.so.toLowerCase().includes(s) ||
           g.invoiceNumber.toLowerCase().includes(s) ||
           g.customerName.toLowerCase().includes(s) ||
-          g.kategoriProdukList.some((k) => k.toLowerCase().includes(s)) ||
+          (g.kategoriProduk && g.kategoriProduk.toLowerCase().includes(s)) ||
           g.items.some(
             (i) =>
               i.itemDescription.toLowerCase().includes(s) ||
               i.itemCode.toLowerCase().includes(s) ||
+              (i.kategoriProduk && i.kategoriProduk.toLowerCase().includes(s)) ||
               (i.klasifikasiObat && i.klasifikasiObat.toLowerCase().includes(s))
           )
       );
@@ -2097,7 +2105,7 @@ export default function Home() {
                       <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 whitespace-nowrap">Print</th>
                       <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 whitespace-nowrap">No SO</th>
                       <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 whitespace-nowrap">No Invoice</th>
-                      <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 whitespace-nowrap">Klasifikasi</th>
+                      <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 whitespace-nowrap">Kat Produk</th>
                       <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 whitespace-nowrap">Jenis Transaksi</th>
                       <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 whitespace-nowrap">Pelanggan</th>
                       <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 whitespace-nowrap">Order Date</th>
@@ -2233,7 +2241,7 @@ export default function Home() {
                               )}
                             </td>
 
-                            {/* Col 4: Klasifikasi */}
+                            {/* Col 4: Kat Produk (Dominant Category) */}
                             <td
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -2242,24 +2250,31 @@ export default function Home() {
                               }}
                               className={`px-2 py-2 whitespace-nowrap ${getCellCls(4)}`}
                             >
-                              {g.kategoriProdukList && g.kategoriProdukList.length > 0 ? (
-                                <div className="flex flex-wrap gap-1 items-center">
-                                  {g.kategoriProdukList.map((cat) => (
-                                    <span
-                                      key={cat}
-                                      className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-bold tracking-wider border shadow-2xs ${
-                                        cat === "PREKURSOR"
-                                          ? "bg-amber-100 text-amber-900 border-amber-300"
-                                          : "bg-purple-100 text-purple-900 border-purple-300"
-                                      }`}
-                                    >
-                                      {cat}
-                                    </span>
-                                  ))}
-                                </div>
-                              ) : (
-                                <span className="text-gray-300 text-xs">-</span>
-                              )}
+                              <div className="flex flex-wrap gap-1 items-center">
+                                <span
+                                  className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-bold tracking-wider border shadow-2xs ${
+                                    g.kategoriProduk === "ALKES"
+                                      ? "bg-teal-100 text-teal-800 border-teal-300"
+                                      : g.kategoriProduk === "PREKURSOR"
+                                      ? "bg-amber-100 text-amber-900 border-amber-300"
+                                      : g.kategoriProduk === "OOT"
+                                      ? "bg-purple-100 text-purple-900 border-purple-300"
+                                      : "bg-indigo-50 text-indigo-700 border-indigo-200"
+                                  }`}
+                                >
+                                  {g.kategoriProduk}
+                                </span>
+                                {g.hasPrekursor && g.kategoriProduk !== "PREKURSOR" && (
+                                  <span className="inline-block px-1 py-0.2 rounded text-[9px] font-bold bg-amber-50 text-amber-800 border border-amber-300" title="Mengandung item Prekursor">
+                                    💊 Prekursor
+                                  </span>
+                                )}
+                                {g.hasOOT && g.kategoriProduk !== "OOT" && (
+                                  <span className="inline-block px-1 py-0.2 rounded text-[9px] font-bold bg-purple-50 text-purple-800 border border-purple-300" title="Mengandung item OOT">
+                                    🧪 OOT
+                                  </span>
+                                )}
+                              </div>
                             </td>
 
                             {/* Col 5: Jenis Transaksi */}
@@ -2361,23 +2376,22 @@ export default function Home() {
                                 <div className="flex flex-wrap items-center justify-between pb-2 mb-2 border-b border-gray-200 gap-2">
                                   <div className="text-xs text-gray-600">
                                     <span className="font-semibold text-gray-900">Invoice: <span className="font-mono text-blue-700 font-bold">{g.invoiceNumber}</span></span> · SO: <span className="font-semibold text-gray-900">{g.so}</span> {g.totalHarga < 0 && <span className="text-[10px] font-semibold text-rose-700 bg-rose-100 border border-rose-200 px-1.5 py-0.2 rounded">Memo Retur</span>} · Pelanggan: <span className="font-semibold text-gray-900">{g.customerName}</span>
-                                    {g.kategoriProdukList && g.kategoriProdukList.length > 0 && (
-                                      <span className="ml-2 inline-flex items-center gap-1">
-                                        <span className="font-medium text-gray-500">Klasifikasi:</span>
-                                        {g.kategoriProdukList.map((cat) => (
-                                          <span
-                                            key={cat}
-                                            className={`inline-block px-1.5 py-0.2 rounded text-[10px] font-bold border ${
-                                              cat === "PREKURSOR"
-                                                ? "bg-amber-100 text-amber-900 border-amber-300"
-                                                : "bg-purple-100 text-purple-900 border-purple-300"
-                                            }`}
-                                          >
-                                            {cat}
-                                          </span>
-                                        ))}
+                                    <span className="ml-2 inline-flex items-center gap-1">
+                                      <span className="font-medium text-gray-500">Kat Dominan:</span>
+                                      <span
+                                        className={`inline-block px-1.5 py-0.2 rounded text-[10px] font-bold border ${
+                                          g.kategoriProduk === "ALKES"
+                                            ? "bg-teal-100 text-teal-800 border-teal-300"
+                                            : g.kategoriProduk === "PREKURSOR"
+                                            ? "bg-amber-100 text-amber-900 border-amber-300"
+                                            : g.kategoriProduk === "OOT"
+                                            ? "bg-purple-100 text-purple-900 border-purple-300"
+                                            : "bg-indigo-50 text-indigo-700 border-indigo-200"
+                                        }`}
+                                      >
+                                        {g.kategoriProduk}
                                       </span>
-                                    )}
+                                    </span>
                                     {g.allPrinted && g.printedAt && (
                                       <span className="ml-2 inline-flex items-center gap-1 font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
                                         <span>⏱ Selesai Print:</span>
@@ -2408,7 +2422,7 @@ export default function Home() {
                                     <tr className="border-b border-gray-200">
                                       <th className="px-2 py-1 text-left font-medium text-gray-500">No Invoice</th>
                                       <th className="px-2 py-1 text-left font-medium text-gray-500">Item Code</th>
-                                      <th className="px-2 py-1 text-left font-medium text-gray-500">Klasifikasi</th>
+                                      <th className="px-2 py-1 text-left font-medium text-gray-500">Kat Produk</th>
                                       <th className="px-2 py-1 text-left font-medium text-gray-500">Item Description</th>
                                       <th className="px-2 py-1 text-right font-medium text-gray-500">Qty</th>
                                       <th className="px-2 py-1 text-left font-medium text-gray-500">UOM</th>
@@ -2423,17 +2437,27 @@ export default function Home() {
                                         <td className="px-2 py-1 font-mono text-gray-600 whitespace-nowrap">{item.itemCode}</td>
                                         <td className="px-2 py-1 whitespace-nowrap">
                                           {(() => {
-                                            const itemKlas = (getPrekursorOOTClassification(item.itemDescription) || item.klasifikasiObat || "").toUpperCase();
-                                            if (!itemKlas) return <span className="text-gray-300 text-xs">-</span>;
+                                            const klas = getPrekursorOOTClassification(item.itemDescription) || item.klasifikasiObat;
+                                            let itemCat = "FARMA";
+                                            if (klas === "Prekursor") itemCat = "PREKURSOR";
+                                            else if (klas === "OOT") itemCat = "OOT";
+                                            else {
+                                              const prodCat = getProductCategory(item.itemCode, item.itemDescription) || item.kategoriProduk;
+                                              itemCat = prodCat === "ALKES" ? "ALKES" : "FARMA";
+                                            }
                                             return (
                                               <span
                                                 className={`inline-block px-1.5 py-0.2 rounded text-[10px] font-bold border ${
-                                                  itemKlas === "PREKURSOR"
+                                                  itemCat === "ALKES"
+                                                    ? "bg-teal-100 text-teal-800 border-teal-300"
+                                                    : itemCat === "PREKURSOR"
                                                     ? "bg-amber-100 text-amber-900 border-amber-300"
-                                                    : "bg-purple-100 text-purple-900 border-purple-300"
+                                                    : itemCat === "OOT"
+                                                    ? "bg-purple-100 text-purple-900 border-purple-300"
+                                                    : "bg-indigo-50 text-indigo-700 border-indigo-200"
                                                 }`}
                                               >
-                                                {itemKlas}
+                                                {itemCat}
                                               </span>
                                             );
                                           })()}

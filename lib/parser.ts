@@ -120,7 +120,7 @@ const productList: Array<{ norm: string; cat: string }> = [];
   }
 });
 
-export function getProductCategory(itemCode?: string, itemDescription?: string): string | null {
+export function getProductCategory(itemCode?: string, itemDescription?: string): string {
   if (itemCode) {
     const cleanCode = String(itemCode).trim();
     if (productCodeMap[cleanCode]) return productCodeMap[cleanCode];
@@ -137,8 +137,12 @@ export function getProductCategory(itemCode?: string, itemDescription?: string):
         }
       }
     }
+    const s = " " + String(itemDescription).toUpperCase() + " ";
+    if (/\b(ALCOHOL|ALKOHOL|KASA|SPUIT|SYRINGE|JARUM|UNDERPAD|MASKER|INFUSION\s+SET|IV\s+CATHETER|HANDSCOON|GLOVES|TEST\s+PACK|URINE\s+BAG|THERMOMETER|TENSIMETER|SURGICAL|COTTON\s+BALL|KAPAS\s+PEMBALUT|SAFETY\s+BOX|ABOCATH|WINGS\s+NEEDLE|SURGICAL\s+TAPE|DERMAFIX|HYPAFIX|MICROPORE)\b/.test(s)) {
+      return "ALKES";
+    }
   }
-  return null;
+  return "FARMA";
 }
 
 /**
