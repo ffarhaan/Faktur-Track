@@ -696,8 +696,10 @@ export default function Home() {
         const invMap = new Map<string, Record<string, unknown>>();
         for (const r of parsed) {
           const isOra = isOraCustomer(r.customerName, r.jenisTransaksi);
-          const noFaktur = isOra ? `${r.invoiceNumber}-1P` : r.invoiceNumber;
-          if (!noFaktur || noFaktur === "0" || noFaktur === "-1P") continue;
+          const cleanInv = String(r.invoiceNumber || "").trim();
+          const hasInv = cleanInv && cleanInv !== "0" && cleanInv !== "-";
+          const noFaktur = hasInv ? (isOra ? `${cleanInv}-1P` : cleanInv) : (r.orderNumber ? `SO-${r.orderNumber}` : `ROW-${r.rowIndex}`);
+          if (!noFaktur || noFaktur === "SO-" || noFaktur === "-1P") continue;
 
           const prevInfo = existingStatusMap.get(noFaktur);
           const isPrinted = prevInfo ? prevInfo.status_cetak : false;
@@ -1549,12 +1551,12 @@ export default function Home() {
   }, [records, printedInvoices, grouped]);
 
   const exportToExcel = useCallback(() => {
-    if (grouped.length === 0) {
+    if (records.length === 0 && grouped.length === 0) {
       alert("Tidak ada data untuk diekspor.");
       return;
     }
 
-    // Sort strictly ASCENDING dari nomor faktur terkecil sampai terbesar (semua faktur tanpa ada yang terbuang)
+    // Sheet 1: Rekap Faktur (Diurutkan nomor faktur ascending)
     const sortedGroups = [...grouped].sort((a, b) => {
       const invA = parseInvNum(a.invoiceNumber);
       const invB = parseInvNum(b.invoiceNumber);
@@ -1564,12 +1566,11 @@ export default function Home() {
       return parseDateMs(a.orderDate) - parseDateMs(b.orderDate);
     });
 
-    // Sheet 1: Rekap Faktur Lengkap
-    const rekapData = sortedGroups.map((g, idx) => ({
+    const rekapFakturData = sortedGroups.map((g, idx) => ({
       "No": idx + 1,
       "Order Date": g.orderDate || "-",
-      "No SO": g.so || "-",
       "No Invoice": g.invoiceNumber || "Menunggu Faktur",
+      "No SO": g.so || "-",
       "Kategori Produk": g.kategoriProduk || "-",
       "Jenis Transaksi": g.jenisTransaksi || "-",
       "Kategori": g.kategori || "-",
@@ -1580,40 +1581,100 @@ export default function Home() {
       "Total Harga": g.totalHarga,
     }));
 
-    // Sheet 2: Detail Rincian Barang per Baris
+    // Sheet 2: Rekap per Sales Order (100% Seluruh SO Pasti Masuk Satu per Satu)
+    const soMap = new Map<string, FakturRecord[]>();
+    for (const r of records) {
+      const soKey = String(r.orderNumber || "").trim() || (r.invoiceNumber ? `INV-${r.invoiceNumber}` : `ROW-${r.rowIndex}`);
+      if (!soMap.has(soKey)) soMap.set(soKey, []);
+      soMap.get(soKey)!.push(r);
+    }
+
+    const sortedSORows = Array.from(soMap.entries()).map(([soKey, items]) => {
+      const invList = [...new Set(items.map((i) => i.invoiceNumber).filter((x) => x && x !== "0" && x !== "-"))];
+      const invKeyList = [...new Set(items.map((i) => i.invoiceKey).filter(Boolean))];
+      const isPrinted = invKeyList.some((k) => printedInvoices.has(k));
+      const pAt = invKeyList.map((k) => printedAtMap[k]).find(Boolean) || null;
+
+      const catCounts: Record<string, number> = {};
+      items.forEach((i) => {
+        const itemCat = (i.kategoriProduk || getProductCategory(i.itemCode, i.itemDescription) || "FARMA").toUpperCase();
+        catCounts[itemCat] = (catCounts[itemCat] || 0) + 1;
+      });
+
+      const prioOrder = ["PREKURSOR", "OOT", "CCP", "ALKES", "FARMA"];
+      let dominantCategory = "FARMA";
+      for (const p of prioOrder) {
+        if (catCounts[p]) {
+          dominantCategory = p;
+          break;
+        }
+      }
+
+      return {
+        soNumber: items[0].orderNumber || soKey,
+        invoiceNumber: invList.length > 0 ? invList.join(", ") : "Menunggu Faktur",
+        orderDate: items[0].orderDate || "-",
+        kategoriProduk: dominantCategory,
+        jenisTransaksi: items[0].jenisTransaksi || "-",
+        kategori: items[0].kategori || "3P",
+        customerName: items[0].customerName || "-",
+        isPrinted,
+        printedAt: pAt,
+        totalItems: items.length,
+        totalHarga: items.reduce((sum, i) => sum + (Number(i.totalHarga) || 0), 0),
+      };
+    }).sort((a, b) => {
+      return a.soNumber.localeCompare(b.soNumber, undefined, { numeric: true });
+    });
+
+    const rekapSOData = sortedSORows.map((s, idx) => ({
+      "No": idx + 1,
+      "Order Date": s.orderDate,
+      "No SO": s.soNumber,
+      "No Invoice": s.invoiceNumber,
+      "Kategori Produk": s.kategoriProduk,
+      "Jenis Transaksi": s.jenisTransaksi,
+      "Kategori": s.kategori,
+      "Pelanggan": s.customerName,
+      "Status Cetak": s.isPrinted ? "Sudah Terprint" : "Belum Terprint",
+      "Waktu Selesai Cetak": s.printedAt ? formatPrintTime(s.printedAt) : "-",
+      "Jumlah Item": s.totalItems,
+      "Total Harga SO": s.totalHarga,
+    }));
+
+    // Sheet 3: Detail Rincian Barang per Baris (Semua Item dari Seluruh SO)
     const detailItemsData: Array<Record<string, unknown>> = [];
     let itemIdx = 1;
-    for (const g of sortedGroups) {
-      for (const it of g.items) {
-        detailItemsData.push({
-          "No": itemIdx++,
-          "No Invoice": g.invoiceNumber || "Menunggu Faktur",
-          "No SO": it.orderNumber || g.so || "-",
-          "Kode Barang": it.itemCode || "-",
-          "Kategori Produk": it.kategoriProduk || getProductCategory(it.itemCode, it.itemDescription) || "-",
-          "Nama Barang / Deskripsi": it.itemDescription || "-",
-          "Qty": it.qty,
-          "UOM": it.uom || "-",
-          "LOT / Batch Number": it.lotNumber || "-",
-          "Total Harga Barang": it.totalHarga,
-          "Pelanggan": g.customerName || "-",
-          "Order Date": g.orderDate || "-",
-          "Jenis Transaksi": g.jenisTransaksi || "-",
-          "Kategori": g.kategori || "-",
-          "Status Cetak": g.allPrinted ? "Sudah Terprint" : "Belum Terprint",
-        });
-      }
+    for (const r of records) {
+      const hasInv = r.invoiceNumber && r.invoiceNumber !== "0" && r.invoiceNumber !== "-";
+      detailItemsData.push({
+        "No": itemIdx++,
+        "No SO": r.orderNumber || "-",
+        "No Invoice": hasInv ? r.invoiceNumber : "Menunggu Faktur",
+        "Kode Barang": r.itemCode || "-",
+        "Kategori Produk": r.kategoriProduk || getProductCategory(r.itemCode, r.itemDescription) || "FARMA",
+        "Nama Barang / Deskripsi": r.itemDescription || "-",
+        "Qty": r.qty,
+        "UOM": r.uom || "-",
+        "LOT / Batch Number": r.lotNumber || "-",
+        "Total Harga Barang": r.totalHarga,
+        "Pelanggan": r.customerName || "-",
+        "Order Date": r.orderDate || "-",
+        "Jenis Transaksi": r.jenisTransaksi || "-",
+        "Kategori": r.kategori || "-",
+        "Status Cetak": printedInvoices.has(r.invoiceKey) ? "Sudah Terprint" : "Belum Terprint",
+      });
     }
 
     const workbook = XLSX.utils.book_new();
 
     // 1. Append Sheet Rekap Faktur
-    const wsRekap = XLSX.utils.json_to_sheet(rekapData);
+    const wsRekap = XLSX.utils.json_to_sheet(rekapFakturData);
     wsRekap["!cols"] = [
       { wch: 6 },  // No
       { wch: 14 }, // Order Date
-      { wch: 18 }, // No SO
       { wch: 16 }, // No Invoice
+      { wch: 20 }, // No SO
       { wch: 20 }, // Kategori Produk
       { wch: 16 }, // Jenis Transaksi
       { wch: 10 }, // Kategori
@@ -1625,13 +1686,31 @@ export default function Home() {
     ];
     XLSX.utils.book_append_sheet(workbook, wsRekap, "Rekap Faktur");
 
-    // 2. Append Sheet Detail Barang
+    // 2. Append Sheet Rekap per SO
+    const wsRekapSO = XLSX.utils.json_to_sheet(rekapSOData);
+    wsRekapSO["!cols"] = [
+      { wch: 6 },  // No
+      { wch: 14 }, // Order Date
+      { wch: 20 }, // No SO
+      { wch: 18 }, // No Invoice
+      { wch: 20 }, // Kategori Produk
+      { wch: 16 }, // Jenis Transaksi
+      { wch: 10 }, // Kategori
+      { wch: 35 }, // Pelanggan
+      { wch: 18 }, // Status Cetak
+      { wch: 22 }, // Waktu Selesai Cetak
+      { wch: 14 }, // Jumlah Item
+      { wch: 18 }, // Total Harga SO
+    ];
+    XLSX.utils.book_append_sheet(workbook, wsRekapSO, "Rekap per SO");
+
+    // 3. Append Sheet Detail Barang
     if (detailItemsData.length > 0) {
       const wsDetail = XLSX.utils.json_to_sheet(detailItemsData);
       wsDetail["!cols"] = [
         { wch: 6 },  // No
+        { wch: 20 }, // No SO
         { wch: 16 }, // No Invoice
-        { wch: 18 }, // No SO
         { wch: 14 }, // Kode Barang
         { wch: 18 }, // Kategori Produk
         { wch: 45 }, // Nama Barang / Deskripsi
@@ -1652,7 +1731,7 @@ export default function Home() {
     const pad = (n: number) => String(n).padStart(2, "0");
     const dateStr = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
     XLSX.writeFile(workbook, `Rekap_Faktur_Lengkap_${dateStr}.xlsx`);
-  }, [grouped]);
+  }, [grouped, records, printedInvoices, printedAtMap]);
 
   return (
     <main className="min-h-screen bg-gray-50">

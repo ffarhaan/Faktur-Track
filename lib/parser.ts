@@ -291,7 +291,7 @@ function parseXXCUST(data: unknown[][], headerIdx: number): FakturRecord[] {
   const records: FakturRecord[] = [];
   for (let i = headerIdx + 1; i < data.length; i++) {
     const row = data[i];
-    if (!row || !row[0]) continue;
+    if (!row || row.length === 0) continue;
 
     const orderNumber = String(row[idx.orderNumber] ?? "").trim();
     const invoiceNumber = String(row[idx.invoiceNumber] ?? "").trim();
