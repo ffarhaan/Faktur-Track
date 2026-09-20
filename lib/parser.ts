@@ -323,14 +323,7 @@ function parseXXCUST(data: unknown[][], headerIdx: number): FakturRecord[] {
     const rawJenis = String(row[idx.jenisTransaksi] ?? "").toUpperCase().trim();
     const isOra = rawJenis === "ORA" || isOraCustomer(customerName, rawJenis);
     const jenisTransaksi: "ORA" | "DOO" = isOra ? "ORA" : "DOO";
-    
-    let siteId = "";
-    const siteMatch = orderNumber.match(/^[A-Z0-9]+-(\d+)/);
-    if (siteMatch) {
-      siteId = siteMatch[1];
-    }
-
-    const kategori = categorize(jenisTransaksi, customerName, jenisTransaksi, siteId);
+    const kategori = categorize(jenisTransaksi, customerName, jenisTransaksi);
     const invoiceKey = isOra ? `${invoiceNumber}-1P` : invoiceNumber;
 
     const itemCode = String(row[idx.itemCode] ?? "").trim();
