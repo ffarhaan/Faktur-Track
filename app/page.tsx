@@ -1999,6 +1999,7 @@ export default function Home() {
 
                 {/* Kategori Produk & Regulasi */}
                 <div className="flex gap-1 shrink-0">
+                  <FBtn active={klasFilter === "all"} onClick={() => setKlasFilter("all")}>All Produk</FBtn>
                   <FBtn active={klasFilter === "prekursor"} onClick={() => setKlasFilter((prev) => (prev === "prekursor" ? "all" : "prekursor"))} color="amber">💊 Prekursor</FBtn>
                   <FBtn active={klasFilter === "oot"} onClick={() => setKlasFilter((prev) => (prev === "oot" ? "all" : "oot"))} color="purple">🧪 OOT</FBtn>
                   <FBtn active={klasFilter === "ccp"} onClick={() => setKlasFilter((prev) => (prev === "ccp" ? "all" : "ccp"))} color="sky">❄️ CCP</FBtn>
