@@ -294,9 +294,25 @@ export default function Home() {
 
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
-  const [printedInvoices, setPrintedInvoices] = useState<Set<string>>(new Set());
+  const [printedInvoices, setPrintedInvoices] = useState<Set<string>>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem("printedInvoices");
+        if (saved) return new Set(JSON.parse(saved));
+      } catch {}
+    }
+    return new Set();
+  });
   const [sessionPrintedKeys, setSessionPrintedKeys] = useState<Set<string>>(new Set());
-  const [printedAtMap, setPrintedAtMap] = useState<Record<string, string>>({});
+  const [printedAtMap, setPrintedAtMap] = useState<Record<string, string>>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem("printedAtMap");
+        if (saved) return JSON.parse(saved);
+      } catch {}
+    }
+    return {};
+  });
   const [dragOver, setDragOver] = useState(false);
   const [expandedInvoices, setExpandedInvoices] = useState<Set<string>>(new Set());
   const [selectedRowIndex, setSelectedRowIndex] = useState(0);
@@ -419,7 +435,9 @@ export default function Home() {
   const togglePrint = useCallback(
     async (group: FakturGroup) => {
       const willBePrinted = !group.allPrinted;
-      const targetKey = group.invoiceKey;
+      const targetKey = group.invoiceKey || group.invoiceNumber;
+      const cleanKey = targetKey.replace(/-1P$/i, "");
+      const keysToSync = [targetKey, cleanKey, `${cleanKey}-1P`].filter(Boolean);
 
       // Debounce rapid toggles on the same invoice (< 300ms)
       if (inFlightToggleRef.current.has(targetKey)) return;
@@ -432,9 +450,9 @@ export default function Home() {
       const next = new Set(printedInvoices);
 
       if (willBePrinted) {
-        next.add(targetKey);
+        keysToSync.forEach((k) => next.add(k));
       } else {
-        next.delete(targetKey);
+        keysToSync.forEach((k) => next.delete(k));
       }
       setPrintedInvoices(next);
 
@@ -442,18 +460,22 @@ export default function Home() {
       setSessionPrintedKeys((prev) => {
         const sNext = new Set(prev);
         if (willBePrinted) {
-          sNext.add(targetKey);
+          keysToSync.forEach((k) => sNext.add(k));
         } else {
-          sNext.delete(targetKey);
+          keysToSync.forEach((k) => sNext.delete(k));
         }
         return sNext;
       });
 
       const nextMap = { ...printedAtMap };
       if (willBePrinted) {
-        nextMap[targetKey] = nowIso;
+        keysToSync.forEach((k) => {
+          nextMap[k] = nowIso;
+        });
       } else {
-        delete nextMap[targetKey];
+        keysToSync.forEach((k) => {
+          delete nextMap[k];
+        });
       }
       setPrintedAtMap(nextMap);
       try {
@@ -1228,8 +1250,18 @@ export default function Home() {
         });
         const soStr = soList.join(", ");
         const isDouble = soList.some((s) => (soInvMap[s]?.size || 0) > 1);
-        const pAt = printedAtMap[invKey] || null;
-        const isPrinted = printedInvoices.has(invKey);
+        const cleanInv = (invNum || invKey || "").replace(/-1P$/i, "");
+        const isPrinted =
+          printedInvoices.has(invKey) ||
+          printedInvoices.has(invNum) ||
+          (cleanInv ? printedInvoices.has(cleanInv) : false) ||
+          (cleanInv ? printedInvoices.has(`${cleanInv}-1P`) : false);
+        const pAt =
+          printedAtMap[invKey] ||
+          printedAtMap[invNum] ||
+          (cleanInv ? printedAtMap[cleanInv] : null) ||
+          (cleanInv ? printedAtMap[`${cleanInv}-1P`] : null) ||
+          null;
 
         const catCounts: Record<string, number> = {};
         let hasPrekursor = false;
