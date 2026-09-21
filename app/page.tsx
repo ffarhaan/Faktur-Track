@@ -763,7 +763,7 @@ export default function Home() {
           if (!noFaktur || noFaktur === "SO-" || noFaktur === "-1P") continue;
 
           const targetKey = noFaktur;
-          const isNewInvoice = isOra ? (prevOraNum > 0 && num > prevOraNum) : (prevDooNum > 0 && num > prevDooNum);
+          const isNewInvoice = (isOra ? (prevOraNum > 0 && num > prevOraNum) : (prevDooNum > 0 && num > prevDooNum)) || !existingStatusMap.has(noFaktur);
           const prevInfo = !isNewInvoice ? (existingStatusMap.get(noFaktur) || (r.orderNumber ? existingStatusMap.get(`SO-${r.orderNumber}`) : undefined)) : undefined;
           const isPrinted = !isNewInvoice && prevInfo ? Boolean(prevInfo.status_cetak) : false;
           const printedAt = !isNewInvoice && prevInfo ? prevInfo.printed_at : null;
@@ -1224,7 +1224,7 @@ export default function Home() {
           const cleanInv = String(r.invoiceNumber || "").trim().replace(/-1P$/i, "");
           const num = parseInvNum(cleanInv);
           const invKey = isOra ? `${cleanInv}-1P` : cleanInv;
-          const isNewInvoice = isOra ? (prevOraNum > 0 && num > prevOraNum) : (prevDooNum > 0 && num > prevDooNum);
+          const isNewInvoice = (isOra ? (prevOraNum > 0 && num > prevOraNum) : (prevDooNum > 0 && num > prevDooNum)) || !existingStatusMap.has(invKey);
           if (isNewInvoice) {
             mergedPrintedSet.delete(invKey);
             mergedPrintedSet.delete(cleanInv);
