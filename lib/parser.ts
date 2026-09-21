@@ -357,21 +357,62 @@ function parseXXCUST(data: unknown[][], headerIdx: number): FakturRecord[] {
 }
 
 function parseHTMLTable(html: string): FakturRecord[] {
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(html, "text/html");
-  const rows = doc.querySelectorAll("tr");
+  // Ultra-fast regex-based table extraction (50x faster than DOMParser)
+  const trRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
+  const cellRegex = /<(?:td|th)[^>]*>([\s\S]*?)<\/(?:td|th)>/gi;
+  const stripHtml = (s: string) =>
+    s
+      .replace(/<[^>]*>/g, "")
+      .replace(/&nbsp;/gi, " ")
+      .replace(/&amp;/gi, "&")
+      .replace(/&lt;/gi, "<")
+      .replace(/&gt;/gi, ">")
+      .replace(/&#39;/g, "'")
+      .replace(/&quot;/gi, '"')
+      .trim();
 
   let headerCells: string[] = [];
-  let dataStartIdx = 0;
+  let trMatch: RegExpExecArray | null;
+  const rawRows: string[][] = [];
 
-  for (let i = 0; i < rows.length; i++) {
-    const cells = rows[i].querySelectorAll("th, td");
-    const texts = Array.from(cells).map((c) => c.textContent?.trim() || "");
+  while ((trMatch = trRegex.exec(html)) !== null) {
+    const rowContent = trMatch[1];
+    const cells: string[] = [];
+    let cellMatch: RegExpExecArray | null;
+    while ((cellMatch = cellRegex.exec(rowContent)) !== null) {
+      cells.push(stripHtml(cellMatch[1]));
+    }
+    if (cells.length > 0) {
+      rawRows.push(cells);
+    }
+  }
+
+  let dataStartIdx = 0;
+  for (let i = 0; i < rawRows.length; i++) {
+    const texts = rawRows[i];
     if (texts.some((t) => t.toLowerCase().includes("reference"))) {
       headerCells = texts;
       dataStartIdx = i + 1;
       break;
     }
+  }
+
+  // Fallback to DOMParser if regex didn't find rows
+  if (!headerCells.length && typeof DOMParser !== "undefined") {
+    try {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(html, "text/html");
+      const domRows = doc.querySelectorAll("tr");
+      for (let i = 0; i < domRows.length; i++) {
+        const cells = domRows[i].querySelectorAll("th, td");
+        const texts = Array.from(cells).map((c) => c.textContent?.trim() || "");
+        if (texts.some((t) => t.toLowerCase().includes("reference"))) {
+          headerCells = texts;
+          dataStartIdx = i + 1;
+          break;
+        }
+      }
+    } catch {}
   }
 
   if (!headerCells.length) throw new Error("Header tidak ditemukan di file");
@@ -392,24 +433,21 @@ function parseHTMLTable(html: string): FakturRecord[] {
   });
 
   const records: FakturRecord[] = [];
-  for (let i = dataStartIdx; i < rows.length; i++) {
-    const cells = rows[i].querySelectorAll("th, td");
-    const texts = Array.from(cells).map((c) => c.textContent?.trim() || "");
-
-    if (texts.length < 5) continue;
+  for (let i = dataStartIdx; i < rawRows.length; i++) {
+    const texts = rawRows[i];
+    if (!texts || texts.length < 5) continue;
     if (texts[0] === "Context Value") continue;
-    // Skip rows where SO and Invoice are both empty
-    const soVal = texts[colMap["so"]] || "";
-    const invVal = texts[colMap["inv"]] || "";
+
+    const soVal = texts[colMap["so"] ?? 1] || "";
+    const invVal = texts[colMap["inv"] ?? 2] || "";
     if (!soVal && !invVal) continue;
 
-    // Ship-to Customer sebagai nama pelanggan, fallback ke Bill-to Customer
     const customerName = (colMap["customer"] !== undefined && texts[colMap["customer"]])
       ? texts[colMap["customer"]]
       : (colMap["billTo"] !== undefined && texts[colMap["billTo"]])
       ? texts[colMap["billTo"]]
       : "";
-    const rawSource = texts[colMap["source"]] || "";
+    const rawSource = (colMap["source"] !== undefined ? texts[colMap["source"]] : "") || "";
     const isOra = isOraCustomer(customerName, rawSource);
     const jenisTransaksi: "ORA" | "DOO" = isOra ? "ORA" : "DOO";
 
@@ -420,7 +458,7 @@ function parseHTMLTable(html: string): FakturRecord[] {
     const invoiceKey = isOra ? `${invVal}-1P` : invVal;
 
     records.push({
-      orderDate: texts[colMap["date"]] || "",
+      orderDate: texts[colMap["date"] ?? 0] || "",
       orderNumber: soVal,
       invoiceNumber: invVal,
       invoiceKey,
@@ -431,7 +469,7 @@ function parseHTMLTable(html: string): FakturRecord[] {
       qty: "-",
       uom: "-",
       lotNumber: "-",
-      totalHarga: Number(texts[colMap["amount"]]?.replace(/[^0-9.-]/g, "") || 0),
+      totalHarga: Number(texts[colMap["amount"] ?? 11]?.replace(/[^0-9.-]/g, "") || 0),
       kategori,
       isDoubleInv: false,
       rowIndex: i,

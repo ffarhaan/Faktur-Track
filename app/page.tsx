@@ -954,21 +954,18 @@ export default function Home() {
           updatedAt: new Date().toLocaleTimeString("id-ID"),
         };
 
+        // 1. INSTANT LOCAL STATE UPDATE (0ms perceptible delay)
+        const { records: localRecs, printedSet: localPrintedSet, printedAtMap: localPrintedAtMap } = dbRowsToFakturRecords(
+          payload as unknown as Array<Record<string, unknown>>
+        );
+
+        setRecords(localRecs);
+        setPrintedInvoices(localPrintedSet);
+        setPrintedAtMap(localPrintedAtMap);
         setInvoiceProgression(progObj);
         try {
           localStorage.setItem("invoiceProgression", JSON.stringify(progObj));
         } catch {}
-
-        // Save batch to Firestore Cloud Database in chunks
-        await saveFaktursBatch(
-          payload as FirestoreFakturDoc[],
-          progObj,
-          loadedPrintState || {
-            printedKeys: Array.from(printedInvoices),
-            printedAtMap,
-            updatedAt: new Date().toISOString(),
-          }
-        );
 
         setUploadNotification({
           fileName: file.name,
@@ -988,6 +985,21 @@ export default function Home() {
           ...prev,
           { name: file.name, count: parsed.length, time: new Date().toLocaleString("id-ID") },
         ]);
+        setPage(0);
+        setLoading(false); // Instant unlock!
+
+        // 2. BACKGROUND FIRESTORE SYNC (Non-blocking)
+        saveFaktursBatch(
+          payload as FirestoreFakturDoc[],
+          progObj,
+          loadedPrintState || {
+            printedKeys: Array.from(localPrintedSet),
+            printedAtMap: localPrintedAtMap,
+            updatedAt: new Date().toISOString(),
+          }
+        ).catch((err) => {
+          console.error("Background Firestore save warning:", err);
+        });
         setPage(0);
       } catch (e) {
         setError(e instanceof Error ? e.message : "Gagal membaca file.");
