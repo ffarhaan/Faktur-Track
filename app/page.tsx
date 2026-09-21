@@ -756,17 +756,17 @@ export default function Home() {
         // Merge incoming records into invMap
         for (const r of parsed) {
           const isOra = isOraCustomer(r.customerName);
-          const cleanInv = String(r.invoiceNumber || "").trim();
+          const cleanInv = String(r.invoiceNumber || "").trim().replace(/-1P$/i, "");
+          const num = parseInvNum(cleanInv);
           const hasInv = cleanInv && cleanInv !== "0" && cleanInv !== "-";
           const noFaktur = hasInv ? (isOra ? `${cleanInv}-1P` : cleanInv) : (r.orderNumber ? `SO-${r.orderNumber}` : `ROW-${r.rowIndex}`);
           if (!noFaktur || noFaktur === "SO-" || noFaktur === "-1P") continue;
 
           const targetKey = noFaktur;
-          const prevInfo =
-            existingStatusMap.get(noFaktur) ||
-            (r.orderNumber ? existingStatusMap.get(`SO-${r.orderNumber}`) : undefined);
-          const isPrinted = prevInfo ? prevInfo.status_cetak : false;
-          const printedAt = prevInfo ? prevInfo.printed_at : null;
+          const isNewInvoice = isOra ? (prevOraNum > 0 && num > prevOraNum) : (prevDooNum > 0 && num > prevDooNum);
+          const prevInfo = !isNewInvoice ? (existingStatusMap.get(noFaktur) || (r.orderNumber ? existingStatusMap.get(`SO-${r.orderNumber}`) : undefined)) : undefined;
+          const isPrinted = !isNewInvoice && prevInfo ? Boolean(prevInfo.status_cetak) : false;
+          const printedAt = !isNewInvoice && prevInfo ? prevInfo.printed_at : null;
           const prevExtra = (prevInfo?.extra as Record<string, unknown>) || null;
           const prevItems = (prevExtra?.items as Array<Record<string, unknown>>) || [];
           const hasExistingRichItems =
@@ -872,7 +872,10 @@ export default function Home() {
           }
 
           const existing = invMap.get(targetKey)!;
-          if (isPrinted) {
+          if (isNewInvoice) {
+            existing.status_cetak = false;
+            existing.printed_at = null;
+          } else if (isPrinted) {
             existing.status_cetak = true;
             if (printedAt) existing.printed_at = printedAt;
           }
@@ -1214,6 +1217,22 @@ export default function Home() {
         setRecords(localRecs);
         const mergedPrintedSet = new Set([...currentActivePrintedSet, ...localPrintedSet]);
         const mergedPrintedMap = { ...currentActivePrintedAtMap, ...localPrintedAtMap };
+
+        // For all new invoices in the uploaded file, guarantee they are NEVER in the printed set!
+        for (const r of parsed) {
+          const isOra = isOraCustomer(r.customerName);
+          const cleanInv = String(r.invoiceNumber || "").trim().replace(/-1P$/i, "");
+          const num = parseInvNum(cleanInv);
+          const invKey = isOra ? `${cleanInv}-1P` : cleanInv;
+          const isNewInvoice = isOra ? (prevOraNum > 0 && num > prevOraNum) : (prevDooNum > 0 && num > prevDooNum);
+          if (isNewInvoice) {
+            mergedPrintedSet.delete(invKey);
+            mergedPrintedSet.delete(cleanInv);
+            delete mergedPrintedMap[invKey];
+            delete mergedPrintedMap[cleanInv];
+          }
+        }
+
         setPrintedInvoices(mergedPrintedSet);
         setPrintedAtMap(mergedPrintedMap);
         setInvoiceProgression(progObj);
