@@ -448,7 +448,8 @@ function parseHTMLTable(html: string): FakturRecord[] {
       ? texts[colMap["billTo"]]
       : "";
     const rawSource = (colMap["source"] !== undefined ? texts[colMap["source"]] : "") || "";
-    const isOra = isOraCustomer(customerName, rawSource);
+    const rawJenis = (colMap["jenis"] !== undefined ? texts[colMap["jenis"]] : "") || "";
+    const isOra = isOraCustomer(customerName, `${rawSource} ${rawJenis}`);
     const jenisTransaksi: "ORA" | "DOO" = isOra ? "ORA" : "DOO";
 
     const shipSite = colMap["shipSite"] !== undefined ? texts[colMap["shipSite"]] : "";
@@ -545,7 +546,8 @@ function parseExportArray(data: unknown[][], headerIdx: number = -1): FakturReco
     ).trim();
 
     const rawSource = String((colMap["source"] !== undefined ? row[colMap["source"]] : row[4]) || "").trim();
-    const isOra = isOraCustomer(customerName, rawSource);
+    const rawJenis = String((colMap["jenis"] !== undefined ? row[colMap["jenis"]] : row[6]) || "").trim();
+    const isOra = isOraCustomer(customerName, `${rawSource} ${rawJenis}`);
     const jenisTransaksi: "ORA" | "DOO" = isOra ? "ORA" : "DOO";
 
     const shipSite = String((colMap["shipSite"] !== undefined ? row[colMap["shipSite"]] : "") || "");
