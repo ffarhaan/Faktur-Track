@@ -769,20 +769,9 @@ export default function Home() {
           const noFaktur = hasInv ? (isOra ? `${cleanInv}-1P` : cleanInv) : (r.orderNumber ? `SO-${r.orderNumber}` : `ROW-${r.rowIndex}`);
           if (!noFaktur || noFaktur === "SO-" || noFaktur === "-1P") continue;
 
-          // Check if already in invMap with any key variant
-          const targetKey = invMap.has(noFaktur)
-            ? noFaktur
-            : invMap.has(cleanInv)
-            ? cleanInv
-            : invMap.has(`${cleanInv}-1P`)
-            ? `${cleanInv}-1P`
-            : noFaktur;
-
+          const targetKey = noFaktur;
           const prevInfo =
-            existingStatusMap.get(targetKey) ||
             existingStatusMap.get(noFaktur) ||
-            existingStatusMap.get(cleanInv) ||
-            existingStatusMap.get(`${cleanInv}-1P`) ||
             (r.orderNumber ? existingStatusMap.get(`SO-${r.orderNumber}`) : undefined);
           const isPrinted = prevInfo ? prevInfo.status_cetak : false;
           const printedAt = prevInfo ? prevInfo.printed_at : null;
