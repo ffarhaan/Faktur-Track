@@ -286,17 +286,25 @@ export default function Home() {
   const [showApotekModal, setShowApotekModal] = useState(false);
   const [showProductModal, setShowProductModal] = useState(false);
   const inFlightToggleRef = useRef<Set<string>>(new Set());
+  const latestDBDocsRef = useRef<FirestoreFakturDoc[]>([]);
+  const latestProgressionRef = useRef<InvoiceProgression | null>(null);
+  const latestPrintStateRef = useRef<{ printedKeys: string[]; printedAtMap: Record<string, string>; updatedAt: string } | null>(null);
 
   // Realtime subscription to Firebase Firestore
   useEffect(() => {
     setLoading(true);
     const unsubscribe = subscribeToFakturs(
-      (docs, prog) => {
+      (docs, prog, printState) => {
+        latestDBDocsRef.current = docs;
         if (prog) {
+          latestProgressionRef.current = prog;
           setInvoiceProgression(prog);
           try {
             localStorage.setItem("invoiceProgression", JSON.stringify(prog));
           } catch {}
+        }
+        if (printState) {
+          latestPrintStateRef.current = printState;
         }
 
         if (docs.length > 0) {
@@ -453,8 +461,17 @@ export default function Home() {
 
         const importedAt = new Date().toISOString();
 
-        // Fetch ALL existing print status & data from Firestore so we NEVER reset already printed invoices or rich item data
-        const { docs: existingDBDocs, progression: loadedProgression, printState: loadedPrintState } = await getExistingFakturs();
+        // Use live in-memory records as primary base, or fetch from DB if empty
+        let existingDBDocs = latestDBDocsRef.current;
+        let loadedProgression = latestProgressionRef.current;
+        let loadedPrintState = latestPrintStateRef.current;
+
+        if (existingDBDocs.length === 0) {
+          const res = await getExistingFakturs();
+          existingDBDocs = res.docs;
+          if (res.progression) loadedProgression = res.progression;
+          if (res.printState) loadedPrintState = res.printState;
+        }
         const existingDB = existingDBDocs as unknown as Array<Record<string, unknown>>;
 
         const existingStatusMap = new Map<
