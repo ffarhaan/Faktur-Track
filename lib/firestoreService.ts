@@ -353,13 +353,21 @@ export async function updateFaktursPrintStatusBatch(
 
   if (status) {
     keys.forEach((k) => {
-      currentKeys.add(k);
-      if (printedAt) currentMap[k] = printedAt;
+      const cleanKey = k.replace(/-1P$/i, "");
+      const keysToSync = [k, cleanKey, `${cleanKey}-1P`];
+      keysToSync.forEach((syncK) => {
+        currentKeys.add(syncK);
+        if (printedAt) currentMap[syncK] = printedAt;
+      });
     });
   } else {
     keys.forEach((k) => {
-      currentKeys.delete(k);
-      delete currentMap[k];
+      const cleanKey = k.replace(/-1P$/i, "");
+      const keysToSync = [k, cleanKey, `${cleanKey}-1P`];
+      keysToSync.forEach((syncK) => {
+        currentKeys.delete(syncK);
+        delete currentMap[syncK];
+      });
     });
   }
 
