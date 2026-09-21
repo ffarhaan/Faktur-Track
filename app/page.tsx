@@ -540,8 +540,34 @@ export default function Home() {
           (r) => r.itemCode && r.itemCode !== "-" && r.itemCode !== ""
         );
 
-        // Group parsed records by invoice to upsert to Supabase
+        // Pre-populate invMap with ALL existing records from DB so multiple files (ORA + DOO + XXCUST) merge seamlessly
         const invMap = new Map<string, Record<string, unknown>>();
+        existingDB.forEach((row) => {
+          if (row.no_faktur === "__SYSTEM_METADATA__") return;
+          const k = String(row.no_faktur || row.id || "");
+          if (k) {
+            const extra = (row.extra as Record<string, unknown>) || {};
+            const soSet = new Set<string>();
+            if (row.no_sales_order) {
+              String(row.no_sales_order).split(",").forEach((s) => {
+                const t = s.trim();
+                if (t && t !== "-") soSet.add(t);
+              });
+            }
+            const prevItems = (extra.items as Array<Record<string, unknown>>) || [];
+            const hasExistingRichItems =
+              prevItems.length > 0 &&
+              prevItems.some((it) => it.item_code && it.item_code !== "-" && it.item_code !== "");
+
+            invMap.set(k, {
+              ...row,
+              _soSet: soSet,
+              _hasPreservedItems: hasExistingRichItems,
+            });
+          }
+        });
+
+        // Merge incoming records into invMap
         for (const r of parsed) {
           const isOra = isOraCustomer(r.customerName, r.jenisTransaksi);
           const cleanInv = String(r.invoiceNumber || "").trim();
@@ -549,7 +575,17 @@ export default function Home() {
           const noFaktur = hasInv ? (isOra ? `${cleanInv}-1P` : cleanInv) : (r.orderNumber ? `SO-${r.orderNumber}` : `ROW-${r.rowIndex}`);
           if (!noFaktur || noFaktur === "SO-" || noFaktur === "-1P") continue;
 
+          // Check if already in invMap with any key variant
+          const targetKey = invMap.has(noFaktur)
+            ? noFaktur
+            : invMap.has(cleanInv)
+            ? cleanInv
+            : invMap.has(`${cleanInv}-1P`)
+            ? `${cleanInv}-1P`
+            : noFaktur;
+
           const prevInfo =
+            existingStatusMap.get(targetKey) ||
             existingStatusMap.get(noFaktur) ||
             existingStatusMap.get(cleanInv) ||
             existingStatusMap.get(`${cleanInv}-1P`) ||
@@ -563,22 +599,15 @@ export default function Home() {
             prevItems.some(
               (it) => it.item_code && it.item_code !== "-" && it.item_code !== ""
             );
-          const existingSO = String(
-            prevInfo?.no_sales_order || (prevExtra?.order_number as string) || ""
-          ).trim();
 
           const isIncomingItem = Boolean(
             r.itemCode && r.itemCode !== "-" && r.itemCode !== ""
           );
 
-          if (!invMap.has(noFaktur)) {
+          if (!invMap.has(targetKey)) {
             const existingName = String(prevExtra?.nama_pelanggan || "").trim();
             const incomingName = String(r.customerName || "").trim();
 
-            // Smarter Customer Name Resolution:
-            // - If incomingName is generic "PT Helios Alchemist Kesehatan" (or empty/numeric)
-            //   and existingName already has a specific apotek/branch name (e.g. "HAK Gejayan", "Apotek Afifah", "Apotek Medika", etc.),
-            //   DO NOT overwrite it with generic Helios! Preserve existingName.
             const isIncomingGenericHelios =
               incomingName.toUpperCase().includes("HELIOS") ||
               incomingName.toUpperCase() === "PT HELIOS ALCHEMIST KESEHATAN" ||
@@ -603,7 +632,6 @@ export default function Home() {
               }
             }
 
-            // SO Number selection:
             const soSet = new Set<string>();
             if (prevInfo?.no_sales_order) {
               prevInfo.no_sales_order.split(",").forEach((s) => {
@@ -618,8 +646,8 @@ export default function Home() {
               baseItems.push(...prevItems);
             }
 
-            invMap.set(noFaktur, {
-              no_faktur: noFaktur,
+            invMap.set(targetKey, {
+              no_faktur: targetKey,
               no_sales_order: Array.from(soSet).join(", ") || r.orderNumber || "-",
               customer_name: finalCustomerName || r.customerName || "-",
               order_date: r.orderDate || "-",
@@ -642,7 +670,12 @@ export default function Home() {
             });
           }
 
-          const existing = invMap.get(noFaktur)!;
+          const existing = invMap.get(targetKey)!;
+          if (isPrinted) {
+            existing.status_cetak = true;
+            if (printedAt) existing.printed_at = printedAt;
+          }
+
           if (isFileItemRich && isIncomingItem) {
             if (r.orderNumber) {
               (existing._soSet as Set<string>).add(r.orderNumber);

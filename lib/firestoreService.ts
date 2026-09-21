@@ -76,11 +76,17 @@ export function subscribeToFakturs(
     const printedSet = new Set(currentPrintState.printedKeys || []);
     const pMap = currentPrintState.printedAtMap || {};
 
-    // Apply printed status
+    // Apply printed status with multi-key fallback (raw, clean, and -1P)
     for (const d of allDocs) {
       const key = d.id || d.no_faktur;
-      d.status_cetak = printedSet.has(key);
-      d.printed_at = pMap[key] || null;
+      const cleanKey = key.replace(/-1P$/i, "");
+      const isPrinted =
+        printedSet.has(key) ||
+        printedSet.has(cleanKey) ||
+        printedSet.has(`${cleanKey}-1P`);
+      d.status_cetak = isPrinted;
+      d.printed_at =
+        pMap[key] || pMap[cleanKey] || pMap[`${cleanKey}-1P`] || null;
     }
 
     onData(allDocs, currentProgression, currentPrintState);
@@ -183,8 +189,14 @@ export async function getExistingFakturs(): Promise<{
     const pMap = printState.printedAtMap || {};
     for (const d of docs) {
       const key = d.id || d.no_faktur;
-      d.status_cetak = printedSet.has(key);
-      d.printed_at = pMap[key] || null;
+      const cleanKey = key.replace(/-1P$/i, "");
+      const isPrinted =
+        printedSet.has(key) ||
+        printedSet.has(cleanKey) ||
+        printedSet.has(`${cleanKey}-1P`);
+      d.status_cetak = isPrinted;
+      d.printed_at =
+        pMap[key] || pMap[cleanKey] || pMap[`${cleanKey}-1P`] || null;
     }
   }
 
@@ -303,13 +315,17 @@ export async function updateFakturPrintStatus(
 ): Promise<void> {
   const nextKeys = new Set(currentPrintedKeys);
   const nextMap = { ...currentPrintedAtMap };
+  const cleanKey = invoiceKey.replace(/-1P$/i, "");
+  const keysToSync = [invoiceKey, cleanKey, `${cleanKey}-1P`];
 
   if (status) {
-    nextKeys.add(invoiceKey);
-    if (printedAt) nextMap[invoiceKey] = printedAt;
+    keysToSync.forEach((k) => nextKeys.add(k));
+    if (printedAt) {
+      keysToSync.forEach((k) => (nextMap[k] = printedAt));
+    }
   } else {
-    nextKeys.delete(invoiceKey);
-    delete nextMap[invoiceKey];
+    keysToSync.forEach((k) => nextKeys.delete(k));
+    keysToSync.forEach((k) => delete nextMap[k]);
   }
 
   await updatePrintState(Array.from(nextKeys), nextMap);
