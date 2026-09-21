@@ -180,7 +180,17 @@ function dbRowsToFakturRecords(rows: Array<Record<string, unknown>>): {
         const docSO = String(r.no_sales_order || "").trim();
         const cleanDocSO = docSO.split(",").map((s) => s.trim()).filter((s) => s && s !== "-").join(", ");
         const validItemSO = itemSO && itemSO !== "-" ? itemSO : "";
-        const validSO = validItemSO || (cleanDocSO && cleanDocSO !== "-" ? cleanDocSO : "-");
+        let validSO = "-";
+        if (cleanJenis === "ORA") {
+          validSO = validItemSO || (cleanDocSO && cleanDocSO !== "-" ? cleanDocSO : "-");
+        } else {
+          // For DOO: The DOO SO from DOO file is strictly preserved
+          if (cleanDocSO && cleanDocSO !== "-") {
+            validSO = cleanDocSO.split(",")[0].trim();
+          } else {
+            validSO = validItemSO || "-";
+          }
+        }
 
         records.push({
           orderDate: date,
@@ -202,10 +212,12 @@ function dbRowsToFakturRecords(rows: Array<Record<string, unknown>>): {
           rowIndex: idx,
         });
       }
-    } else {
       const docSO = String(r.no_sales_order || "").trim();
       const cleanDocSO = docSO.split(",").map((s) => s.trim()).filter((s) => s && s !== "-").join(", ");
-      const validSO = cleanDocSO && cleanDocSO !== "-" ? cleanDocSO : "-";
+      let validSO = "-";
+      if (cleanDocSO && cleanDocSO !== "-") {
+        validSO = cleanJenis === "ORA" ? cleanDocSO : cleanDocSO.split(",")[0].trim();
+      }
       const docAmount = typeof extra.total_harga === "number"
         ? extra.total_harga
         : typeof extra.entered_amount === "number"
@@ -816,10 +828,12 @@ export default function Home() {
               });
             }
             if (r.orderNumber && r.orderNumber !== "-" && r.orderNumber !== "") {
-              r.orderNumber.split(",").forEach((s) => {
-                const t = s.trim();
-                if (t && t !== "-") soSet.add(t);
-              });
+              if (isOra || !isFileItemRich) {
+                r.orderNumber.split(",").forEach((s) => {
+                  const t = s.trim();
+                  if (t && t !== "-") soSet.add(t);
+                });
+              }
             }
 
             const baseItems: Array<Record<string, unknown>> = [];
@@ -827,9 +841,13 @@ export default function Home() {
               baseItems.push(...prevItems);
             }
 
+            const initialSO = isOra
+              ? (Array.from(soSet).join(", ") || (r.orderNumber && r.orderNumber !== "-" ? r.orderNumber : "-"))
+              : (prevInfo?.no_sales_order ? String(prevInfo.no_sales_order).split(",")[0].trim() : (r.orderNumber && !isFileItemRich ? r.orderNumber : "-"));
+
             invMap.set(targetKey, {
               no_faktur: targetKey,
-              no_sales_order: Array.from(soSet).join(", ") || (r.orderNumber && r.orderNumber !== "-" ? r.orderNumber : "-"),
+              no_sales_order: initialSO,
               customer_name: finalCustomerName || r.customerName || "-",
               order_date: r.orderDate || "-",
               jenis_transaksi: r.jenisTransaksi,
@@ -858,12 +876,25 @@ export default function Home() {
             if (printedAt) existing.printed_at = printedAt;
           }
 
-          // ALWAYS preserve and accumulate valid SO numbers
+          // For ORA: XXCUST supplies the official Sales Order
+          // For DOO: Keep the DOO SO from DOO export unchanged!
           if (r.orderNumber && r.orderNumber !== "-" && r.orderNumber !== "") {
-            r.orderNumber.split(",").forEach((s) => {
-              const t = s.trim();
-              if (t && t !== "-") (existing._soSet as Set<string>).add(t);
-            });
+            const isEntryOra = isOraCustomer(
+              String(existing.customer_name || r.customerName || ""),
+              String(existing.jenis_transaksi || r.jenisTransaksi || "")
+            );
+            if (isEntryOra) {
+              (existing._soSet as Set<string>).clear();
+              r.orderNumber.split(",").forEach((s) => {
+                const t = s.trim();
+                if (t && t !== "-") (existing._soSet as Set<string>).add(t);
+              });
+            } else if (!isFileItemRich) {
+              r.orderNumber.split(",").forEach((s) => {
+                const t = s.trim();
+                if (t && t !== "-") (existing._soSet as Set<string>).add(t);
+              });
+            }
           }
 
           // Customer name refinement: If incoming has a specific name and existing is generic Helios, update it
@@ -894,8 +925,15 @@ export default function Home() {
             if (!Array.isArray(extra.items)) extra.items = [];
             const itList = extra.items as Array<Record<string, unknown>>;
             const katProd = getProductCategory(r.itemCode, r.itemDescription) || r.kategoriProduk || "FARMA";
+            const isEntryOra = isOraCustomer(
+              String(existing.customer_name || r.customerName || ""),
+              String(existing.jenis_transaksi || r.jenisTransaksi || "")
+            );
+            const existingDocSO = String(existing.no_sales_order || Array.from(existing._soSet as Set<string>)[0] || "").trim();
+            const itemOrderNum = isEntryOra ? r.orderNumber : (existingDocSO && existingDocSO !== "-" ? existingDocSO : r.orderNumber);
+
             const isDup = itList.some(
-              (it) => it.item_code === r.itemCode && it.order_number === r.orderNumber && it.lot_number === r.lotNumber && it.qty === r.qty
+              (it) => it.item_code === r.itemCode && it.order_number === itemOrderNum && it.lot_number === r.lotNumber && it.qty === r.qty
             );
             if (!isDup) {
               itList.push({
@@ -906,7 +944,7 @@ export default function Home() {
                 uom: r.uom,
                 lot_number: r.lotNumber,
                 total_harga: r.totalHarga,
-                order_number: r.orderNumber,
+                order_number: itemOrderNum,
               });
             }
           } else if (!existing._hasPreservedItems) {
@@ -932,7 +970,18 @@ export default function Home() {
         const payload: FirestoreFakturDoc[] = Array.from(invMap.values()).map(({ _soSet, _hasPreservedItems, ...rest }) => {
           const soArr = Array.from(_soSet as Set<string>).filter((s) => s && s !== "-");
           const cleanDocSO = rest.no_sales_order ? String(rest.no_sales_order).split(",").map(s => s.trim()).filter(s => s && s !== "-").join(", ") : "";
-          const finalSO = soArr.length > 0 ? soArr.join(", ") : (cleanDocSO && cleanDocSO !== "-" ? cleanDocSO : "-");
+          const isDocOra = rest.jenis_transaksi === "ORA" || isOraCustomer(String(rest.customer_name || ""), String(rest.jenis_transaksi || ""));
+          let finalSO = "-";
+          if (isDocOra) {
+            finalSO = soArr.length > 0 ? soArr.join(", ") : (cleanDocSO && cleanDocSO !== "-" ? cleanDocSO : "-");
+          } else {
+            // For DOO: SO is strictly preserved from the DOO export
+            if (cleanDocSO && cleanDocSO !== "-") {
+              finalSO = cleanDocSO.split(",")[0].trim();
+            } else if (soArr.length > 0) {
+              finalSO = soArr[0];
+            }
+          }
           return {
             ...rest,
             id: String(rest.no_faktur),
