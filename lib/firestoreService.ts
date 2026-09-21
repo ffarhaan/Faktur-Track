@@ -67,10 +67,17 @@ export function subscribeToFakturs(
       return na - nb;
     });
 
+    const seenDocKeys = new Set<string>();
     const allDocs: FirestoreFakturDoc[] = [];
     for (const k of sortedChunkKeys) {
       const list = currentChunksMap.get(k) || [];
-      allDocs.push(...list);
+      for (const d of list) {
+        const key = d.id || d.no_faktur;
+        if (!seenDocKeys.has(key)) {
+          seenDocKeys.add(key);
+          allDocs.push(d);
+        }
+      }
     }
 
     const printedSet = new Set(currentPrintState.printedKeys || []);
@@ -210,13 +217,13 @@ function createSafeChunks(items: FirestoreFakturDoc[]): FirestoreFakturDoc[][] {
   const chunks: FirestoreFakturDoc[][] = [];
   let currentChunk: FirestoreFakturDoc[] = [];
   let currentEstimatedBytes = 0;
-  const MAX_CHUNK_BYTES = 700 * 1024; // 700 KB safety limit (Firestore limit is 1048 KB)
+  const MAX_CHUNK_BYTES = 550 * 1024; // 550 KB safety limit (Firestore hard limit is 1048 KB)
 
   for (const item of items) {
     const itemBytes = JSON.stringify(item).length;
     if (
       currentChunk.length > 0 &&
-      (currentEstimatedBytes + itemBytes > MAX_CHUNK_BYTES || currentChunk.length >= 300)
+      (currentEstimatedBytes + itemBytes > MAX_CHUNK_BYTES || currentChunk.length >= 35)
     ) {
       chunks.push(currentChunk);
       currentChunk = [];
