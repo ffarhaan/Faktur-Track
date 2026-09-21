@@ -212,6 +212,7 @@ function dbRowsToFakturRecords(rows: Array<Record<string, unknown>>): {
           rowIndex: idx,
         });
       }
+    } else {
       const docSO = String(r.no_sales_order || "").trim();
       const cleanDocSO = docSO.split(",").map((s) => s.trim()).filter((s) => s && s !== "-").join(", ");
       let validSO = "-";
@@ -232,7 +233,7 @@ function dbRowsToFakturRecords(rows: Array<Record<string, unknown>>): {
         jenisTransaksi: cleanJenis,
         customerName: cust,
         itemCode: "-",
-        itemDescription: "Data DOO",
+        itemDescription: "-",
         qty: 1,
         uom: "-",
         lotNumber: "-",
