@@ -474,9 +474,7 @@ export default function Home() {
   const togglePrint = useCallback(
     async (group: FakturGroup) => {
       const willBePrinted = !group.allPrinted;
-      const targetKey = group.invoiceKey || group.invoiceNumber;
-      const cleanKey = targetKey.replace(/-1P$/i, "");
-      const keysToSync = [targetKey, cleanKey, `${cleanKey}-1P`].filter(Boolean);
+      const targetKey = group.invoiceKey || (group.jenisTransaksi === "ORA" ? `${group.invoiceNumber}-1P` : group.invoiceNumber);
 
       // Debounce rapid toggles on the same invoice (< 300ms)
       if (inFlightToggleRef.current.has(targetKey)) return;
@@ -489,9 +487,9 @@ export default function Home() {
       const next = new Set(printedInvoices);
 
       if (willBePrinted) {
-        keysToSync.forEach((k) => next.add(k));
+        next.add(targetKey);
       } else {
-        keysToSync.forEach((k) => next.delete(k));
+        next.delete(targetKey);
       }
       setPrintedInvoices(next);
 
@@ -499,22 +497,18 @@ export default function Home() {
       setSessionPrintedKeys((prev) => {
         const sNext = new Set(prev);
         if (willBePrinted) {
-          keysToSync.forEach((k) => sNext.add(k));
+          sNext.add(targetKey);
         } else {
-          keysToSync.forEach((k) => sNext.delete(k));
+          sNext.delete(targetKey);
         }
         return sNext;
       });
 
       const nextMap = { ...printedAtMap };
       if (willBePrinted) {
-        keysToSync.forEach((k) => {
-          nextMap[k] = nowIso;
-        });
+        nextMap[targetKey] = nowIso;
       } else {
-        keysToSync.forEach((k) => {
-          delete nextMap[k];
-        });
+        delete nextMap[targetKey];
       }
       setPrintedAtMap(nextMap);
       try {
@@ -1591,12 +1585,7 @@ export default function Home() {
     // 1. Optimistic Update Local State
     setPrintedInvoices((prev) => {
       const next = new Set(prev);
-      targetKeys.forEach((k) => {
-        const cleanK = k.replace(/-1P$/i, "");
-        next.add(k);
-        next.add(cleanK);
-        next.add(`${cleanK}-1P`);
-      });
+      targetKeys.forEach((k) => next.add(k));
       try {
         localStorage.setItem("printedInvoices", JSON.stringify([...next]));
       } catch {}
@@ -1605,22 +1594,14 @@ export default function Home() {
 
     setSessionPrintedKeys((prev) => {
       const sNext = new Set(prev);
-      targetKeys.forEach((k) => {
-        const cleanK = k.replace(/-1P$/i, "");
-        sNext.add(k);
-        sNext.add(cleanK);
-        sNext.add(`${cleanK}-1P`);
-      });
+      targetKeys.forEach((k) => sNext.add(k));
       return sNext;
     });
 
     setPrintedAtMap((prev) => {
       const nextMap = { ...prev };
       targetKeys.forEach((k) => {
-        const cleanK = k.replace(/-1P$/i, "");
         nextMap[k] = nowIso;
-        nextMap[cleanK] = nowIso;
-        nextMap[`${cleanK}-1P`] = nowIso;
       });
       try {
         localStorage.setItem("printedAtMap", JSON.stringify(nextMap));
