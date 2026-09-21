@@ -1205,6 +1205,10 @@ export default function Home() {
     setJenisFilter("all");
     setSearch("");
     setPage(0);
+    setInvoiceProgression(null);
+    latestDBDocsRef.current = [];
+    latestProgressionRef.current = null;
+    latestPrintStateRef.current = null;
     try {
       localStorage.removeItem("records");
       localStorage.removeItem("uploadedFiles");
