@@ -333,17 +333,15 @@ export async function updateFakturPrintStatus(
 ): Promise<void> {
   const nextKeys = new Set(currentPrintedKeys);
   const nextMap = { ...currentPrintedAtMap };
-  const cleanKey = invoiceKey.replace(/-1P$/i, "");
-  const keysToSync = [invoiceKey, cleanKey, `${cleanKey}-1P`];
 
   if (status) {
-    keysToSync.forEach((k) => nextKeys.add(k));
+    nextKeys.add(invoiceKey);
     if (printedAt) {
-      keysToSync.forEach((k) => (nextMap[k] = printedAt));
+      nextMap[invoiceKey] = printedAt;
     }
   } else {
-    keysToSync.forEach((k) => nextKeys.delete(k));
-    keysToSync.forEach((k) => delete nextMap[k]);
+    nextKeys.delete(invoiceKey);
+    delete nextMap[invoiceKey];
   }
 
   await updatePrintState(Array.from(nextKeys), nextMap);
@@ -371,21 +369,13 @@ export async function updateFaktursPrintStatusBatch(
 
   if (status) {
     keys.forEach((k) => {
-      const cleanKey = k.replace(/-1P$/i, "");
-      const keysToSync = [k, cleanKey, `${cleanKey}-1P`];
-      keysToSync.forEach((syncK) => {
-        currentKeys.add(syncK);
-        if (printedAt) currentMap[syncK] = printedAt;
-      });
+      currentKeys.add(k);
+      if (printedAt) currentMap[k] = printedAt;
     });
   } else {
     keys.forEach((k) => {
-      const cleanKey = k.replace(/-1P$/i, "");
-      const keysToSync = [k, cleanKey, `${cleanKey}-1P`];
-      keysToSync.forEach((syncK) => {
-        currentKeys.delete(syncK);
-        delete currentMap[syncK];
-      });
+      currentKeys.delete(k);
+      delete currentMap[k];
     });
   }
 
