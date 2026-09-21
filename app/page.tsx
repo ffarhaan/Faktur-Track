@@ -1960,16 +1960,6 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-gray-50">
-      {/* Maintenance Notification Bar */}
-      <div className="bg-gradient-to-r from-amber-600 via-amber-500 to-orange-600 text-white px-4 py-2.5 text-xs font-semibold shadow-md flex items-center justify-between border-b border-amber-700">
-        <div className="max-w-7xl mx-auto w-full flex items-center justify-center gap-2 text-center tracking-wide">
-          <span className="text-base animate-bounce">⚠️</span>
-          <span>
-            <strong>PEMBERITAHUAN: SISTEM SEDANG DALAM PERBAIKAN & PEMELIHARAAN (MAINTENANCE MODE)</strong> — Sedang dilakukan penyesuaian logika database. Mohon menunggu hingga pemeliharaan selesai.
-          </span>
-        </div>
-      </div>
-
       <header className="bg-white border-b border-gray-200 sticky top-0 z-10 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -1979,10 +1969,6 @@ export default function Home() {
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-lg font-bold text-gray-900">Faktur Tracker</h1>
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-800 border border-amber-300 animate-pulse shadow-xs">
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping"></span>
-                  🛠️ Sedang Dalam Perbaikan
-                </span>
               </div>
               <p className="text-xs text-gray-500">Tracking faktur dari Oracle export</p>
             </div>
