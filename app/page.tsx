@@ -1015,7 +1015,7 @@ export default function Home() {
           new1P = maxUploaded1PStr;
           if (prev1PNum > 0 && maxUploaded1PNum > prev1PNum) {
             prev1P = prev1PStr;
-            range1P = `${prev1PStr} ➔ ${maxUploaded1PStr}`;
+            range1P = `${prev1PNum + 1} ➔ ${maxUploaded1PStr}`;
           } else if (minUploaded1PNum > 0 && minUploaded1PNum !== maxUploaded1PNum) {
             prev1P = minUploaded1PStr;
             range1P = `${minUploaded1PStr} ➔ ${maxUploaded1PStr}`;
@@ -1032,7 +1032,7 @@ export default function Home() {
           new2P = maxUploaded2PStr;
           if (prev2PNum > 0 && maxUploaded2PNum > prev2PNum) {
             prev2P = prev2PStr;
-            range2P = `${prev2PStr} ➔ ${maxUploaded2PStr}`;
+            range2P = `${prev2PNum + 1} ➔ ${maxUploaded2PStr}`;
           } else if (minUploaded2PNum > 0 && minUploaded2PNum !== maxUploaded2PNum) {
             prev2P = minUploaded2PStr;
             range2P = `${minUploaded2PStr} ➔ ${maxUploaded2PStr}`;
@@ -1049,7 +1049,7 @@ export default function Home() {
           new3P = maxUploaded3PStr;
           if (prev3PNum > 0 && maxUploaded3PNum > prev3PNum) {
             prev3P = prev3PStr;
-            range3P = `${prev3PStr} ➔ ${maxUploaded3PStr}`;
+            range3P = `${prev3PNum + 1} ➔ ${maxUploaded3PStr}`;
           } else if (minUploaded3PNum > 0 && minUploaded3PNum !== maxUploaded3PNum) {
             prev3P = minUploaded3PStr;
             range3P = `${minUploaded3PStr} ➔ ${maxUploaded3PStr}`;
@@ -1066,7 +1066,7 @@ export default function Home() {
           newOra = maxUploadedOraStr;
           if (prevOraNum > 0 && maxUploadedOraNum > prevOraNum) {
             prevOra = prevOraStr;
-            rangeOra = `${prevOraStr} ➔ ${maxUploadedOraStr}`;
+            rangeOra = `${prevOraNum + 1} ➔ ${maxUploadedOraStr}`;
           } else if (minUploadedOraNum > 0 && minUploadedOraNum !== maxUploadedOraNum) {
             prevOra = minUploadedOraStr;
             rangeOra = `${minUploadedOraStr} ➔ ${maxUploadedOraStr}`;
@@ -1083,7 +1083,7 @@ export default function Home() {
           newDoo = maxUploadedDooStr;
           if (prevDooNum > 0 && maxUploadedDooNum > prevDooNum) {
             prevDoo = prevDooStr;
-            rangeDoo = `${prevDooStr} ➔ ${maxUploadedDooStr}`;
+            rangeDoo = `${prevDooNum + 1} ➔ ${maxUploadedDooStr}`;
           } else if (minUploadedDooNum > 0 && minUploadedDooNum !== maxUploadedDooNum) {
             prevDoo = minUploadedDooStr;
             rangeDoo = `${minUploadedDooStr} ➔ ${maxUploadedDooStr}`;
@@ -2008,29 +2008,6 @@ export default function Home() {
         onDrop={onDrop}
         className="max-w-7xl mx-auto px-4 py-4"
       >
-        {/* Maintenance / System In Repair Banner */}
-        <div className="mb-4 bg-amber-50 border-2 border-amber-300 rounded-xl p-3.5 shadow-sm flex items-start gap-3">
-          <div className="text-2xl mt-0.5">
-            ⚙️
-          </div>
-          <div className="flex-1">
-            <div className="flex items-center gap-2">
-              <span className="px-2 py-0.5 bg-amber-200 text-amber-900 font-bold text-[11px] rounded-md uppercase tracking-wide">
-                Sedang Dalam Perbaikan
-              </span>
-              <span className="text-xs text-amber-700 font-medium">
-                Maintenance / Update System
-              </span>
-            </div>
-            <h2 className="text-sm font-bold text-amber-950 mt-1">
-              Sistem Sedang Diperbaiki & Diatur Ulang
-            </h2>
-            <p className="text-xs text-amber-800 mt-0.5 leading-relaxed">
-              Logika penggabungan data, nomor SO, detail item obat, dan status cetak sedang disesuaikan ulang dari awal. Mohon menunggu pemberitahuan selanjutnya sebelum mengunggah file baru.
-            </p>
-          </div>
-        </div>
-
         {error && (
           <div className="mb-3 bg-red-50 border border-red-200 text-red-700 px-4 py-2 rounded-lg text-sm">
             {error}
@@ -2051,21 +2028,21 @@ export default function Home() {
                 ({uploadNotification.totalInvoices.toLocaleString("id-ID")} faktur · {uploadNotification.totalItems.toLocaleString("id-ID")} baris)
               </span>
               {uploadNotification.maxDoo !== "-" && (
-                <span className="font-medium bg-emerald-100/90 text-emerald-950 px-1.5 py-0.2 rounded font-mono text-[11px]">
-                  🏬 DOO: {uploadNotification.prevDoo && uploadNotification.prevDoo !== uploadNotification.maxDoo ? `${uploadNotification.prevDoo}➔${uploadNotification.maxDoo}` : `#${uploadNotification.maxDoo}`}
+                <span className="font-medium bg-emerald-100/90 text-emerald-950 px-2 py-0.5 rounded font-mono text-[11px] border border-emerald-300">
+                  🏬 DOO: {uploadNotification.rangeDoo ? uploadNotification.rangeDoo : `#${uploadNotification.maxDoo}`}
                 </span>
               )}
               {uploadNotification.maxOra !== "-" && (
-                <span className="font-medium bg-blue-100/90 text-blue-950 px-1.5 py-0.2 rounded font-mono text-[11px]">
-                  🏢 ORA: {uploadNotification.prevOra && uploadNotification.prevOra !== uploadNotification.maxOra ? `${uploadNotification.prevOra}➔${uploadNotification.maxOra}` : `#${uploadNotification.maxOra}`}
+                <span className="font-medium bg-blue-100/90 text-blue-950 px-2 py-0.5 rounded font-mono text-[11px] border border-blue-300">
+                  🏢 ORA: {uploadNotification.rangeOra ? uploadNotification.rangeOra : `#${uploadNotification.maxOra}`}
                 </span>
               )}
               {uploadNotification.newUnprinted > 0 ? (
-                <span className="font-bold text-amber-800 bg-amber-100 px-1.5 py-0.2 rounded text-[11px]">
-                  🚨 {uploadNotification.newUnprinted} Belum Print
+                <span className="font-bold text-amber-900 bg-amber-100 px-2 py-0.5 rounded text-[11px] border border-amber-300">
+                  🚨 {uploadNotification.newUnprinted} Faktur Baru Belum Print
                 </span>
               ) : (
-                <span className="text-emerald-700 font-semibold text-[11px]">
+                <span className="text-emerald-800 bg-emerald-100 font-semibold text-[11px] px-2 py-0.5 rounded border border-emerald-300">
                   ✅ Semua Terprint
                 </span>
               )}
