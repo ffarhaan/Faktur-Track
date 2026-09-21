@@ -2008,6 +2008,29 @@ export default function Home() {
         onDrop={onDrop}
         className="max-w-7xl mx-auto px-4 py-4"
       >
+        {/* Maintenance / System In Repair Banner */}
+        <div className="mb-4 bg-amber-50 border-2 border-amber-300 rounded-xl p-3.5 shadow-sm flex items-start gap-3">
+          <div className="text-2xl mt-0.5">
+            ⚙️
+          </div>
+          <div className="flex-1">
+            <div className="flex items-center gap-2">
+              <span className="px-2 py-0.5 bg-amber-200 text-amber-900 font-bold text-[11px] rounded-md uppercase tracking-wide">
+                Sedang Dalam Perbaikan
+              </span>
+              <span className="text-xs text-amber-700 font-medium">
+                Maintenance / Update System
+              </span>
+            </div>
+            <h2 className="text-sm font-bold text-amber-950 mt-1">
+              Sistem Sedang Diperbaiki & Diatur Ulang
+            </h2>
+            <p className="text-xs text-amber-800 mt-0.5 leading-relaxed">
+              Logika penggabungan data, nomor SO, detail item obat, dan status cetak sedang disesuaikan ulang dari awal. Mohon menunggu pemberitahuan selanjutnya sebelum mengunggah file baru.
+            </p>
+          </div>
+        </div>
+
         {error && (
           <div className="mb-3 bg-red-50 border border-red-200 text-red-700 px-4 py-2 rounded-lg text-sm">
             {error}
