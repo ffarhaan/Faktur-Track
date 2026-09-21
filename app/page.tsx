@@ -2097,7 +2097,7 @@ export default function Home() {
             {/* Filters & Sorting Toolbar */}
             <div className="bg-white rounded-lg border border-gray-200 p-2.5 mb-4 space-y-2 shadow-xs">
               {/* Row 1: All Filters & Sorting in 1 strict line */}
-              <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 select-none">
+              <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5 select-none">
                 <button
                   onClick={handleManualRefresh}
                   className="px-2.5 py-1 text-xs font-semibold rounded-md border border-blue-400 bg-blue-50 text-blue-800 hover:bg-blue-100 flex items-center gap-1 whitespace-nowrap shadow-2xs transition-colors shrink-0"
