@@ -178,7 +178,9 @@ function dbRowsToFakturRecords(rows: Array<Record<string, unknown>>): {
 
         const itemSO = String(it.order_number || "").trim();
         const docSO = String(r.no_sales_order || "").trim();
-        const validSO = itemSO && itemSO !== "-" ? itemSO : (docSO && docSO !== "-" ? docSO : "-");
+        const cleanDocSO = docSO.split(",").map((s) => s.trim()).filter((s) => s && s !== "-" && !s.startsWith("3000") && s.length < 11).join(", ");
+        const validItemSO = itemSO && itemSO !== "-" && !itemSO.startsWith("3000") && itemSO.length < 11 ? itemSO : "";
+        const validSO = validItemSO || (cleanDocSO && cleanDocSO !== "-" ? cleanDocSO : "-");
 
         records.push({
           orderDate: date,
@@ -202,7 +204,8 @@ function dbRowsToFakturRecords(rows: Array<Record<string, unknown>>): {
       }
     } else {
       const docSO = String(r.no_sales_order || "").trim();
-      const validSO = docSO && docSO !== "-" ? docSO : "-";
+      const cleanDocSO = docSO.split(",").map((s) => s.trim()).filter((s) => s && s !== "-" && !s.startsWith("3000") && s.length < 11).join(", ");
+      const validSO = cleanDocSO && cleanDocSO !== "-" ? cleanDocSO : "-";
       const docAmount = typeof extra.total_harga === "number"
         ? extra.total_harga
         : typeof extra.entered_amount === "number"
@@ -631,13 +634,13 @@ export default function Home() {
             if (row.no_sales_order) {
               String(row.no_sales_order).split(",").forEach((s) => {
                 const t = s.trim();
-                if (t && t !== "-") soSet.add(t);
+                if (t && t !== "-" && !t.startsWith("3000") && t.length < 11) soSet.add(t);
               });
             }
             const prevItems = (extra.items as Array<Record<string, unknown>>) || [];
             prevItems.forEach((it) => {
               const so = String(it.order_number || "").trim();
-              if (so && so !== "-") soSet.add(so);
+              if (so && so !== "-" && !so.startsWith("3000") && so.length < 11) soSet.add(so);
             });
             const hasExistingRichItems =
               prevItems.length > 0 &&
@@ -661,7 +664,7 @@ export default function Home() {
             if (rec.orderNumber && rec.orderNumber !== "-") {
               rec.orderNumber.split(",").forEach((s) => {
                 const t = s.trim();
-                if (t && t !== "-") soSet.add(t);
+                if (t && t !== "-" && !t.startsWith("3000") && t.length < 11) soSet.add(t);
               });
             }
             invMap.set(k, {
@@ -693,7 +696,7 @@ export default function Home() {
           if (rec.orderNumber && rec.orderNumber !== "-") {
             rec.orderNumber.split(",").forEach((s) => {
               const t = s.trim();
-              if (t && t !== "-") (existingEntry._soSet as Set<string>).add(t);
+              if (t && t !== "-" && !t.startsWith("3000") && t.length < 11) (existingEntry._soSet as Set<string>).add(t);
             });
           }
 
@@ -789,13 +792,13 @@ export default function Home() {
             if (prevInfo?.no_sales_order) {
               prevInfo.no_sales_order.split(",").forEach((s) => {
                 const t = s.trim();
-                if (t && t !== "-") soSet.add(t);
+                if (t && t !== "-" && !t.startsWith("3000") && t.length < 11) soSet.add(t);
               });
             }
             if (r.orderNumber && r.orderNumber !== "-" && r.orderNumber !== "") {
               r.orderNumber.split(",").forEach((s) => {
                 const t = s.trim();
-                if (t && t !== "-") soSet.add(t);
+                if (t && t !== "-" && !t.startsWith("3000") && t.length < 11) soSet.add(t);
               });
             }
 
@@ -806,7 +809,7 @@ export default function Home() {
 
             invMap.set(targetKey, {
               no_faktur: targetKey,
-              no_sales_order: Array.from(soSet).join(", ") || r.orderNumber || "-",
+              no_sales_order: Array.from(soSet).join(", ") || (r.orderNumber && !r.orderNumber.startsWith("3000") && r.orderNumber.length < 11 ? r.orderNumber : "-"),
               customer_name: finalCustomerName || r.customerName || "-",
               order_date: r.orderDate || "-",
               jenis_transaksi: r.jenisTransaksi,
@@ -835,11 +838,11 @@ export default function Home() {
             if (printedAt) existing.printed_at = printedAt;
           }
 
-          // ALWAYS preserve and accumulate valid SO numbers
+          // ALWAYS preserve and accumulate valid SO numbers (filter out internal Oracle IDs)
           if (r.orderNumber && r.orderNumber !== "-" && r.orderNumber !== "") {
             r.orderNumber.split(",").forEach((s) => {
               const t = s.trim();
-              if (t && t !== "-") (existing._soSet as Set<string>).add(t);
+              if (t && t !== "-" && !t.startsWith("3000") && t.length < 11) (existing._soSet as Set<string>).add(t);
             });
           }
 
@@ -907,8 +910,9 @@ export default function Home() {
         }
 
         const payload: FirestoreFakturDoc[] = Array.from(invMap.values()).map(({ _soSet, _hasPreservedItems, ...rest }) => {
-          const soArr = Array.from(_soSet as Set<string>).filter((s) => s && s !== "-");
-          const finalSO = soArr.length > 0 ? soArr.join(", ") : (rest.no_sales_order && rest.no_sales_order !== "-" ? String(rest.no_sales_order) : "-");
+          const soArr = Array.from(_soSet as Set<string>).filter((s) => s && s !== "-" && !s.startsWith("3000") && s.length < 11);
+          const cleanDocSO = rest.no_sales_order ? String(rest.no_sales_order).split(",").map(s => s.trim()).filter(s => s && s !== "-" && !s.startsWith("3000") && s.length < 11).join(", ") : "";
+          const finalSO = soArr.length > 0 ? soArr.join(", ") : (cleanDocSO && cleanDocSO !== "-" ? cleanDocSO : "-");
           return {
             ...rest,
             id: String(rest.no_faktur),

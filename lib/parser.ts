@@ -457,9 +457,13 @@ function parseHTMLTable(html: string): FakturRecord[] {
     const kategori = isOra ? "1P" : categorize(jenisTransaksi, customerName, jenisTransaksi, shipSite, billSite);
     const invoiceKey = isOra ? `${invVal}-1P` : invVal;
 
+    // Filter out internal Oracle transaction/reference IDs (e.g. 300000046249462)
+    const isInternalOracleId = isOra || soVal.startsWith("3000") || soVal.length >= 11;
+    const finalSO = isInternalOracleId ? "-" : soVal;
+
     records.push({
       orderDate: texts[colMap["date"] ?? 0] || "",
-      orderNumber: soVal,
+      orderNumber: finalSO,
       invoiceNumber: invVal,
       invoiceKey,
       jenisTransaksi,
@@ -553,9 +557,13 @@ function parseExportArray(data: unknown[][], headerIdx: number = -1): FakturReco
     const rawAmount = row[colMap["amount"] ?? 11];
     const totalHarga = typeof rawAmount === "number" ? rawAmount : Number(String(rawAmount || "").replace(/[^0-9.-]/g, "") || 0);
 
+    // Filter out internal Oracle transaction/reference IDs (e.g. 300000046249462)
+    const isInternalOracleId = isOra || soVal.startsWith("3000") || soVal.length >= 11;
+    const finalSO = isInternalOracleId ? "-" : soVal;
+
     records.push({
       orderDate: formatExcelDate(row[colMap["date"] ?? 0]),
-      orderNumber: soVal,
+      orderNumber: finalSO,
       invoiceNumber: invVal,
       invoiceKey,
       jenisTransaksi,
