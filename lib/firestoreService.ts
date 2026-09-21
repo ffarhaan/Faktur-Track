@@ -37,7 +37,7 @@ const METADATA_DOC = "metadata";
 const PRINT_STATE_DOC = "print_state";
 const CHUNKS_COLLECTION = "faktur_chunks";
 
-const CHUNK_SIZE = 500; // ~500 items per doc (~150KB-200KB, well under 1MB limit)
+const CHUNK_SIZE = 120; // ~120 items per doc (~250KB, comfortably under 1MB Firestore doc limit)
 
 /**
  * Realtime listener for Chunked Fakturs and Print State
@@ -192,19 +192,43 @@ export async function getExistingFakturs(): Promise<{
 }
 
 /**
+ * Safe chunk builder that guarantees every chunk document is < 500KB (Firestore allows up to 1024 KB)
+ */
+function createSafeChunks(items: FirestoreFakturDoc[]): FirestoreFakturDoc[][] {
+  const chunks: FirestoreFakturDoc[][] = [];
+  let currentChunk: FirestoreFakturDoc[] = [];
+  let currentEstimatedBytes = 0;
+  const MAX_CHUNK_BYTES = 450 * 1024; // 450 KB safety limit
+
+  for (const item of items) {
+    const itemBytes = JSON.stringify(item).length;
+    if (
+      currentChunk.length > 0 &&
+      (currentEstimatedBytes + itemBytes > MAX_CHUNK_BYTES || currentChunk.length >= 75)
+    ) {
+      chunks.push(currentChunk);
+      currentChunk = [];
+      currentEstimatedBytes = 0;
+    }
+    currentChunk.push(item);
+    currentEstimatedBytes += itemBytes;
+  }
+  if (currentChunk.length > 0) {
+    chunks.push(currentChunk);
+  }
+  return chunks;
+}
+
+/**
  * Save / Upsert Fakturs in Chunks
- * Total writes: ~6-10 document writes instead of 4,000+ writes!
+ * Safely writes chunks in parallel under 500KB each
  */
 export async function saveFaktursBatch(
   fakturs: FirestoreFakturDoc[],
   progression?: InvoiceProgression | null,
   existingPrintState?: PrintState | null
 ): Promise<void> {
-  const chunks: FirestoreFakturDoc[][] = [];
-  for (let i = 0; i < fakturs.length; i += CHUNK_SIZE) {
-    chunks.push(fakturs.slice(i, i + CHUNK_SIZE));
-  }
-
+  const chunks = createSafeChunks(fakturs);
   const nowIso = new Date().toISOString();
   const chunkIds: string[] = [];
 
