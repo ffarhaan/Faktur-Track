@@ -328,6 +328,19 @@ export default function Home() {
   const latestDBDocsRef = useRef<FirestoreFakturDoc[]>([]);
   const latestProgressionRef = useRef<InvoiceProgression | null>(null);
   const latestPrintStateRef = useRef<{ printedKeys: string[]; printedAtMap: Record<string, string>; updatedAt: string } | null>(null);
+  const recordsRef = useRef<FakturRecord[]>([]);
+  const printedInvoicesRef = useRef<Set<string>>(new Set());
+  const printedAtMapRef = useRef<Record<string, string>>({});
+
+  useEffect(() => {
+    recordsRef.current = records;
+  }, [records]);
+  useEffect(() => {
+    printedInvoicesRef.current = printedInvoices;
+  }, [printedInvoices]);
+  useEffect(() => {
+    printedAtMapRef.current = printedAtMap;
+  }, [printedAtMap]);
 
   // Realtime subscription to Firebase Firestore
   useEffect(() => {
@@ -521,16 +534,19 @@ export default function Home() {
 
         const importedAt = new Date().toISOString();
 
-        // Use live in-memory records as primary base, or fetch from DB if empty
-        let existingDBDocs = latestDBDocsRef.current;
-        let loadedProgression = latestProgressionRef.current;
-        let loadedPrintState = latestPrintStateRef.current;
+        // Always fetch the freshest state from Firestore AND combine with current active in-memory records
+        let existingDBDocs: FirestoreFakturDoc[] = [];
+        let loadedProgression: InvoiceProgression | null = latestProgressionRef.current;
+        let loadedPrintState: { printedKeys: string[]; printedAtMap: Record<string, string>; updatedAt: string } | null = latestPrintStateRef.current;
 
-        if (existingDBDocs.length === 0) {
+        try {
           const res = await getExistingFakturs();
           existingDBDocs = res.docs;
           if (res.progression) loadedProgression = res.progression;
           if (res.printState) loadedPrintState = res.printState;
+        } catch (err) {
+          console.warn("Could not fetch existing fakturs, falling back to cached in-memory:", err);
+          existingDBDocs = latestDBDocsRef.current;
         }
         const existingDB = existingDBDocs as unknown as Array<Record<string, unknown>>;
 
@@ -623,6 +639,10 @@ export default function Home() {
           (r) => r.itemCode && r.itemCode !== "-" && r.itemCode !== ""
         );
 
+        const currentActiveRecords = recordsRef.current;
+        const currentActivePrintedSet = printedInvoicesRef.current;
+        const currentActivePrintedAtMap = printedAtMapRef.current;
+
         // Pre-populate invMap with ALL existing records from DB so multiple files (ORA + DOO + XXCUST) merge seamlessly
         const invMap = new Map<string, Record<string, unknown>>();
         existingDB.forEach((row) => {
@@ -655,7 +675,7 @@ export default function Home() {
         });
 
         // Also ensure any records currently in state are preserved in invMap
-        records.forEach((rec) => {
+        currentActiveRecords.forEach((rec) => {
           const k = rec.invoiceKey || rec.invoiceNumber;
           if (!k) return;
 
@@ -674,8 +694,8 @@ export default function Home() {
               order_date: rec.orderDate || "-",
               jenis_transaksi: rec.jenisTransaksi,
               kategori: rec.kategori,
-              status_cetak: printedInvoices.has(k),
-              printed_at: printedAtMap[k] || null,
+              status_cetak: currentActivePrintedSet.has(k),
+              printed_at: currentActivePrintedAtMap[k] || null,
               imported_at: importedAt,
               source_file: rec.jenisTransaksi,
               extra: {
@@ -1118,14 +1138,14 @@ export default function Home() {
           updatedAt: new Date().toLocaleTimeString("id-ID"),
         };
 
-        // 1. INSTANT LOCAL STATE UPDATE (0ms perceptible delay)
+        // 1. INSTANT LOCAL STATE UPDATE
         const { records: localRecs, printedSet: localPrintedSet, printedAtMap: localPrintedAtMap } = dbRowsToFakturRecords(
           payload as unknown as Array<Record<string, unknown>>
         );
 
         setRecords(localRecs);
-        const mergedPrintedSet = new Set([...printedInvoices, ...localPrintedSet]);
-        const mergedPrintedMap = { ...printedAtMap, ...localPrintedAtMap };
+        const mergedPrintedSet = new Set([...currentActivePrintedSet, ...localPrintedSet]);
+        const mergedPrintedMap = { ...currentActivePrintedAtMap, ...localPrintedAtMap };
         setPrintedInvoices(mergedPrintedSet);
         setPrintedAtMap(mergedPrintedMap);
         setInvoiceProgression(progObj);
@@ -1154,10 +1174,9 @@ export default function Home() {
           { name: file.name, count: parsed.length, time: new Date().toLocaleString("id-ID") },
         ]);
         setPage(0);
-        setLoading(false); // Instant unlock!
 
-        // 2. BACKGROUND FIRESTORE SYNC (Non-blocking)
-        saveFaktursBatch(
+        // 2. FIRESTORE SYNC
+        await saveFaktursBatch(
           payload as FirestoreFakturDoc[],
           progObj,
           {
@@ -1165,11 +1184,10 @@ export default function Home() {
             printedAtMap: mergedPrintedMap,
             updatedAt: new Date().toISOString(),
           }
-        ).catch((err) => {
-          console.error("Background Firestore save warning:", err);
-        });
+        );
         setPage(0);
       } catch (e) {
+        console.error("Upload error:", e);
         setError(e instanceof Error ? e.message : "Gagal membaca file.");
       } finally {
         setLoading(false);

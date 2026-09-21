@@ -102,9 +102,15 @@ export function subscribeToFakturs(
     onData(allDocs, currentProgression, currentPrintState);
   };
 
+  let expectedChunks = 0;
+
   const debouncedEmit = () => {
     if (emitTimer) clearTimeout(emitTimer);
     emitTimer = setTimeout(() => {
+      // Guard against emitting incomplete chunks if totalChunks is known
+      if (expectedChunks > 0 && currentChunksMap.size < expectedChunks) {
+        return;
+      }
       emitData();
     }, 200);
   };
@@ -117,6 +123,9 @@ export function subscribeToFakturs(
         const data = snap.data();
         if (data.invoiceProgression) {
           currentProgression = data.invoiceProgression as InvoiceProgression;
+        }
+        if (typeof data.totalChunks === "number") {
+          expectedChunks = data.totalChunks;
         }
       }
       debouncedEmit();
@@ -228,13 +237,13 @@ function createSafeChunks(items: FirestoreFakturDoc[]): FirestoreFakturDoc[][] {
   const chunks: FirestoreFakturDoc[][] = [];
   let currentChunk: FirestoreFakturDoc[] = [];
   let currentEstimatedBytes = 0;
-  const MAX_CHUNK_BYTES = 550 * 1024; // 550 KB safety limit (Firestore hard limit is 1048 KB)
+  const MAX_CHUNK_BYTES = 500 * 1024; // 500 KB safety limit (Firestore hard limit is 1048 KB)
 
   for (const item of items) {
     const itemBytes = JSON.stringify(item).length;
     if (
       currentChunk.length > 0 &&
-      (currentEstimatedBytes + itemBytes > MAX_CHUNK_BYTES || currentChunk.length >= 35)
+      (currentEstimatedBytes + itemBytes > MAX_CHUNK_BYTES || currentChunk.length >= 150)
     ) {
       chunks.push(currentChunk);
       currentChunk = [];
