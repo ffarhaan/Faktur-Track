@@ -197,17 +197,12 @@ export function getProductCategory(itemCode?: string, itemDescription?: string):
  * - ORA: HANYA untuk PT Helios Alchemist Kesehatan / HAK.
  * - DOO: Semua transaksi reguler DOO (termasuk Apotek Medika Prima, SBS, Pasti Hemat, Halomedika, 2P, 3P).
  */
-export function isOraCustomer(customerName?: string, sourceFile?: string): boolean {
+export function isOraCustomer(customerName?: string): boolean {
   const upperCust = String(customerName || "").toUpperCase().trim();
-  const upperSrc = String(sourceFile || "").toUpperCase().trim();
   return (
     upperCust.includes("HELIOS") ||
     upperCust.startsWith("HAK") ||
-    upperCust.includes("ORA") ||
-    upperCust === "1001" ||
-    upperSrc.includes("ORA") ||
-    upperSrc.includes("HELIOS") ||
-    upperSrc.includes("HAK")
+    upperCust === "1001"
   );
 }
 
@@ -340,7 +335,7 @@ function parseXXCUST(data: unknown[][], headerIdx: number): FakturRecord[] {
 
     const customerName = val(idx.customerName);
     const rawJenis = val(idx.jenisTransaksi).toUpperCase();
-    const isOra = rawJenis === "ORA" || isOraCustomer(customerName, rawJenis);
+    const isOra = rawJenis === "ORA" || isOraCustomer(customerName);
     const jenisTransaksi: "ORA" | "DOO" = isOra ? "ORA" : "DOO";
     const kategori = categorize(jenisTransaksi, customerName, jenisTransaksi);
     const invoiceKey = isOra ? `${invoiceNumber}-1P` : invoiceNumber;
@@ -466,9 +461,7 @@ function parseHTMLTable(html: string): FakturRecord[] {
       : (colMap["billTo"] !== undefined && texts[colMap["billTo"]])
       ? texts[colMap["billTo"]]
       : "";
-    const rawSource = (colMap["source"] !== undefined ? texts[colMap["source"]] : "") || "";
-    const rawJenis = (colMap["jenis"] !== undefined ? texts[colMap["jenis"]] : "") || "";
-    const isOra = isOraCustomer(customerName, `${rawSource} ${rawJenis}`);
+    const isOra = isOraCustomer(customerName);
     const jenisTransaksi: "ORA" | "DOO" = isOra ? "ORA" : "DOO";
 
     const shipSite = colMap["shipSite"] !== undefined ? texts[colMap["shipSite"]] : "";
@@ -564,9 +557,7 @@ function parseExportArray(data: unknown[][], headerIdx: number = -1): FakturReco
       row[3] || ""
     ).trim();
 
-    const rawSource = String((colMap["source"] !== undefined ? row[colMap["source"]] : row[4]) || "").trim();
-    const rawJenis = String((colMap["jenis"] !== undefined ? row[colMap["jenis"]] : row[6]) || "").trim();
-    const isOra = isOraCustomer(customerName, `${rawSource} ${rawJenis}`);
+    const isOra = isOraCustomer(customerName);
     const jenisTransaksi: "ORA" | "DOO" = isOra ? "ORA" : "DOO";
 
     const shipSite = String((colMap["shipSite"] !== undefined ? row[colMap["shipSite"]] : "") || "");
