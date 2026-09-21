@@ -182,7 +182,7 @@ function dbRowsToFakturRecords(rows: Array<Record<string, unknown>>): {
         const validItemSO = itemSO && itemSO !== "-" ? itemSO : "";
         let validSO = "-";
         if (cleanJenis === "ORA") {
-          validSO = validItemSO || (cleanDocSO && cleanDocSO !== "-" ? cleanDocSO : "-");
+          validSO = validItemSO || (cleanDocSO && cleanDocSO !== "-" ? (cleanDocSO.includes(",") ? cleanDocSO.split(",").map(s => s.trim()).filter(s => s.length > 5)[0] || cleanDocSO.split(",").pop()?.trim() || "-" : cleanDocSO) : "-");
         } else {
           // For DOO: The DOO SO from DOO file is strictly preserved
           if (cleanDocSO && cleanDocSO !== "-") {
@@ -217,7 +217,9 @@ function dbRowsToFakturRecords(rows: Array<Record<string, unknown>>): {
       const cleanDocSO = docSO.split(",").map((s) => s.trim()).filter((s) => s && s !== "-").join(", ");
       let validSO = "-";
       if (cleanDocSO && cleanDocSO !== "-") {
-        validSO = cleanJenis === "ORA" ? cleanDocSO : cleanDocSO.split(",")[0].trim();
+        validSO = cleanJenis === "ORA"
+          ? (cleanDocSO.includes(",") ? cleanDocSO.split(",").map(s => s.trim()).filter(s => s.length > 5)[0] || cleanDocSO.split(",").pop()?.trim() || cleanDocSO : cleanDocSO)
+          : cleanDocSO.split(",")[0].trim();
       }
       const docAmount = typeof extra.total_harga === "number"
         ? extra.total_harga
@@ -822,18 +824,32 @@ export default function Home() {
             }
 
             const soSet = new Set<string>();
-            if (prevInfo?.no_sales_order) {
-              prevInfo.no_sales_order.split(",").forEach((s) => {
-                const t = s.trim();
-                if (t && t !== "-") soSet.add(t);
-              });
-            }
-            if (r.orderNumber && r.orderNumber !== "-" && r.orderNumber !== "") {
-              if (isOra || !isFileItemRich) {
+            if (isOra) {
+              if (r.orderNumber && r.orderNumber !== "-" && r.orderNumber !== "") {
                 r.orderNumber.split(",").forEach((s) => {
                   const t = s.trim();
                   if (t && t !== "-") soSet.add(t);
                 });
+              } else if (prevInfo?.no_sales_order) {
+                prevInfo.no_sales_order.split(",").forEach((s) => {
+                  const t = s.trim();
+                  if (t && t !== "-") soSet.add(t);
+                });
+              }
+            } else {
+              if (prevInfo?.no_sales_order) {
+                prevInfo.no_sales_order.split(",").forEach((s) => {
+                  const t = s.trim();
+                  if (t && t !== "-") soSet.add(t);
+                });
+              }
+              if (r.orderNumber && r.orderNumber !== "-" && r.orderNumber !== "") {
+                if (!isFileItemRich) {
+                  r.orderNumber.split(",").forEach((s) => {
+                    const t = s.trim();
+                    if (t && t !== "-") soSet.add(t);
+                  });
+                }
               }
             }
 
@@ -843,7 +859,7 @@ export default function Home() {
             }
 
             const initialSO = isOra
-              ? (Array.from(soSet).join(", ") || (r.orderNumber && r.orderNumber !== "-" ? r.orderNumber : "-"))
+              ? (Array.from(soSet).filter(s => s.length > 5)[0] || Array.from(soSet)[Array.from(soSet).length - 1] || (r.orderNumber && r.orderNumber !== "-" ? r.orderNumber : "-"))
               : (prevInfo?.no_sales_order ? String(prevInfo.no_sales_order).split(",")[0].trim() : (r.orderNumber && !isFileItemRich ? r.orderNumber : "-"));
 
             invMap.set(targetKey, {
@@ -988,7 +1004,9 @@ export default function Home() {
           const isDocOra = isOraCustomer(String(rest.customer_name || ""));
           let finalSO = "-";
           if (isDocOra) {
-            finalSO = soArr.length > 0 ? soArr.join(", ") : (cleanDocSO && cleanDocSO !== "-" ? cleanDocSO : "-");
+            finalSO = soArr.length > 0
+              ? (soArr.filter(s => s.length > 5)[0] || soArr[soArr.length - 1] || soArr.join(", "))
+              : (cleanDocSO && cleanDocSO !== "-" ? (cleanDocSO.includes(",") ? cleanDocSO.split(",").map(s => s.trim()).filter(s => s.length > 5)[0] || cleanDocSO.split(",").pop()?.trim() || cleanDocSO : cleanDocSO) : "-");
           } else {
             // For DOO: SO is strictly preserved from the DOO export
             if (cleanDocSO && cleanDocSO !== "-") {
