@@ -1373,17 +1373,8 @@ export default function Home() {
           : "-";
         const isDouble = soList.some((s) => (soInvMap[s]?.size || 0) > 1);
         const cleanInv = (invNum || invKey || "").replace(/-1P$/i, "");
-        const isPrinted =
-          printedInvoices.has(invKey) ||
-          printedInvoices.has(invNum) ||
-          (cleanInv ? printedInvoices.has(cleanInv) : false) ||
-          (cleanInv ? printedInvoices.has(`${cleanInv}-1P`) : false);
-        const pAt =
-          printedAtMap[invKey] ||
-          printedAtMap[invNum] ||
-          (cleanInv ? printedAtMap[cleanInv] : null) ||
-          (cleanInv ? printedAtMap[`${cleanInv}-1P`] : null) ||
-          null;
+        const isPrinted = printedInvoices.has(invKey);
+        const pAt = printedAtMap[invKey] || null;
 
         const catCounts: Record<string, number> = {};
         let hasPrekursor = false;
@@ -1518,13 +1509,43 @@ export default function Home() {
   const filtered = useMemo(() => {
     let result = grouped;
 
+    // 1. Status Tab Filter (Belum / Sudah / Double)
+    if (filter === "belum") {
+      result = result.filter(
+        (g) => !g.allPrinted || sessionPrintedKeys.has(g.invoiceKey)
+      );
+    } else if (filter === "sudah") {
+      result = result.filter((g) => g.allPrinted);
+    } else if (filter === "double") {
+      result = result.filter((g) => g.isDoubleInv);
+    }
+
+    // 2. Date Filter
     if (dateFilter !== "all") {
       result = result.filter((g) => g.orderDate === dateFilter);
     }
 
+    // 3. Category Filter (1P / 2P / 3P)
+    if (katFilter !== "all") {
+      result = result.filter((g) => g.kategori === katFilter);
+    }
+
+    // 4. Jenis Transaksi Filter (ORA / DOO)
+    if (jenisFilter !== "all") {
+      result = result.filter((g) => g.jenisTransaksi === jenisFilter);
+    }
+
+    // 5. Product Classification Filter (Prekursor / OOT / CCP / Alkes / Farma)
+    if (klasFilter === "prekursor") result = result.filter((g) => g.hasPrekursor);
+    else if (klasFilter === "oot") result = result.filter((g) => g.hasOOT);
+    else if (klasFilter === "ccp") result = result.filter((g) => g.hasCCP);
+    else if (klasFilter === "alkes") result = result.filter((g) => g.hasAlkes);
+    else if (klasFilter === "farma") result = result.filter((g) => g.hasFarma);
+
+    // 6. Search Query
     if (search.trim()) {
       const s = search.toLowerCase().trim();
-      const allMatches = result.filter(
+      result = result.filter(
         (g) =>
           g.so.toLowerCase().includes(s) ||
           g.invoiceNumber.toLowerCase().includes(s) ||
@@ -1538,47 +1559,7 @@ export default function Home() {
               (i.klasifikasiObat && i.klasifikasiObat.toLowerCase().includes(s))
           )
       );
-
-      // Try applying current active tab filters to the matches
-      let tabMatches = allMatches;
-      if (filter === "belum") {
-        tabMatches = tabMatches.filter(
-          (g) => !g.allPrinted || sessionPrintedKeys.has(g.invoiceKey)
-        );
-      } else if (filter === "sudah") {
-        tabMatches = tabMatches.filter((g) => g.allPrinted);
-      } else if (filter === "double") {
-        tabMatches = tabMatches.filter((g) => g.isDoubleInv);
-      }
-
-      if (katFilter !== "all") tabMatches = tabMatches.filter((g) => g.kategori === katFilter);
-      if (jenisFilter !== "all") tabMatches = tabMatches.filter((g) => g.jenisTransaksi === jenisFilter);
-      if (klasFilter === "prekursor") tabMatches = tabMatches.filter((g) => g.hasPrekursor);
-      if (klasFilter === "oot") tabMatches = tabMatches.filter((g) => g.hasOOT);
-      if (klasFilter === "ccp") tabMatches = tabMatches.filter((g) => g.hasCCP);
-      if (klasFilter === "alkes") tabMatches = tabMatches.filter((g) => g.hasAlkes);
-      if (klasFilter === "farma") tabMatches = tabMatches.filter((g) => g.hasFarma);
-
-      // If matches exist in current tab, show them; otherwise fallback to allMatches so user is never misled
-      return tabMatches.length > 0 ? tabMatches : allMatches;
     }
-
-    if (filter === "belum") {
-      result = result.filter(
-        (g) => !g.allPrinted || sessionPrintedKeys.has(g.invoiceKey)
-      );
-    } else if (filter === "sudah") {
-      result = result.filter((g) => g.allPrinted);
-    } else if (filter === "double") {
-      result = result.filter((g) => g.isDoubleInv);
-    }
-    if (katFilter !== "all") result = result.filter((g) => g.kategori === katFilter);
-    if (jenisFilter !== "all") result = result.filter((g) => g.jenisTransaksi === jenisFilter);
-    if (klasFilter === "prekursor") result = result.filter((g) => g.hasPrekursor);
-    if (klasFilter === "oot") result = result.filter((g) => g.hasOOT);
-    if (klasFilter === "ccp") result = result.filter((g) => g.hasCCP);
-    if (klasFilter === "alkes") result = result.filter((g) => g.hasAlkes);
-    if (klasFilter === "farma") result = result.filter((g) => g.hasFarma);
 
     return result;
   }, [grouped, filter, katFilter, jenisFilter, klasFilter, dateFilter, search, sessionPrintedKeys]);

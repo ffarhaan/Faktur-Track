@@ -85,18 +85,13 @@ export function subscribeToFakturs(
     const printedSet = new Set(currentPrintState.printedKeys || []);
     const pMap = currentPrintState.printedAtMap || {};
 
-    // Apply printed status with multi-key fallback (raw, clean, and -1P)
+    // Apply printed status with exact key matching
     for (const d of allDocs) {
       const key = d.id || d.no_faktur;
       if (!key) continue;
-      const cleanKey = key.replace(/-1P$/i, "");
-      const isPrinted =
-        printedSet.has(key) ||
-        printedSet.has(cleanKey) ||
-        printedSet.has(`${cleanKey}-1P`);
+      const isPrinted = printedSet.has(key);
       d.status_cetak = isPrinted;
-      d.printed_at =
-        pMap[key] || pMap[cleanKey] || pMap[`${cleanKey}-1P`] || null;
+      d.printed_at = pMap[key] || null;
     }
 
     onData(allDocs, currentProgression, currentPrintState);
@@ -216,14 +211,10 @@ export async function getExistingFakturs(): Promise<{
     const pMap = printState.printedAtMap || {};
     for (const d of docs) {
       const key = d.id || d.no_faktur;
-      const cleanKey = key.replace(/-1P$/i, "");
-      const isPrinted =
-        printedSet.has(key) ||
-        printedSet.has(cleanKey) ||
-        printedSet.has(`${cleanKey}-1P`);
+      if (!key) continue;
+      const isPrinted = printedSet.has(key);
       d.status_cetak = isPrinted;
-      d.printed_at =
-        pMap[key] || pMap[cleanKey] || pMap[`${cleanKey}-1P`] || null;
+      d.printed_at = pMap[key] || null;
     }
   }
 

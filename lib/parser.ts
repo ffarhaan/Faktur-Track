@@ -346,7 +346,7 @@ function parseXXCUST(data: unknown[][], headerIdx: number): FakturRecord[] {
     const klasifikasiObat = getPrekursorOOTClassification(itemDescription) || undefined;
 
     records.push({
-      orderDate: val(idx.orderDate),
+      orderDate: normalizeDateStr(rawVal(idx.orderDate) ?? val(idx.orderDate)),
       orderNumber,
       invoiceNumber,
       invoiceKey,
@@ -476,7 +476,7 @@ function parseHTMLTable(html: string): FakturRecord[] {
     const finalSO = isOra ? "-" : (soVal || "-");
 
     records.push({
-      orderDate: texts[colMap["date"] ?? 0] || "",
+      orderDate: normalizeDateStr(texts[colMap["date"] ?? 0] || ""),
       orderNumber: finalSO,
       invoiceNumber: invVal,
       invoiceKey,
@@ -498,7 +498,8 @@ function parseHTMLTable(html: string): FakturRecord[] {
   return records;
 }
 
-function formatExcelDate(v: unknown): string {
+export function normalizeDateStr(v: unknown): string {
+  if (!v) return "-";
   if (typeof v === "number") {
     const d = new Date(Math.round((v - 25569) * 86400 * 1000));
     if (!isNaN(d.getTime())) {
@@ -506,7 +507,30 @@ function formatExcelDate(v: unknown): string {
       return `${pad(d.getUTCDate())}/${pad(d.getUTCMonth() + 1)}/${d.getUTCFullYear()}`;
     }
   }
-  return String(v || "").trim();
+  let s = String(v).trim();
+  if (!s || s === "-" || s === "0") return "-";
+  const mIso = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (mIso) {
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${pad(Number(mIso[3]))}/${pad(Number(mIso[2]))}/${mIso[1]}`;
+  }
+  const mSlash = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (mSlash) {
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${pad(Number(mSlash[1]))}/${pad(Number(mSlash[2]))}/${mSlash[3]}`;
+  }
+  const mMon = s.match(/^(\d{1,2})-([A-Za-z]{3})-(\d{4})/);
+  if (mMon) {
+    const months: Record<string, string> = { jan: "01", feb: "02", mar: "03", apr: "04", may: "05", jun: "06", jul: "07", aug: "08", sep: "09", oct: "10", nov: "11", dec: "12" };
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const mon = months[mMon[2].toLowerCase()] || "01";
+    return `${pad(Number(mMon[1]))}/${mon}/${mMon[3]}`;
+  }
+  return s;
+}
+
+function formatExcelDate(v: unknown): string {
+  return normalizeDateStr(v);
 }
 
 function parseExportArray(data: unknown[][], headerIdx: number = -1): FakturRecord[] {
