@@ -153,12 +153,12 @@ function dbRowsToFakturRecords(rows: Array<Record<string, unknown>>): {
     const cleanInv = rawInv.replace(/-1P$/i, "");
     const extra = (r.extra as Record<string, unknown>) || {};
     const items = (extra.items as Array<Record<string, unknown>>) || [];
-    const cust = String(extra.nama_pelanggan || "");
-    const date = String(extra.accounting_date || extra.order_date || r.imported_at || "");
-    const isOra = isOraCustomer(cust, (extra.jenis_transaksi as string) || (r.source_file as string));
+    const cust = String(extra.nama_pelanggan || r.customer_name || "");
+    const date = String(extra.accounting_date || extra.order_date || r.order_date || r.imported_at || "");
+    const isOra = isOraCustomer(cust, (extra.jenis_transaksi as string) || (r.source_file as string) || (r.jenis_transaksi as string));
     const invKey = rawInv || (isOra ? `${cleanInv}-1P` : cleanInv);
     const cleanJenis: "DOO" | "ORA" = isOra ? "ORA" : "DOO";
-    const kategori = categorize(cleanJenis, cust, (extra.jenis_transaksi as string) || (r.source_file as string));
+    const kategori = (r.kategori as "1P" | "2P" | "3P") || categorize(cleanJenis, cust, (extra.jenis_transaksi as string) || (r.source_file as string));
     const pAt = (r.printed_at as string) || (extra.printed_at as string) || null;
 
     if (r.status_cetak) {
@@ -203,6 +203,12 @@ function dbRowsToFakturRecords(rows: Array<Record<string, unknown>>): {
     } else {
       const docSO = String(r.no_sales_order || "").trim();
       const validSO = docSO && docSO !== "-" ? docSO : "-";
+      const docAmount = typeof extra.total_harga === "number"
+        ? extra.total_harga
+        : typeof extra.entered_amount === "number"
+        ? extra.entered_amount
+        : parseFloat(String(extra.total_harga || extra.entered_amount || extra.amount || 0)) || 0;
+
       records.push({
         orderDate: date,
         orderNumber: validSO,
@@ -215,7 +221,7 @@ function dbRowsToFakturRecords(rows: Array<Record<string, unknown>>): {
         qty: 1,
         uom: "-",
         lotNumber: "-",
-        totalHarga: 0,
+        totalHarga: docAmount,
         kategori,
         isDoubleInv: false,
         rowIndex: 0,
@@ -223,14 +229,28 @@ function dbRowsToFakturRecords(rows: Array<Record<string, unknown>>): {
     }
   }
 
-  // Detect double invoices
+  // Accurately detect double invoices by splitting comma-separated SOs
   const soInvMap: Record<string, Set<string>> = {};
   for (const rec of records) {
-    if (!soInvMap[rec.orderNumber]) soInvMap[rec.orderNumber] = new Set();
-    if (rec.invoiceNumber) soInvMap[rec.orderNumber].add(rec.invoiceNumber);
+    if (rec.orderNumber && rec.orderNumber !== "-") {
+      rec.orderNumber.split(",").forEach((s) => {
+        const cleanSO = s.trim();
+        if (cleanSO && cleanSO !== "-") {
+          if (!soInvMap[cleanSO]) soInvMap[cleanSO] = new Set();
+          if (rec.invoiceNumber && rec.invoiceNumber !== "0" && rec.invoiceNumber !== "-") {
+            soInvMap[cleanSO].add(rec.invoiceNumber);
+          }
+        }
+      });
+    }
   }
   for (const rec of records) {
-    if (soInvMap[rec.orderNumber]?.size > 1) rec.isDoubleInv = true;
+    if (rec.orderNumber && rec.orderNumber !== "-") {
+      const sos = rec.orderNumber.split(",").map((s) => s.trim()).filter((s) => s && s !== "-");
+      if (sos.some((s) => (soInvMap[s]?.size || 0) > 1)) {
+        rec.isDoubleInv = true;
+      }
+    }
   }
 
   return { records, printedSet, printedAtMap, progression };
@@ -1120,12 +1140,19 @@ export default function Home() {
       map[gKey].push(r);
     }
 
-    // Detect double invoices per SO
+    // Detect double invoices per individual SO
     const soInvMap: Record<string, Set<string>> = {};
     for (const r of records) {
-      if (!soInvMap[r.orderNumber]) soInvMap[r.orderNumber] = new Set();
-      if (r.invoiceNumber && r.invoiceNumber !== "0" && r.invoiceNumber !== "-") {
-        soInvMap[r.orderNumber].add(r.invoiceNumber);
+      if (r.orderNumber && r.orderNumber !== "-") {
+        r.orderNumber.split(",").forEach((s) => {
+          const cleanSO = s.trim();
+          if (cleanSO && cleanSO !== "-") {
+            if (!soInvMap[cleanSO]) soInvMap[cleanSO] = new Set();
+            if (r.invoiceNumber && r.invoiceNumber !== "0" && r.invoiceNumber !== "-") {
+              soInvMap[cleanSO].add(r.invoiceNumber);
+            }
+          }
+        });
       }
     }
 
@@ -1133,7 +1160,17 @@ export default function Home() {
       .map(([key, items]) => {
         const invNum = items[0].invoiceNumber;
         const invKey = items[0].invoiceKey;
-        const soList = [...new Set(items.map((i) => i.orderNumber).filter(Boolean))];
+        const soList: string[] = [];
+        items.forEach((i) => {
+          if (i.orderNumber && i.orderNumber !== "-") {
+            i.orderNumber.split(",").forEach((s) => {
+              const cleanSO = s.trim();
+              if (cleanSO && cleanSO !== "-" && !soList.includes(cleanSO)) {
+                soList.push(cleanSO);
+              }
+            });
+          }
+        });
         const soStr = soList.join(", ");
         const isDouble = soList.some((s) => (soInvMap[s]?.size || 0) > 1);
         const pAt = printedAtMap[invKey] || null;
@@ -1575,8 +1612,21 @@ export default function Home() {
   }, [pageData, selectedRowIndex, selectedColIdx, page, totalPages, togglePrint, toggleExpand]);
 
   const summary = useMemo(() => {
-    const uniqueInvoices = new Set(records.map((r) => r.invoiceKey));
-    const uniqueSO = new Set(records.map((r) => r.orderNumber));
+    const uniqueInvoices = new Set(
+      records.map((r) => r.invoiceKey).filter((k) => k && k !== "0" && k !== "-")
+    );
+    const uniqueSO = new Set<string>();
+    records.forEach((r) => {
+      if (r.orderNumber && r.orderNumber !== "-") {
+        r.orderNumber.split(",").forEach((s) => {
+          const cleanSO = s.trim();
+          if (cleanSO && cleanSO !== "-") {
+            uniqueSO.add(cleanSO);
+          }
+        });
+      }
+    });
+
     const belumTerprint = [...uniqueInvoices].filter(
       (key) => !printedInvoices.has(key)
     ).length;
