@@ -4,7 +4,16 @@ import { useState, useMemo, useEffect, useCallback, useRef, Fragment } from "rea
 import * as XLSX from "xlsx";
 import { parseExcelFile, categorize, isOraCustomer, getProductCategory, getPrekursorOOTClassification } from "@/lib/parser";
 import { FakturRecord } from "@/lib/types";
-import { supabase } from "@/lib/supabaseClient";
+import {
+  subscribeToFakturs,
+  getExistingFakturs,
+  saveFaktursBatch,
+  updateFakturPrintStatus,
+  clearAllFakturs,
+  FirestoreFakturDoc,
+} from "@/lib/firestoreService";
+import { db } from "@/lib/firebase";
+import { collection, getDocs } from "firebase/firestore";
 import masterApotekList from "@/lib/masterApotekList.json";
 import masterProductList from "@/lib/masterProduct.json";
 
@@ -268,81 +277,13 @@ export default function Home() {
   const [showHelpModal, setShowHelpModal] = useState(false);
   const [showApotekModal, setShowApotekModal] = useState(false);
   const [showProductModal, setShowProductModal] = useState(false);
-
-  const isFetchingRef = useRef(false);
-  const lastSyncHashRef = useRef("");
-  const lastKnownVersionRef = useRef<{ count: number; latestUpdated: string }>({ count: 0, latestUpdated: "" });
-  const pendingPrintsRef = useRef<Map<string, { status: boolean; time: number }>>(new Map());
   const inFlightToggleRef = useRef<Set<string>>(new Set());
-  const realtimeChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
-  // Fetch all records with Smart Sync Fingerprinting (Zero-lag, 0% bandwidth when no changes, supports 100k+ records)
-  const fetchFromSupabase = useCallback(async (forceFull = false, showLoading = false) => {
-    if (isFetchingRef.current) return;
-    isFetchingRef.current = true;
-    if (showLoading) setLoading(true);
-    try {
-      // 1. Ultra-lightweight check: only ask for 1 row if not forced
-      if (!forceFull && lastKnownVersionRef.current.count > 0) {
-        const { count, data: checkData, error: checkErr } = await supabase
-          .from("faktur_records")
-          .select("updated_at", { count: "exact" })
-          .order("updated_at", { ascending: false })
-          .limit(1);
-
-        if (!checkErr && count !== null) {
-          const latestUpdated = checkData?.[0]?.updated_at ? String(checkData[0].updated_at) : "";
-          if (
-            count === lastKnownVersionRef.current.count &&
-            latestUpdated === lastKnownVersionRef.current.latestUpdated
-          ) {
-            // Nothing changed in database! Exit immediately with zero overhead
-            return;
-          }
-        }
-      }
-
-      // 2. Initial load or changes detected: fetch rows in paginated chunks
-      let allRows: Array<Record<string, unknown>> = [];
-      let from = 0;
-      const step = 1000;
-      while (true) {
-        const { data, error: sbErr } = await supabase
-          .from("faktur_records")
-          .select("*")
-          .order("id", { ascending: true })
-          .range(from, from + step - 1);
-
-        if (sbErr || !data || data.length === 0) break;
-        allRows = allRows.concat(data as Array<Record<string, unknown>>);
-        if (data.length < step) break;
-        from += step;
-      }
-
-      if (allRows.length > 0) {
-        // Guaranteed Unique Deduplication by ID
-        const seenIds = new Set<string>();
-        let maxUpdatedAt = "";
-        const uniqueRows = allRows.filter((r) => {
-          const key = String(r.id || r.no_faktur);
-          const uAt = r.updated_at ? String(r.updated_at) : "";
-          if (uAt > maxUpdatedAt) {
-            maxUpdatedAt = uAt;
-          }
-          if (seenIds.has(key)) return false;
-          seenIds.add(key);
-          return true;
-        });
-
-        lastKnownVersionRef.current = {
-          count: uniqueRows.length,
-          latestUpdated: maxUpdatedAt,
-        };
-
-        // Fast fingerprint to avoid redundant state updates & re-renders
-        const hash = `${uniqueRows.length}-${uniqueRows[0]?.id || ""}-${uniqueRows[uniqueRows.length - 1]?.id || ""}-${maxUpdatedAt}`;
-        const { records: recs, printedSet, printedAtMap: pMap, progression: prog } = dbRowsToFakturRecords(uniqueRows);
-
+  // Realtime subscription to Firebase Firestore
+  useEffect(() => {
+    setLoading(true);
+    const unsubscribe = subscribeToFakturs(
+      (docs, prog) => {
         if (prog) {
           setInvoiceProgression(prog);
           try {
@@ -350,128 +291,30 @@ export default function Home() {
           } catch {}
         }
 
-        // Merge recent pending optimistic user actions (within last 15s) so background sync doesn't revert local user edits
-        const now = Date.now();
-        pendingPrintsRef.current.forEach((val, k) => {
-          if (now - val.time < 15000) {
-            if (val.status) {
-              printedSet.add(k);
-              if (!pMap[k]) pMap[k] = new Date(val.time).toISOString();
-            } else {
-              printedSet.delete(k);
-              delete pMap[k];
-            }
-          } else {
-            pendingPrintsRef.current.delete(k);
-          }
-        });
-
-        setRecords(recs);
-        setPrintedInvoices(printedSet);
-        setPrintedAtMap(pMap);
-        lastSyncHashRef.current = hash;
-      } else {
-        lastKnownVersionRef.current = { count: 0, latestUpdated: "" };
-        setRecords([]);
-        setPrintedInvoices(new Set());
-        setPrintedAtMap({});
-      }
-    } catch (err) {
-      console.error("Supabase sync error:", err);
-    } finally {
-      isFetchingRef.current = false;
-      if (showLoading) setLoading(false);
-    }
-  }, []);
-
-  // Load on mount: fetch directly from Supabase (Source of Truth) & subscribe to Realtime WebSocket
-  useEffect(() => {
-    fetchFromSupabase(true, true);
-
-    // 1. Instant Realtime WebSocket subscription with Broadcast + Postgres Changes (<30ms cross-device sync)
-    const channel = supabase.channel("faktur-realtime-sync", {
-      config: {
-        broadcast: { self: false },
+        if (docs.length > 0) {
+          const { records: recs, printedSet, printedAtMap: pMap } = dbRowsToFakturRecords(
+            docs as unknown as Array<Record<string, unknown>>
+          );
+          setRecords(recs);
+          setPrintedInvoices(printedSet);
+          setPrintedAtMap(pMap);
+        } else {
+          setRecords([]);
+          setPrintedInvoices(new Set());
+          setPrintedAtMap({});
+        }
+        setLoading(false);
       },
-    });
-
-    channel
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "faktur_records",
-        },
-        () => {
-          fetchFromSupabase(true, false);
-        }
-      )
-      .on("broadcast", { event: "SYNC_TRIGGER" }, () => {
-        fetchFromSupabase(true, false);
-      })
-      .on("broadcast", { event: "UPLOAD_COMPLETED" }, (payload: { payload?: { progression?: InvoiceProgression } }) => {
-        if (payload?.payload?.progression) {
-          setInvoiceProgression(payload.payload.progression);
-        }
-        fetchFromSupabase(true, false);
-      })
-      .on("broadcast", { event: "PRINT_TOGGLE" }, (payload: { payload?: { invoiceKey?: string; status?: boolean; printed_at?: string } }) => {
-        const data = payload?.payload;
-        if (data && typeof data.invoiceKey === "string") {
-          const invKey: string = data.invoiceKey;
-          const isStatus = Boolean(data.status);
-          const printedAt = data.printed_at;
-          setPrintedInvoices((prev) => {
-            const next = new Set(prev);
-            if (isStatus) next.add(invKey);
-            else next.delete(invKey);
-            return next;
-          });
-          setPrintedAtMap((prev) => {
-            const next = { ...prev };
-            if (isStatus) next[invKey] = printedAt || new Date().toISOString();
-            else delete next[invKey];
-            return next;
-          });
-        }
-        fetchFromSupabase(true, false);
-      })
-      .subscribe();
-
-    realtimeChannelRef.current = channel;
-
-    // 2. Auto-sync on Tab Focus, Window Visibility Change, or Network Reconnect
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
-        fetchFromSupabase(false, false);
+      (err) => {
+        console.error("Firestore sync error:", err);
+        setLoading(false);
       }
-    };
-    const handleFocus = () => {
-      fetchFromSupabase(false, false);
-    };
-    const handleOnline = () => {
-      fetchFromSupabase(false, false);
-    };
-
-    window.addEventListener("focus", handleFocus);
-    window.addEventListener("online", handleOnline);
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-
-    // 3. Fallback ultra-fast background sync interval every 1 second (1000ms) with zero-cost metadata check
-    const syncInterval = setInterval(() => {
-      fetchFromSupabase(false, false);
-    }, 1000);
+    );
 
     return () => {
-      supabase.removeChannel(channel);
-      realtimeChannelRef.current = null;
-      window.removeEventListener("focus", handleFocus);
-      window.removeEventListener("online", handleOnline);
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-      clearInterval(syncInterval);
+      unsubscribe();
     };
-  }, [fetchFromSupabase]);
+  }, []);
 
   // Auto-refresh on new deploy version
   useEffect(() => {
@@ -503,10 +346,28 @@ export default function Home() {
 
   const handleManualRefresh = useCallback(() => {
     setSessionPrintedKeys(new Set());
-    fetchFromSupabase(true);
-  }, [fetchFromSupabase]);
+    setLoading(true);
+    getDocs(collection(db, "fakturs"))
+      .then((snap) => {
+        const items: FirestoreFakturDoc[] = [];
+        snap.forEach((d) => {
+          if (d.id !== "__SYSTEM_METADATA__") items.push(d.data() as FirestoreFakturDoc);
+        });
+        const { records: recs, printedSet, printedAtMap: pMap } = dbRowsToFakturRecords(
+          items as unknown as Array<Record<string, unknown>>
+        );
+        setRecords(recs);
+        setPrintedInvoices(printedSet);
+        setPrintedAtMap(pMap);
+        setLoading(false);
+      })
+      .catch((err) => {
+        console.error("Manual refresh error:", err);
+        setLoading(false);
+      });
+  }, []);
 
-  // Print / Unprint: toggle local state AND sync to Supabase so all devices see it
+  // Print / Unprint: toggle local state AND sync to Firestore in realtime
   const togglePrint = useCallback(
     async (group: FakturGroup) => {
       const willBePrinted = !group.allPrinted;
@@ -529,10 +390,7 @@ export default function Home() {
       }
       setPrintedInvoices(next);
 
-      // Record in pending prints for optimistic retention against background sync
-      pendingPrintsRef.current.set(targetKey, { status: willBePrinted, time: Date.now() });
-
-      // Track items printed in this session so they persist in Belum Terprint view until manual refresh
+      // Optimistic session state
       setSessionPrintedKeys((prev) => {
         const sNext = new Set(prev);
         if (willBePrinted) {
@@ -560,30 +418,9 @@ export default function Home() {
       } catch {}
 
       try {
-        // Broadcast instant state change to all devices in <30ms over WebSocket
-        realtimeChannelRef.current?.send({
-          type: "broadcast",
-          event: "PRINT_TOGGLE",
-          payload: {
-            invoiceKey: targetKey,
-            status: willBePrinted,
-            printed_at: willBePrinted ? nowIso : null,
-          },
-        });
-
-        const { error: updateErr } = await supabase
-          .from("faktur_records")
-          .update({
-            status_cetak: willBePrinted,
-            printed_at: willBePrinted ? nowIso : null,
-          })
-          .eq("no_faktur", targetKey);
-
-        if (updateErr) {
-          console.error("Supabase update error:", updateErr.message);
-        }
+        await updateFakturPrintStatus(targetKey, willBePrinted, willBePrinted ? nowIso : null);
       } catch (err) {
-        console.error("Failed to update print status in Supabase:", err);
+        console.error("Failed to update print status in Firestore:", err);
       }
     },
     [printedInvoices]
@@ -604,20 +441,9 @@ export default function Home() {
 
         const importedAt = new Date().toISOString();
 
-        // Fetch ALL existing print status & data from DB (paginated) so we NEVER reset already printed invoices or rich item data
-        let existingDB: Array<Record<string, unknown>> = [];
-        let fromIdx = 0;
-        while (true) {
-          const { data: pageData, error: pageErr } = await supabase
-            .from("faktur_records")
-            .select("no_faktur, no_sales_order, status_cetak, printed_at, extra")
-            .order("id", { ascending: true })
-            .range(fromIdx, fromIdx + 999);
-          if (pageErr || !pageData || pageData.length === 0) break;
-          existingDB = existingDB.concat(pageData as Array<Record<string, unknown>>);
-          if (pageData.length < 1000) break;
-          fromIdx += 1000;
-        }
+        // Fetch ALL existing print status & data from Firestore so we NEVER reset already printed invoices or rich item data
+        const { docs: existingDBDocs, progression: loadedProgression } = await getExistingFakturs();
+        const existingDB = existingDBDocs as unknown as Array<Record<string, unknown>>;
 
         const existingStatusMap = new Map<
           string,
@@ -628,7 +454,7 @@ export default function Home() {
             extra: Record<string, unknown> | null;
           }
         >();
-        let existingProgression: InvoiceProgression = {};
+        let existingProgression: InvoiceProgression = loadedProgression || {};
         let prev1PNum = -1;
         let prev1PStr = "-";
         let prev2PNum = -1;
@@ -756,37 +582,41 @@ export default function Home() {
             }
 
             // SO Number selection:
-            // 1. If file is XXCUST, use incoming r.orderNumber.
-            // 2. If file is summary ORA export and DB already has clean SO from XXCUST, PRESERVE existing SO!
-            let finalSO = r.orderNumber;
-            if (
-              !isFileItemRich &&
-              existingSO &&
-              existingSO !== "-" &&
-              !existingSO.startsWith("ORA_") &&
-              existingSO.length < 35
-            ) {
-              finalSO = existingSO;
+            const soSet = new Set<string>();
+            if (prevInfo?.no_sales_order) {
+              prevInfo.no_sales_order.split(",").forEach((s) => {
+                const t = s.trim();
+                if (t) soSet.add(t);
+              });
+            }
+            if (r.orderNumber) soSet.add(r.orderNumber);
+
+            const baseItems: Array<Record<string, unknown>> = [];
+            if (hasExistingRichItems) {
+              baseItems.push(...prevItems);
             }
 
             invMap.set(noFaktur, {
               no_faktur: noFaktur,
-              no_sales_order: finalSO,
-              no_delivery_order: null,
+              no_sales_order: Array.from(soSet).join(", ") || r.orderNumber || "-",
+              customer_name: finalCustomerName || r.customerName || "-",
+              order_date: r.orderDate || "-",
+              jenis_transaksi: r.jenisTransaksi,
+              kategori: r.kategori,
               status_cetak: isPrinted,
               printed_at: printedAt,
               imported_at: importedAt,
-              source_file: isOra ? "ORA" : "DOO",
+              source_file: r.jenisTransaksi,
               extra: {
-                nama_pelanggan: finalCustomerName || (prevExtra?.nama_pelanggan as string) || null,
-                jenis_transaksi: isOra ? "ORA" : "DOO",
-                accounting_date: r.orderDate || (prevExtra?.accounting_date as string) || null,
-                order_date: r.orderDate || (prevExtra?.order_date as string) || null,
+                nama_pelanggan: finalCustomerName || r.customerName,
+                order_date: r.orderDate,
+                accounting_date: r.orderDate,
+                jenis_transaksi: r.jenisTransaksi,
                 kategori: r.kategori,
-                items: !isFileItemRich && hasExistingRichItems ? prevItems : [],
+                items: baseItems,
               },
-              _soSet: new Set([finalSO]),
-              _hasPreservedItems: !isFileItemRich && hasExistingRichItems,
+              _soSet: soSet,
+              _hasPreservedItems: hasExistingRichItems,
             });
           }
 
@@ -825,17 +655,12 @@ export default function Home() {
           }
         }
 
-        const payload = Array.from(invMap.values()).map(({ _soSet, _hasPreservedItems, ...rest }) => ({
+        const payload: FirestoreFakturDoc[] = Array.from(invMap.values()).map(({ _soSet, _hasPreservedItems, ...rest }) => ({
           ...rest,
+          id: String(rest.no_faktur),
           no_sales_order: (_soSet as Set<string>).size > 0 ? Array.from(_soSet as Set<string>).join(", ") : rest.no_sales_order,
-        }));
-
-        for (const batch of chunk(payload, 500)) {
-          const { error: sbErr } = await supabase
-            .from("faktur_records")
-            .upsert(batch, { onConflict: "no_faktur" });
-          if (sbErr) console.error("Upload upsert error:", sbErr.message);
-        }
+          updated_at: new Date().toISOString(),
+        })) as unknown as FirestoreFakturDoc[];
 
         // Calculate min/max invoices per category (1P, 2P, 3P, ORA, DOO) in uploaded file
         let minUploaded1PNum = Infinity;
@@ -905,7 +730,6 @@ export default function Home() {
                 minUploaded3PStr = cleanInv;
               }
             }
-
             if (isOra) {
               if (num > maxUploadedOraNum) {
                 maxUploadedOraNum = num;
@@ -915,7 +739,8 @@ export default function Home() {
                 minUploadedOraNum = num;
                 minUploadedOraStr = cleanInv;
               }
-            } else {
+            }
+            if (!isOra) {
               if (num > maxUploadedDooNum) {
                 maxUploadedDooNum = num;
                 maxUploadedDooStr = cleanInv;
@@ -1038,21 +863,8 @@ export default function Home() {
           localStorage.setItem("invoiceProgression", JSON.stringify(progObj));
         } catch {}
 
-        // Save progression to Supabase metadata so all devices see this progression
-        try {
-          await supabase.from("faktur_records").upsert({
-            no_faktur: "__SYSTEM_METADATA__",
-            no_sales_order: "__SYSTEM__",
-            status_cetak: true,
-            imported_at: importedAt,
-            source_file: "SYS",
-            extra: {
-              invoiceProgression: progObj,
-            },
-          }, { onConflict: "no_faktur" });
-        } catch (err) {
-          console.error("Failed to save progression to Supabase metadata:", err);
-        }
+        // Save batch to Firestore Cloud Database
+        await saveFaktursBatch(payload, progObj);
 
         setUploadNotification({
           fileName: file.name,
@@ -1073,25 +885,13 @@ export default function Home() {
           { name: file.name, count: parsed.length, time: new Date().toLocaleString("id-ID") },
         ]);
         setPage(0);
-
-        // Instant broadcast to all connected devices in <30ms over WebSocket
-        realtimeChannelRef.current?.send({
-          type: "broadcast",
-          event: "UPLOAD_COMPLETED",
-          payload: {
-            timestamp: Date.now(),
-            progression: progObj,
-          },
-        });
-
-        await fetchFromSupabase(true, false);
       } catch (e) {
         setError(e instanceof Error ? e.message : "Gagal membaca file.");
       } finally {
         setLoading(false);
       }
     },
-    [fetchFromSupabase]
+    []
   );
 
   const onDrop = useCallback(
@@ -1131,17 +931,10 @@ export default function Home() {
       localStorage.removeItem("uploadedFiles");
       localStorage.removeItem("printedInvoices");
       localStorage.removeItem("printedAtMap");
+      localStorage.removeItem("invoiceProgression");
     } catch {}
 
-    await supabase.from("faktur_records").delete().neq("id", "00000000-0000-0000-0000-000000000000");
-
-    // Broadcast reset event immediately
-    realtimeChannelRef.current?.send({
-      type: "broadcast",
-      event: "SYNC_TRIGGER",
-      payload: { timestamp: Date.now(), action: "reset" },
-    });
-
+    await clearAllFakturs();
     setLoading(false);
   };
 
