@@ -182,7 +182,10 @@ function dbRowsToFakturRecords(rows: Array<Record<string, unknown>>): {
         const validItemSO = itemSO && itemSO !== "-" ? itemSO : "";
         let validSO = "-";
         if (cleanJenis === "ORA") {
-          validSO = validItemSO || (cleanDocSO && cleanDocSO !== "-" ? (cleanDocSO.includes(",") ? cleanDocSO.split(",").map(s => s.trim()).filter(s => s.length > 5)[0] || cleanDocSO.split(",").pop()?.trim() || "-" : cleanDocSO) : "-");
+          const candidate = [validItemSO, cleanDocSO].filter((s) => s && s !== "-").join(", ");
+          const parts = candidate.split(",").map((s) => s.trim()).filter((s) => s && s !== "-");
+          const realParts = parts.filter((s) => s.length >= 5 || s.includes("-"));
+          validSO = realParts.length > 0 ? realParts[0] : parts[0] || "-";
         } else {
           // For DOO: The DOO SO from DOO file is strictly preserved
           if (cleanDocSO && cleanDocSO !== "-") {
@@ -1368,7 +1371,17 @@ export default function Home() {
             });
           }
         });
-        const soStr = soList.join(", ");
+
+        let finalSoList = soList;
+        const realSOs = soList.filter((s) => s.length >= 5 || s.includes("-"));
+        if (realSOs.length > 0) {
+          finalSoList = realSOs;
+        }
+
+        const isOra = items[0].jenisTransaksi === "ORA";
+        const soStr = finalSoList.length > 0
+          ? (isOra ? finalSoList[0] : finalSoList.join(", "))
+          : "-";
         const isDouble = soList.some((s) => (soInvMap[s]?.size || 0) > 1);
         const cleanInv = (invNum || invKey || "").replace(/-1P$/i, "");
         const isPrinted =
