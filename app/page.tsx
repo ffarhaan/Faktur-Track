@@ -642,8 +642,6 @@ export default function Home() {
           };
 
           if (rawFaktur) existingStatusMap.set(rawFaktur, statusInfo);
-          if (cleanFaktur) existingStatusMap.set(cleanFaktur, statusInfo);
-          if (cleanFaktur) existingStatusMap.set(`${cleanFaktur}-1P`, statusInfo);
           if (row.no_sales_order) {
             String(row.no_sales_order).split(",").forEach((s) => {
               const soClean = s.trim();
