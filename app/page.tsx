@@ -878,8 +878,17 @@ export default function Home() {
 
           // For ORA: XXCUST supplies the official Sales Order
           // For DOO: Keep the DOO SO from DOO export unchanged!
+          if (r.jenisTransaksi === "ORA") {
+            existing.jenis_transaksi = "ORA";
+            existing.kategori = "1P";
+            if (existing.extra) {
+              (existing.extra as Record<string, unknown>).jenis_transaksi = "ORA";
+              (existing.extra as Record<string, unknown>).kategori = "1P";
+            }
+          }
+
           if (r.orderNumber && r.orderNumber !== "-" && r.orderNumber !== "") {
-            const isEntryOra = isOraCustomer(
+            const isEntryOra = existing.jenis_transaksi === "ORA" || isOraCustomer(
               String(existing.customer_name || r.customerName || ""),
               String(existing.jenis_transaksi || r.jenisTransaksi || "")
             );

@@ -203,8 +203,11 @@ export function isOraCustomer(customerName?: string, sourceFile?: string): boole
   return (
     upperCust.includes("HELIOS") ||
     upperCust.startsWith("HAK") ||
+    upperCust.includes("ORA") ||
+    upperCust === "1001" ||
     upperSrc.includes("ORA") ||
-    upperCust === "1001"
+    upperSrc.includes("HELIOS") ||
+    upperSrc.includes("HAK")
   );
 }
 
