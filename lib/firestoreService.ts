@@ -125,14 +125,25 @@ export async function saveFaktursBatch(
   progression?: InvoiceProgression | null
 ): Promise<void> {
   const chunkSize = 450;
+  const chunks: FirestoreFakturDoc[][] = [];
   for (let i = 0; i < fakturs.length; i += chunkSize) {
-    const chunk = fakturs.slice(i, i + chunkSize);
-    const batch = writeBatch(db);
-    for (const item of chunk) {
-      const docRef = doc(db, FAKTURS_COLLECTION, item.id || item.no_faktur);
-      batch.set(docRef, item, { merge: true });
-    }
-    await batch.commit();
+    chunks.push(fakturs.slice(i, i + chunkSize));
+  }
+
+  // Run batch writes concurrently (4 batches in parallel) for ultra-fast upload
+  const concurrency = 4;
+  for (let i = 0; i < chunks.length; i += concurrency) {
+    const batchGroup = chunks.slice(i, i + concurrency);
+    await Promise.all(
+      batchGroup.map(async (chunk) => {
+        const batch = writeBatch(db);
+        for (const item of chunk) {
+          const docRef = doc(db, FAKTURS_COLLECTION, item.id || item.no_faktur);
+          batch.set(docRef, item, { merge: true });
+        }
+        await batch.commit();
+      })
+    );
   }
 
   // Save metadata progression
