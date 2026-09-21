@@ -331,11 +331,21 @@ export default function Home() {
           const { records: recs, printedSet, printedAtMap: pMap } = dbRowsToFakturRecords(
             docs as unknown as Array<Record<string, unknown>>
           );
-          setRecords(recs);
+          setRecords((prev) => {
+            // Guard: If current local state has significantly more data/items, don't overwrite with partial snapshot
+            if (prev.length > recs.length && recs.length > 0) {
+              const prevRich = prev.filter((r) => r.itemCode && r.itemCode !== "-" && r.itemCode !== "").length;
+              const recsRich = recs.filter((r) => r.itemCode && r.itemCode !== "-" && r.itemCode !== "").length;
+              if (prevRich > recsRich) {
+                return prev;
+              }
+            }
+            return recs;
+          });
           setPrintedInvoices(printedSet);
           setPrintedAtMap(pMap);
         } else {
-          setRecords([]);
+          setRecords((prev) => (prev.length > 0 ? prev : []));
           setPrintedInvoices(new Set());
           setPrintedAtMap({});
         }

@@ -58,6 +58,7 @@ export function subscribeToFakturs(
     printedAtMap: {},
     updatedAt: "",
   };
+  let emitTimer: ReturnType<typeof setTimeout> | null = null;
 
   const emitData = () => {
     // Merge all chunks in order
@@ -71,8 +72,9 @@ export function subscribeToFakturs(
     const allDocs: FirestoreFakturDoc[] = [];
     for (const k of sortedChunkKeys) {
       const list = currentChunksMap.get(k) || [];
-      for (const d of list) {
-        const key = d.id || d.no_faktur;
+      for (let idx = 0; idx < list.length; idx++) {
+        const d = list[idx];
+        const key = d.id || d.no_faktur || `${k}_${idx}`;
         if (!seenDocKeys.has(key)) {
           seenDocKeys.add(key);
           allDocs.push(d);
@@ -86,6 +88,7 @@ export function subscribeToFakturs(
     // Apply printed status with multi-key fallback (raw, clean, and -1P)
     for (const d of allDocs) {
       const key = d.id || d.no_faktur;
+      if (!key) continue;
       const cleanKey = key.replace(/-1P$/i, "");
       const isPrinted =
         printedSet.has(key) ||
@@ -99,6 +102,13 @@ export function subscribeToFakturs(
     onData(allDocs, currentProgression, currentPrintState);
   };
 
+  const debouncedEmit = () => {
+    if (emitTimer) clearTimeout(emitTimer);
+    emitTimer = setTimeout(() => {
+      emitData();
+    }, 200);
+  };
+
   // 1. Subscribe to Metadata
   const unsubMeta = onSnapshot(
     doc(db, APP_DATA_COLLECTION, METADATA_DOC),
@@ -109,7 +119,7 @@ export function subscribeToFakturs(
           currentProgression = data.invoiceProgression as InvoiceProgression;
         }
       }
-      emitData();
+      debouncedEmit();
     },
     (err) => console.warn("Metadata sync warning:", err)
   );
@@ -121,7 +131,7 @@ export function subscribeToFakturs(
       if (snap.exists()) {
         currentPrintState = snap.data() as PrintState;
       }
-      emitData();
+      debouncedEmit();
     },
     (err) => console.warn("PrintState sync warning:", err)
   );
@@ -138,7 +148,7 @@ export function subscribeToFakturs(
         }
       });
       currentChunksMap = newMap;
-      emitData();
+      debouncedEmit();
     },
     (err) => {
       console.error("Chunks sync error:", err);
@@ -147,6 +157,7 @@ export function subscribeToFakturs(
   );
 
   return () => {
+    if (emitTimer) clearTimeout(emitTimer);
     unsubMeta();
     unsubPrint();
     unsubChunks();
