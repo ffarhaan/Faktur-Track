@@ -22,6 +22,9 @@ export type InvoiceProgression = {
   prev1P?: string | null;
   new1P?: string | null;
   range1P?: string | null;
+  prev1PDoo?: string | null;
+  new1PDoo?: string | null;
+  range1PDoo?: string | null;
   prev2P?: string | null;
   new2P?: string | null;
   range2P?: string | null;

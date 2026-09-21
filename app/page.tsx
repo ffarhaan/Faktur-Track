@@ -114,6 +114,9 @@ export type InvoiceProgression = {
   prev1P?: string | null;
   new1P?: string | null;
   range1P?: string | null;
+  prev1PDoo?: string | null;
+  new1PDoo?: string | null;
+  range1PDoo?: string | null;
   prev2P?: string | null;
   new2P?: string | null;
   range2P?: string | null;
@@ -525,6 +528,8 @@ export default function Home() {
         let existingProgression: InvoiceProgression = loadedProgression || {};
         let prev1PNum = -1;
         let prev1PStr = "-";
+        let prev1PDooNum = -1;
+        let prev1PDooStr = "-";
         let prev2PNum = -1;
         let prev2PStr = "-";
         let prev3PNum = -1;
@@ -551,19 +556,6 @@ export default function Home() {
           const kat = isOra ? "1P" : categorize("DOO", cust);
 
           if (num > 0) {
-            if (kat === "1P" && num > prev1PNum) {
-              prev1PNum = num;
-              prev1PStr = cleanInv;
-            }
-            if (kat === "2P" && num > prev2PNum) {
-              prev2PNum = num;
-              prev2PStr = cleanInv;
-            }
-            if (kat === "3P" && num > prev3PNum) {
-              prev3PNum = num;
-              prev3PStr = cleanInv;
-            }
-
             if (isOra) {
               if (num > prevOraNum) {
                 prevOraNum = num;
@@ -573,6 +565,16 @@ export default function Home() {
               if (num > prevDooNum) {
                 prevDooNum = num;
                 prevDooStr = cleanInv;
+              }
+              if (kat === "1P" && num > prev1PDooNum) {
+                prev1PDooNum = num;
+                prev1PDooStr = cleanInv;
+              } else if (kat === "2P" && num > prev2PNum) {
+                prev2PNum = num;
+                prev2PStr = cleanInv;
+              } else if (kat === "3P" && num > prev3PNum) {
+                prev3PNum = num;
+                prev3PStr = cleanInv;
               }
             }
           }
@@ -963,11 +965,11 @@ export default function Home() {
           };
         }) as unknown as FirestoreFakturDoc[];
 
-        // Calculate min/max invoices per category (1P, 2P, 3P, ORA, DOO) in the uploaded file
-        let minUploaded1PNum = Infinity;
-        let minUploaded1PStr = "-";
-        let maxUploaded1PNum = -1;
-        let maxUploaded1PStr = "-";
+        // Calculate min/max invoices per category (1P DOO, 2P, 3P, ORA, DOO) in the uploaded file
+        let minUploaded1PDooNum = Infinity;
+        let minUploaded1PDooStr = "-";
+        let maxUploaded1PDooNum = -1;
+        let maxUploaded1PDooStr = "-";
 
         let minUploaded2PNum = Infinity;
         let minUploaded2PStr = "-";
@@ -1002,36 +1004,6 @@ export default function Home() {
           const kat = isOra ? "1P" : (r.kategori || categorize("DOO", r.customerName));
 
           if (num > 0) {
-            if (kat === "1P") {
-              if (num > maxUploaded1PNum) {
-                maxUploaded1PNum = num;
-                maxUploaded1PStr = cleanInv;
-              }
-              if (num < minUploaded1PNum) {
-                minUploaded1PNum = num;
-                minUploaded1PStr = cleanInv;
-              }
-            }
-            if (kat === "2P") {
-              if (num > maxUploaded2PNum) {
-                maxUploaded2PNum = num;
-                maxUploaded2PStr = cleanInv;
-              }
-              if (num < minUploaded2PNum) {
-                minUploaded2PNum = num;
-                minUploaded2PStr = cleanInv;
-              }
-            }
-            if (kat === "3P") {
-              if (num > maxUploaded3PNum) {
-                maxUploaded3PNum = num;
-                maxUploaded3PStr = cleanInv;
-              }
-              if (num < minUploaded3PNum) {
-                minUploaded3PNum = num;
-                minUploaded3PStr = cleanInv;
-              }
-            }
             if (isOra) {
               if (num > maxUploadedOraNum) {
                 maxUploadedOraNum = num;
@@ -1041,8 +1013,7 @@ export default function Home() {
                 minUploadedOraNum = num;
                 minUploadedOraStr = cleanInv;
               }
-            }
-            if (!isOra) {
+            } else {
               if (num > maxUploadedDooNum) {
                 maxUploadedDooNum = num;
                 maxUploadedDooStr = cleanInv;
@@ -1051,24 +1022,53 @@ export default function Home() {
                 minUploadedDooNum = num;
                 minUploadedDooStr = cleanInv;
               }
+
+              if (kat === "1P") {
+                if (num > maxUploaded1PDooNum) {
+                  maxUploaded1PDooNum = num;
+                  maxUploaded1PDooStr = cleanInv;
+                }
+                if (num < minUploaded1PDooNum) {
+                  minUploaded1PDooNum = num;
+                  minUploaded1PDooStr = cleanInv;
+                }
+              } else if (kat === "2P") {
+                if (num > maxUploaded2PNum) {
+                  maxUploaded2PNum = num;
+                  maxUploaded2PStr = cleanInv;
+                }
+                if (num < minUploaded2PNum) {
+                  minUploaded2PNum = num;
+                  minUploaded2PStr = cleanInv;
+                }
+              } else if (kat === "3P") {
+                if (num > maxUploaded3PNum) {
+                  maxUploaded3PNum = num;
+                  maxUploaded3PStr = cleanInv;
+                }
+                if (num < minUploaded3PNum) {
+                  minUploaded3PNum = num;
+                  minUploaded3PStr = cleanInv;
+                }
+              }
             }
           }
         }
 
-        let range1P = existingProgression.range1P || null;
-        let prev1P = existingProgression.prev1P || null;
-        let new1P = existingProgression.new1P || null;
-        if (maxUploaded1PNum > 0) {
-          new1P = maxUploaded1PStr;
-          if (prev1PNum > 0 && maxUploaded1PNum > prev1PNum) {
-            prev1P = prev1PStr;
-            range1P = `${prev1PNum + 1} ➔ ${maxUploaded1PStr}`;
-          } else if (minUploaded1PNum > 0 && minUploaded1PNum !== maxUploaded1PNum) {
-            prev1P = minUploaded1PStr;
-            range1P = `${minUploaded1PStr} ➔ ${maxUploaded1PStr}`;
+        let range1PDoo = existingProgression.range1PDoo || existingProgression.rangeDoo || null;
+        let prev1PDoo = existingProgression.prev1PDoo || existingProgression.prevDoo || null;
+        let new1PDoo = existingProgression.new1PDoo || existingProgression.newDoo || null;
+        if (maxUploaded1PDooNum > 0) {
+          new1PDoo = maxUploaded1PDooStr;
+          if (prev1PDooNum > 0 && maxUploaded1PDooNum > prev1PDooNum) {
+            prev1PDoo = prev1PDooStr;
+            range1PDoo = `${prev1PDooNum + 1} ➔ ${maxUploaded1PDooStr}`;
+          } else if (minUploaded1PDooNum > 0 && minUploaded1PDooNum !== maxUploaded1PDooNum) {
+            prev1PDoo = minUploaded1PDooStr;
+            range1PDoo = `${minUploaded1PDooStr} ➔ ${maxUploaded1PDooStr}`;
           } else {
-            prev1P = prev1PStr !== "-" ? prev1PStr : maxUploaded1PStr;
-            range1P = maxUploaded1PStr;
+            prev1PDoo = prev1PDooStr !== "-" ? prev1PDooStr : maxUploaded1PDooStr;
+            range1PDoo = maxUploaded1PDooStr;
           }
         }
 
@@ -1142,9 +1142,9 @@ export default function Home() {
 
         const progObj: InvoiceProgression = {
           ...existingProgression,
-          prev1P,
-          new1P,
-          range1P,
+          prev1PDoo,
+          new1PDoo,
+          range1PDoo,
           prev2P,
           new2P,
           range2P,
@@ -2245,9 +2245,9 @@ export default function Home() {
                   </p>
                 </div>
                 <div className="flex items-center justify-between gap-1 text-[8.5px] font-mono mt-0.5 pt-0.5 border-t border-teal-50">
-                  {invoiceProgression?.rangeDoo || invoiceProgression?.range1P ? (
-                    <span className="text-teal-700 font-bold bg-teal-50 border border-teal-200 px-1 py-0.2 rounded text-[8px] truncate" title={`Rentang Upload: ${invoiceProgression?.rangeDoo || invoiceProgression?.range1P}`}>
-                      {invoiceProgression?.rangeDoo || invoiceProgression?.range1P}
+                  {invoiceProgression?.range1PDoo || invoiceProgression?.rangeDoo ? (
+                    <span className="text-teal-700 font-bold bg-teal-50 border border-teal-200 px-1 py-0.2 rounded text-[8px] truncate" title={`Rentang Upload: ${invoiceProgression?.range1PDoo || invoiceProgression?.rangeDoo}`}>
+                      {invoiceProgression?.range1PDoo || invoiceProgression?.rangeDoo}
                     </span>
                   ) : (
                     <span className="text-gray-400">-</span>
