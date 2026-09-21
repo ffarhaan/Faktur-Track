@@ -293,21 +293,34 @@ function parseXXCUST(data: unknown[][], headerIdx: number): FakturRecord[] {
     if (h) {
       const key = h.trim().toLowerCase();
       if (!colMap[key]) colMap[key] = i;
+      // Also match normalized keys without spaces/punctuation
+      const cleanKey = key.replace(/[^a-z0-9]/g, "");
+      if (!colMap[cleanKey]) colMap[cleanKey] = i;
     }
   });
 
+  const getCol = (...keys: string[]): number | undefined => {
+    for (const k of keys) {
+      const lk = k.toLowerCase().trim();
+      const ck = lk.replace(/[^a-z0-9]/g, "");
+      if (colMap[lk] !== undefined) return colMap[lk];
+      if (colMap[ck] !== undefined) return colMap[ck];
+    }
+    return undefined;
+  };
+
   const idx = {
-    jenisTransaksi: colMap["jenis transaksi"],
-    customerName: colMap["nama pelanggan"],
-    invoiceNumber: colMap["no invoice ar"],
-    orderDate: colMap["order date"],
-    orderNumber: colMap["order number"],
-    itemCode: colMap["item code"],
-    itemDescription: colMap["item description"],
-    qty: colMap["qty"],
-    uom: colMap["uom"],
-    lotNumber: colMap["lot number"],
-    totalHarga: colMap["total harga"],
+    jenisTransaksi: getCol("jenis transaksi", "jenis", "transaction type"),
+    customerName: getCol("nama pelanggan", "customer name", "pelanggan", "customer"),
+    invoiceNumber: getCol("no invoice ar", "ar number", "ar no", "no ar", "invoice number", "no invoice"),
+    orderDate: getCol("order date", "tanggal order", "date", "accounting date"),
+    orderNumber: getCol("order number", "order no", "no order", "no so", "so number"),
+    itemCode: getCol("item code", "kode barang", "kode produk", "item"),
+    itemDescription: getCol("item description", "nama barang", "deskripsi barang", "description"),
+    qty: getCol("qty", "quantity", "jumlah"),
+    uom: getCol("uom", "satuan", "unit"),
+    lotNumber: getCol("lot number", "batch number", "lot", "batch"),
+    totalHarga: getCol("total harga", "total amount", "amount", "total"),
   };
 
   const records: FakturRecord[] = [];
@@ -315,24 +328,27 @@ function parseXXCUST(data: unknown[][], headerIdx: number): FakturRecord[] {
     const row = data[i];
     if (!row || row.length === 0) continue;
 
-    const orderNumber = String(row[idx.orderNumber] ?? "").trim();
-    const invoiceNumber = String(row[idx.invoiceNumber] ?? "").trim();
+    const val = (cIdx: number | undefined) => (cIdx !== undefined && cIdx >= 0 ? String(row[cIdx] ?? "").trim() : "");
+    const rawVal = (cIdx: number | undefined) => (cIdx !== undefined && cIdx >= 0 ? row[cIdx] : undefined);
+
+    const orderNumber = val(idx.orderNumber);
+    const invoiceNumber = val(idx.invoiceNumber);
     if (!orderNumber && !invoiceNumber) continue;
 
-    const customerName = String(row[idx.customerName] ?? "").trim();
-    const rawJenis = String(row[idx.jenisTransaksi] ?? "").toUpperCase().trim();
+    const customerName = val(idx.customerName);
+    const rawJenis = val(idx.jenisTransaksi).toUpperCase();
     const isOra = rawJenis === "ORA" || isOraCustomer(customerName, rawJenis);
     const jenisTransaksi: "ORA" | "DOO" = isOra ? "ORA" : "DOO";
     const kategori = categorize(jenisTransaksi, customerName, jenisTransaksi);
     const invoiceKey = isOra ? `${invoiceNumber}-1P` : invoiceNumber;
 
-    const itemCode = String(row[idx.itemCode] ?? "").trim();
-    const itemDescription = String(row[idx.itemDescription] ?? "").trim();
+    const itemCode = val(idx.itemCode);
+    const itemDescription = val(idx.itemDescription);
     const kategoriProduk = getProductCategory(itemCode, itemDescription) || undefined;
     const klasifikasiObat = getPrekursorOOTClassification(itemDescription) || undefined;
 
     records.push({
-      orderDate: String(row[idx.orderDate] ?? "").trim(),
+      orderDate: val(idx.orderDate),
       orderNumber,
       invoiceNumber,
       invoiceKey,
@@ -340,10 +356,10 @@ function parseXXCUST(data: unknown[][], headerIdx: number): FakturRecord[] {
       customerName,
       itemCode,
       itemDescription,
-      qty: (row[idx.qty] as number | string) ?? 0,
-      uom: String(row[idx.uom] ?? "").trim(),
-      lotNumber: String(row[idx.lotNumber] ?? "").trim(),
-      totalHarga: Number(row[idx.totalHarga] ?? 0),
+      qty: (rawVal(idx.qty) as number | string) ?? 0,
+      uom: val(idx.uom),
+      lotNumber: val(idx.lotNumber),
+      totalHarga: Number(rawVal(idx.totalHarga) ?? 0),
       kategori,
       kategoriProduk,
       klasifikasiObat,
