@@ -358,12 +358,17 @@ export default function Home() {
             }
             return recs;
           });
-          setPrintedInvoices(printedSet);
-          setPrintedAtMap(pMap);
+          setPrintedInvoices((prev) => {
+            const merged = new Set(prev);
+            printedSet.forEach((k) => merged.add(k));
+            return merged;
+          });
+          setPrintedAtMap((prev) => ({
+            ...prev,
+            ...pMap,
+          }));
         } else {
           setRecords((prev) => (prev.length > 0 ? prev : []));
-          setPrintedInvoices(new Set());
-          setPrintedAtMap({});
         }
         setLoading(false);
       },
@@ -1114,11 +1119,15 @@ export default function Home() {
         );
 
         setRecords(localRecs);
-        setPrintedInvoices(localPrintedSet);
-        setPrintedAtMap(localPrintedAtMap);
+        const mergedPrintedSet = new Set([...printedInvoices, ...localPrintedSet]);
+        const mergedPrintedMap = { ...printedAtMap, ...localPrintedAtMap };
+        setPrintedInvoices(mergedPrintedSet);
+        setPrintedAtMap(mergedPrintedMap);
         setInvoiceProgression(progObj);
         try {
           localStorage.setItem("invoiceProgression", JSON.stringify(progObj));
+          localStorage.setItem("printedInvoices", JSON.stringify(Array.from(mergedPrintedSet)));
+          localStorage.setItem("printedAtMap", JSON.stringify(mergedPrintedMap));
         } catch {}
 
         setUploadNotification({
@@ -1146,9 +1155,9 @@ export default function Home() {
         saveFaktursBatch(
           payload as FirestoreFakturDoc[],
           progObj,
-          loadedPrintState || {
-            printedKeys: Array.from(localPrintedSet),
-            printedAtMap: localPrintedAtMap,
+          {
+            printedKeys: Array.from(mergedPrintedSet),
+            printedAtMap: mergedPrintedMap,
             updatedAt: new Date().toISOString(),
           }
         ).catch((err) => {
