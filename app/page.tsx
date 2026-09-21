@@ -594,6 +594,46 @@ export default function Home() {
           }
         });
 
+        // Also ensure any records currently in state are preserved in invMap
+        records.forEach((rec) => {
+          const k = rec.invoiceKey || rec.invoiceNumber;
+          if (k && !invMap.has(k)) {
+            const soSet = new Set<string>();
+            if (rec.orderNumber && rec.orderNumber !== "-") soSet.add(rec.orderNumber);
+            invMap.set(k, {
+              no_faktur: k,
+              no_sales_order: rec.orderNumber || "-",
+              customer_name: rec.customerName || "-",
+              order_date: rec.orderDate || "-",
+              jenis_transaksi: rec.jenisTransaksi,
+              kategori: rec.kategori,
+              status_cetak: printedInvoices.has(k),
+              printed_at: printedAtMap[k] || null,
+              imported_at: importedAt,
+              source_file: rec.jenisTransaksi,
+              extra: {
+                nama_pelanggan: rec.customerName,
+                order_date: rec.orderDate,
+                accounting_date: rec.orderDate,
+                jenis_transaksi: rec.jenisTransaksi,
+                kategori: rec.kategori,
+                items: [{
+                  item_code: rec.itemCode,
+                  item_description: rec.itemDescription,
+                  kategori_produk: rec.kategoriProduk || "FARMA",
+                  qty: rec.qty,
+                  uom: rec.uom,
+                  lot_number: rec.lotNumber,
+                  total_harga: rec.totalHarga,
+                  order_number: rec.orderNumber,
+                }],
+              },
+              _soSet: soSet,
+              _hasPreservedItems: true,
+            });
+          }
+        });
+
         // Merge incoming records into invMap
         for (const r of parsed) {
           const isOra = isOraCustomer(r.customerName, r.jenisTransaksi);
