@@ -1178,9 +1178,7 @@ export default function Home() {
           const isNewInvoice = (isOra ? (prevOraNum > 0 && num > prevOraNum) : (prevDooNum > 0 && num > prevDooNum)) || !existingStatusMap.has(invKey);
           if (isNewInvoice) {
             mergedPrintedSet.delete(invKey);
-            mergedPrintedSet.delete(cleanInv);
             delete mergedPrintedMap[invKey];
-            delete mergedPrintedMap[cleanInv];
           }
         }
 
