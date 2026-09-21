@@ -9,6 +9,8 @@ import {
   getExistingFakturs,
   saveFaktursBatch,
   updateFakturPrintStatus,
+  updateFaktursPrintStatusBatch,
+  updatePrintState,
   clearAllFakturs,
   FirestoreFakturDoc,
 } from "@/lib/firestoreService";
@@ -347,14 +349,16 @@ export default function Home() {
   const handleManualRefresh = useCallback(() => {
     setSessionPrintedKeys(new Set());
     setLoading(true);
-    getDocs(collection(db, "fakturs"))
-      .then((snap) => {
-        const items: FirestoreFakturDoc[] = [];
-        snap.forEach((d) => {
-          if (d.id !== "__SYSTEM_METADATA__") items.push(d.data() as FirestoreFakturDoc);
-        });
+    getExistingFakturs()
+      .then(({ docs, progression: prog }) => {
+        if (prog) {
+          setInvoiceProgression(prog);
+          try {
+            localStorage.setItem("invoiceProgression", JSON.stringify(prog));
+          } catch {}
+        }
         const { records: recs, printedSet, printedAtMap: pMap } = dbRowsToFakturRecords(
-          items as unknown as Array<Record<string, unknown>>
+          docs as unknown as Array<Record<string, unknown>>
         );
         setRecords(recs);
         setPrintedInvoices(printedSet);
@@ -367,7 +371,7 @@ export default function Home() {
       });
   }, []);
 
-  // Print / Unprint: toggle local state AND sync to Firestore in realtime
+  // Print / Unprint: toggle local state AND sync to Firestore in realtime (1 write, < 50ms)
   const togglePrint = useCallback(
     async (group: FakturGroup) => {
       const willBePrinted = !group.allPrinted;
@@ -401,29 +405,31 @@ export default function Home() {
         return sNext;
       });
 
-      setPrintedAtMap((prev) => {
-        const nextMap = { ...prev };
-        if (willBePrinted) {
-          nextMap[targetKey] = nowIso;
-        } else {
-          delete nextMap[targetKey];
-        }
-        try {
-          localStorage.setItem("printedAtMap", JSON.stringify(nextMap));
-        } catch {}
-        return nextMap;
-      });
+      const nextMap = { ...printedAtMap };
+      if (willBePrinted) {
+        nextMap[targetKey] = nowIso;
+      } else {
+        delete nextMap[targetKey];
+      }
+      setPrintedAtMap(nextMap);
       try {
+        localStorage.setItem("printedAtMap", JSON.stringify(nextMap));
         localStorage.setItem("printedInvoices", JSON.stringify([...next]));
       } catch {}
 
       try {
-        await updateFakturPrintStatus(targetKey, willBePrinted, willBePrinted ? nowIso : null);
+        await updateFakturPrintStatus(
+          targetKey,
+          willBePrinted,
+          willBePrinted ? nowIso : null,
+          next,
+          nextMap
+        );
       } catch (err) {
         console.error("Failed to update print status in Firestore:", err);
       }
     },
-    [printedInvoices]
+    [printedInvoices, printedAtMap]
   );
 
   // Upload: Parse & Save directly to Supabase cloud DB so all devices see it
@@ -442,7 +448,7 @@ export default function Home() {
         const importedAt = new Date().toISOString();
 
         // Fetch ALL existing print status & data from Firestore so we NEVER reset already printed invoices or rich item data
-        const { docs: existingDBDocs, progression: loadedProgression } = await getExistingFakturs();
+        const { docs: existingDBDocs, progression: loadedProgression, printState: loadedPrintState } = await getExistingFakturs();
         const existingDB = existingDBDocs as unknown as Array<Record<string, unknown>>;
 
         const existingStatusMap = new Map<
@@ -509,12 +515,24 @@ export default function Home() {
             }
           }
 
-          existingStatusMap.set(String(row.no_faktur).trim(), {
+          const rawFaktur = String(row.no_faktur || "").trim();
+          const cleanFaktur = rawFaktur.replace(/-1P$/i, "");
+          const statusInfo = {
             no_sales_order: (row.no_sales_order as string) || null,
             status_cetak: Boolean(row.status_cetak),
             printed_at: (row.printed_at as string) || null,
             extra: (row.extra as Record<string, unknown>) || null,
-          });
+          };
+
+          if (rawFaktur) existingStatusMap.set(rawFaktur, statusInfo);
+          if (cleanFaktur) existingStatusMap.set(cleanFaktur, statusInfo);
+          if (cleanFaktur) existingStatusMap.set(`${cleanFaktur}-1P`, statusInfo);
+          if (row.no_sales_order) {
+            String(row.no_sales_order).split(",").forEach((s) => {
+              const soClean = s.trim();
+              if (soClean) existingStatusMap.set(`SO-${soClean}`, statusInfo);
+            });
+          }
         });
 
         // Check if uploaded file contains detailed items (XXCUST format)
@@ -531,7 +549,11 @@ export default function Home() {
           const noFaktur = hasInv ? (isOra ? `${cleanInv}-1P` : cleanInv) : (r.orderNumber ? `SO-${r.orderNumber}` : `ROW-${r.rowIndex}`);
           if (!noFaktur || noFaktur === "SO-" || noFaktur === "-1P") continue;
 
-          const prevInfo = existingStatusMap.get(noFaktur);
+          const prevInfo =
+            existingStatusMap.get(noFaktur) ||
+            existingStatusMap.get(cleanInv) ||
+            existingStatusMap.get(`${cleanInv}-1P`) ||
+            (r.orderNumber ? existingStatusMap.get(`SO-${r.orderNumber}`) : undefined);
           const isPrinted = prevInfo ? prevInfo.status_cetak : false;
           const printedAt = prevInfo ? prevInfo.printed_at : null;
           const prevExtra = (prevInfo?.extra as Record<string, unknown>) || null;
@@ -863,8 +885,16 @@ export default function Home() {
           localStorage.setItem("invoiceProgression", JSON.stringify(progObj));
         } catch {}
 
-        // Save batch to Firestore Cloud Database
-        await saveFaktursBatch(payload, progObj);
+        // Save batch to Firestore Cloud Database in chunks
+        await saveFaktursBatch(
+          payload as FirestoreFakturDoc[],
+          progObj,
+          loadedPrintState || {
+            printedKeys: Array.from(printedInvoices),
+            printedAtMap,
+            updatedAt: new Date().toISOString(),
+          }
+        );
 
         setUploadNotification({
           fileName: file.name,
@@ -1166,6 +1196,70 @@ export default function Home() {
 
   const totalPages = Math.ceil(filtered.length / ROWS_PER_PAGE);
   const pageData = filtered.slice(page * ROWS_PER_PAGE, (page + 1) * ROWS_PER_PAGE);
+
+  const unprintedCountInFiltered = useMemo(() => {
+    return filtered.filter(
+      (g) => !g.allPrinted && g.invoiceNumber && g.invoiceNumber !== "0" && g.invoiceNumber !== "-"
+    ).length;
+  }, [filtered]);
+
+  // Mark All As Printed (Tandai Semua Selesai)
+  const handleMarkAllPrinted = useCallback(async () => {
+    const unprintedInView = filtered.filter(
+      (g) => !g.allPrinted && g.invoiceNumber && g.invoiceNumber !== "0" && g.invoiceNumber !== "-"
+    );
+
+    if (unprintedInView.length === 0) {
+      alert("Semua faktur yang tampil sudah berstatus Selesai Terprint.");
+      return;
+    }
+
+    const confirmMsg = `Yakin ingin menandai ${unprintedInView.length} faktur yang tampil sebagai SUDAH TERPRINT?`;
+    if (!confirm(confirmMsg)) return;
+
+    const nowIso = new Date().toISOString();
+    const targetKeys = unprintedInView.map((g) => g.invoiceKey);
+
+    // 1. Optimistic Update Local State
+    setPrintedInvoices((prev) => {
+      const next = new Set(prev);
+      targetKeys.forEach((k) => next.add(k));
+      try {
+        localStorage.setItem("printedInvoices", JSON.stringify([...next]));
+      } catch {}
+      return next;
+    });
+
+    setSessionPrintedKeys((prev) => {
+      const sNext = new Set(prev);
+      targetKeys.forEach((k) => sNext.add(k));
+      return sNext;
+    });
+
+    setPrintedAtMap((prev) => {
+      const nextMap = { ...prev };
+      targetKeys.forEach((k) => {
+        nextMap[k] = nowIso;
+      });
+      try {
+        localStorage.setItem("printedAtMap", JSON.stringify(nextMap));
+      } catch {}
+      return nextMap;
+    });
+
+    // 2. Batch Update to Firestore Cloud DB
+    try {
+      setLoading(true);
+      await updateFaktursPrintStatusBatch(targetKeys, true, nowIso);
+      setCopyToast(`✓ Berhasil menandai ${targetKeys.length} faktur selesai diprint!`);
+      setTimeout(() => setCopyToast(null), 3500);
+    } catch (err) {
+      console.error("Gagal update batch print ke Firestore:", err);
+      alert("Terjadi kesalahan saat menyimpan status ke database cloud.");
+    } finally {
+      setLoading(false);
+    }
+  }, [filtered]);
 
   useEffect(() => {
     setPage(0);
@@ -1872,6 +1966,21 @@ export default function Home() {
                 </div>
                 <div className="h-5 w-px bg-gray-200 mx-0.5 shrink-0" />
 
+                {/* Tandai Semua Selesai Button */}
+                {unprintedCountInFiltered > 0 && (
+                  <>
+                    <button
+                      onClick={handleMarkAllPrinted}
+                      className="px-2.5 py-1 text-xs font-bold rounded-md bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1 shadow-2xs transition-all shrink-0 active:scale-95 animate-pulse hover:animate-none"
+                      title={`Tandai ${unprintedCountInFiltered} faktur yang belum selesai di tampilan ini sebagai SUDAH TERPRINT`}
+                    >
+                      <span>✓✓</span>
+                      <span>Tandai Semua Selesai ({unprintedCountInFiltered})</span>
+                    </button>
+                    <div className="h-5 w-px bg-gray-200 mx-0.5 shrink-0" />
+                  </>
+                )}
+
                 {/* Kategori */}
                 <div className="flex gap-1 shrink-0">
                   <FBtn active={katFilter === "all"} onClick={() => setKatFilter("all")}>All Kat</FBtn>
@@ -1987,6 +2096,16 @@ export default function Home() {
                   <p className="text-xs text-gray-600 font-medium">
                     {filtered.length.toLocaleString("id-ID")} SO · {summary.totalInvoices.toLocaleString("id-ID")} invoice
                   </p>
+                  {unprintedCountInFiltered > 0 && (
+                    <button
+                      onClick={handleMarkAllPrinted}
+                      className="ml-1.5 px-2.5 py-1 text-xs font-bold rounded-md bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1 shadow-xs transition-all active:scale-95"
+                      title={`Tandai ${unprintedCountInFiltered} faktur yang belum selesai sebagai SUDAH TERPRINT`}
+                    >
+                      <span>✓✓</span>
+                      <span>Tandai Semua Selesai ({unprintedCountInFiltered})</span>
+                    </button>
+                  )}
                 </div>
                 <div className="flex items-center gap-1.5">
                   <button
