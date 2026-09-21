@@ -303,37 +303,12 @@ export default function Home() {
     time: string;
   } | null>(null);
 
-  const [invoiceProgression, setInvoiceProgression] = useState<InvoiceProgression | null>(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const saved = localStorage.getItem("invoiceProgression");
-        if (saved) return JSON.parse(saved);
-      } catch {}
-    }
-    return null;
-  });
-
+  const [invoiceProgression, setInvoiceProgression] = useState<InvoiceProgression | null>(null);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
-  const [printedInvoices, setPrintedInvoices] = useState<Set<string>>(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const saved = localStorage.getItem("printedInvoices");
-        if (saved) return new Set(JSON.parse(saved));
-      } catch {}
-    }
-    return new Set();
-  });
+  const [printedInvoices, setPrintedInvoices] = useState<Set<string>>(new Set());
   const [sessionPrintedKeys, setSessionPrintedKeys] = useState<Set<string>>(new Set());
-  const [printedAtMap, setPrintedAtMap] = useState<Record<string, string>>(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const saved = localStorage.getItem("printedAtMap");
-        if (saved) return JSON.parse(saved);
-      } catch {}
-    }
-    return {};
-  });
+  const [printedAtMap, setPrintedAtMap] = useState<Record<string, string>>({});
   const [dragOver, setDragOver] = useState(false);
   const [expandedInvoices, setExpandedInvoices] = useState<Set<string>>(new Set());
   const [selectedRowIndex, setSelectedRowIndex] = useState(0);
@@ -369,9 +344,6 @@ export default function Home() {
         if (prog) {
           latestProgressionRef.current = prog;
           setInvoiceProgression(prog);
-          try {
-            localStorage.setItem("invoiceProgression", JSON.stringify(prog));
-          } catch {}
         }
         if (printState) {
           latestPrintStateRef.current = printState;
@@ -381,28 +353,13 @@ export default function Home() {
           const { records: recs, printedSet, printedAtMap: pMap } = dbRowsToFakturRecords(
             docs as unknown as Array<Record<string, unknown>>
           );
-          setRecords((prev) => {
-            // Guard: If current local state has significantly more data/items, don't overwrite with partial snapshot
-            if (prev.length > recs.length && recs.length > 0) {
-              const prevRich = prev.filter((r) => r.itemCode && r.itemCode !== "-" && r.itemCode !== "").length;
-              const recsRich = recs.filter((r) => r.itemCode && r.itemCode !== "-" && r.itemCode !== "").length;
-              if (prevRich > recsRich) {
-                return prev;
-              }
-            }
-            return recs;
-          });
-          setPrintedInvoices((prev) => {
-            const merged = new Set(prev);
-            printedSet.forEach((k) => merged.add(k));
-            return merged;
-          });
-          setPrintedAtMap((prev) => ({
-            ...prev,
-            ...pMap,
-          }));
+          setRecords(recs);
+          setPrintedInvoices(printedSet);
+          setPrintedAtMap(pMap);
         } else {
-          setRecords((prev) => (prev.length > 0 ? prev : []));
+          setRecords([]);
+          setPrintedInvoices(new Set());
+          setPrintedAtMap({});
         }
         setLoading(false);
       },
@@ -451,10 +408,8 @@ export default function Home() {
     getExistingFakturs()
       .then(({ docs, progression: prog }) => {
         if (prog) {
+          latestProgressionRef.current = prog;
           setInvoiceProgression(prog);
-          try {
-            localStorage.setItem("invoiceProgression", JSON.stringify(prog));
-          } catch {}
         }
         const { records: recs, printedSet, printedAtMap: pMap } = dbRowsToFakturRecords(
           docs as unknown as Array<Record<string, unknown>>
@@ -511,10 +466,6 @@ export default function Home() {
         delete nextMap[targetKey];
       }
       setPrintedAtMap(nextMap);
-      try {
-        localStorage.setItem("printedAtMap", JSON.stringify(nextMap));
-        localStorage.setItem("printedInvoices", JSON.stringify([...next]));
-      } catch {}
 
       try {
         await updateFakturPrintStatus(
@@ -1236,11 +1187,6 @@ export default function Home() {
         setPrintedInvoices(mergedPrintedSet);
         setPrintedAtMap(mergedPrintedMap);
         setInvoiceProgression(progObj);
-        try {
-          localStorage.setItem("invoiceProgression", JSON.stringify(progObj));
-          localStorage.setItem("printedInvoices", JSON.stringify(Array.from(mergedPrintedSet)));
-          localStorage.setItem("printedAtMap", JSON.stringify(mergedPrintedMap));
-        } catch {}
 
         setUploadNotification({
           fileName: file.name,
@@ -1605,9 +1551,6 @@ export default function Home() {
     setPrintedInvoices((prev) => {
       const next = new Set(prev);
       targetKeys.forEach((k) => next.add(k));
-      try {
-        localStorage.setItem("printedInvoices", JSON.stringify([...next]));
-      } catch {}
       return next;
     });
 
@@ -1622,9 +1565,6 @@ export default function Home() {
       targetKeys.forEach((k) => {
         nextMap[k] = nowIso;
       });
-      try {
-        localStorage.setItem("printedAtMap", JSON.stringify(nextMap));
-      } catch {}
       return nextMap;
     });
 
