@@ -202,6 +202,7 @@ export function isOraCustomer(customerName?: string): boolean {
   return (
     upperCust.includes("HELIOS") ||
     upperCust.startsWith("HAK") ||
+    upperCust.includes("HALOMEDIKA") ||
     upperCust === "1001"
   );
 }
