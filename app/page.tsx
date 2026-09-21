@@ -617,9 +617,16 @@ export default function Home() {
         // Also ensure any records currently in state are preserved in invMap
         records.forEach((rec) => {
           const k = rec.invoiceKey || rec.invoiceNumber;
-          if (k && !invMap.has(k)) {
+          if (!k) return;
+
+          if (!invMap.has(k)) {
             const soSet = new Set<string>();
-            if (rec.orderNumber && rec.orderNumber !== "-") soSet.add(rec.orderNumber);
+            if (rec.orderNumber && rec.orderNumber !== "-") {
+              rec.orderNumber.split(",").forEach((s) => {
+                const t = s.trim();
+                if (t && t !== "-") soSet.add(t);
+              });
+            }
             invMap.set(k, {
               no_faktur: k,
               no_sales_order: rec.orderNumber || "-",
@@ -637,20 +644,42 @@ export default function Home() {
                 accounting_date: rec.orderDate,
                 jenis_transaksi: rec.jenisTransaksi,
                 kategori: rec.kategori,
-                items: [{
-                  item_code: rec.itemCode,
-                  item_description: rec.itemDescription,
-                  kategori_produk: rec.kategoriProduk || "FARMA",
-                  qty: rec.qty,
-                  uom: rec.uom,
-                  lot_number: rec.lotNumber,
-                  total_harga: rec.totalHarga,
-                  order_number: rec.orderNumber,
-                }],
+                total_harga: rec.totalHarga || 0,
+                items: [],
               },
               _soSet: soSet,
-              _hasPreservedItems: true,
+              _hasPreservedItems: false,
             });
+          }
+
+          const existingEntry = invMap.get(k)!;
+          if (rec.orderNumber && rec.orderNumber !== "-") {
+            rec.orderNumber.split(",").forEach((s) => {
+              const t = s.trim();
+              if (t && t !== "-") (existingEntry._soSet as Set<string>).add(t);
+            });
+          }
+
+          if (rec.itemCode && rec.itemCode !== "-" && rec.itemCode !== "") {
+            existingEntry._hasPreservedItems = true;
+            const extra = existingEntry.extra as Record<string, unknown>;
+            if (!Array.isArray(extra.items)) extra.items = [];
+            const itList = extra.items as Array<Record<string, unknown>>;
+            const isDup = itList.some(
+              (it) => it.item_code === rec.itemCode && it.order_number === rec.orderNumber && it.lot_number === rec.lotNumber && it.qty === rec.qty
+            );
+            if (!isDup) {
+              itList.push({
+                item_code: rec.itemCode,
+                item_description: rec.itemDescription,
+                kategori_produk: rec.kategoriProduk || "FARMA",
+                qty: rec.qty,
+                uom: rec.uom,
+                lot_number: rec.lotNumber,
+                total_harga: rec.totalHarga,
+                order_number: rec.orderNumber,
+              });
+            }
           }
         });
 
@@ -727,7 +756,10 @@ export default function Home() {
               });
             }
             if (r.orderNumber && r.orderNumber !== "-" && r.orderNumber !== "") {
-              soSet.add(r.orderNumber);
+              r.orderNumber.split(",").forEach((s) => {
+                const t = s.trim();
+                if (t && t !== "-") soSet.add(t);
+              });
             }
 
             const baseItems: Array<Record<string, unknown>> = [];
@@ -752,6 +784,7 @@ export default function Home() {
                 accounting_date: r.orderDate,
                 jenis_transaksi: r.jenisTransaksi,
                 kategori: r.kategori,
+                total_harga: r.totalHarga || 0,
                 items: baseItems,
               },
               _soSet: soSet,
@@ -767,7 +800,10 @@ export default function Home() {
 
           // ALWAYS preserve and accumulate valid SO numbers
           if (r.orderNumber && r.orderNumber !== "-" && r.orderNumber !== "") {
-            (existing._soSet as Set<string>).add(r.orderNumber);
+            r.orderNumber.split(",").forEach((s) => {
+              const t = s.trim();
+              if (t && t !== "-") (existing._soSet as Set<string>).add(t);
+            });
           }
 
           // Customer name refinement: If incoming has a specific name and existing is generic Helios, update it
@@ -794,20 +830,29 @@ export default function Home() {
           }
 
           if (isFileItemRich && isIncomingItem) {
-            const itList = (existing.extra as Record<string, unknown>).items as Array<Record<string, unknown>>;
+            const extra = existing.extra as Record<string, unknown>;
+            if (!Array.isArray(extra.items)) extra.items = [];
+            const itList = extra.items as Array<Record<string, unknown>>;
             const katProd = getProductCategory(r.itemCode, r.itemDescription) || r.kategoriProduk || "FARMA";
-            itList.push({
-              item_code: r.itemCode,
-              item_description: r.itemDescription,
-              kategori_produk: katProd,
-              qty: r.qty,
-              uom: r.uom,
-              lot_number: r.lotNumber,
-              total_harga: r.totalHarga,
-              order_number: r.orderNumber,
-            });
+            const isDup = itList.some(
+              (it) => it.item_code === r.itemCode && it.order_number === r.orderNumber && it.lot_number === r.lotNumber && it.qty === r.qty
+            );
+            if (!isDup) {
+              itList.push({
+                item_code: r.itemCode,
+                item_description: r.itemDescription,
+                kategori_produk: katProd,
+                qty: r.qty,
+                uom: r.uom,
+                lot_number: r.lotNumber,
+                total_harga: r.totalHarga,
+                order_number: r.orderNumber,
+              });
+            }
           } else if (!existing._hasPreservedItems) {
-            const itList = (existing.extra as Record<string, unknown>).items as Array<Record<string, unknown>>;
+            const extra = existing.extra as Record<string, unknown>;
+            if (!Array.isArray(extra.items)) extra.items = [];
+            const itList = extra.items as Array<Record<string, unknown>>;
             if (itList.length === 0) {
               const katProd = getProductCategory(r.itemCode, r.itemDescription) || r.kategoriProduk || "FARMA";
               itList.push({
