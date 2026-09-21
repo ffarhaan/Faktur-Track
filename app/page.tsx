@@ -176,9 +176,13 @@ function dbRowsToFakturRecords(rows: Array<Record<string, unknown>>): {
         const katProd = getProductCategory(itemCode, itemDesc);
         const klasObat = getPrekursorOOTClassification(itemDesc, itemCode) || (katProd === "PREKURSOR" ? "Prekursor" : katProd === "OOT" ? "OOT" : undefined);
 
+        const itemSO = String(it.order_number || "").trim();
+        const docSO = String(r.no_sales_order || "").trim();
+        const validSO = itemSO && itemSO !== "-" ? itemSO : (docSO && docSO !== "-" ? docSO : "-");
+
         records.push({
           orderDate: date,
-          orderNumber: String(it.order_number || r.no_sales_order || cleanInv),
+          orderNumber: validSO,
           invoiceNumber: cleanInv,
           invoiceKey: invKey,
           jenisTransaksi: cleanJenis,
@@ -197,9 +201,11 @@ function dbRowsToFakturRecords(rows: Array<Record<string, unknown>>): {
         });
       }
     } else {
+      const docSO = String(r.no_sales_order || "").trim();
+      const validSO = docSO && docSO !== "-" ? docSO : "-";
       records.push({
         orderDate: date,
-        orderNumber: String(r.no_sales_order || cleanInv),
+        orderNumber: validSO,
         invoiceNumber: cleanInv,
         invoiceKey: invKey,
         jenisTransaksi: cleanJenis,
@@ -555,6 +561,10 @@ export default function Home() {
               });
             }
             const prevItems = (extra.items as Array<Record<string, unknown>>) || [];
+            prevItems.forEach((it) => {
+              const so = String(it.order_number || "").trim();
+              if (so && so !== "-") soSet.add(so);
+            });
             const hasExistingRichItems =
               prevItems.length > 0 &&
               prevItems.some((it) => it.item_code && it.item_code !== "-" && it.item_code !== "");
@@ -636,10 +646,12 @@ export default function Home() {
             if (prevInfo?.no_sales_order) {
               prevInfo.no_sales_order.split(",").forEach((s) => {
                 const t = s.trim();
-                if (t) soSet.add(t);
+                if (t && t !== "-") soSet.add(t);
               });
             }
-            if (r.orderNumber) soSet.add(r.orderNumber);
+            if (r.orderNumber && r.orderNumber !== "-" && r.orderNumber !== "") {
+              soSet.add(r.orderNumber);
+            }
 
             const baseItems: Array<Record<string, unknown>> = [];
             if (hasExistingRichItems) {
@@ -676,10 +688,35 @@ export default function Home() {
             if (printedAt) existing.printed_at = printedAt;
           }
 
-          if (isFileItemRich && isIncomingItem) {
-            if (r.orderNumber) {
-              (existing._soSet as Set<string>).add(r.orderNumber);
+          // ALWAYS preserve and accumulate valid SO numbers
+          if (r.orderNumber && r.orderNumber !== "-" && r.orderNumber !== "") {
+            (existing._soSet as Set<string>).add(r.orderNumber);
+          }
+
+          // Customer name refinement: If incoming has a specific name and existing is generic Helios, update it
+          const currentCust = String(existing.customer_name || (existing.extra as Record<string, unknown>)?.nama_pelanggan || "");
+          const incomingCust = String(r.customerName || "");
+          const isCurrentGeneric =
+            !currentCust ||
+            currentCust === "-" ||
+            currentCust.toUpperCase().includes("HELIOS") ||
+            currentCust.toUpperCase() === "PT HELIOS ALCHEMIST KESEHATAN" ||
+            currentCust === "1001" ||
+            /^\d+$/.test(currentCust);
+          const isIncomingSpecific =
+            incomingCust &&
+            incomingCust !== "-" &&
+            !incomingCust.toUpperCase().includes("HELIOS") &&
+            !/^\d+$/.test(incomingCust);
+
+          if (isCurrentGeneric && isIncomingSpecific) {
+            existing.customer_name = incomingCust;
+            if (existing.extra) {
+              (existing.extra as Record<string, unknown>).nama_pelanggan = incomingCust;
             }
+          }
+
+          if (isFileItemRich && isIncomingItem) {
             const itList = (existing.extra as Record<string, unknown>).items as Array<Record<string, unknown>>;
             const katProd = getProductCategory(r.itemCode, r.itemDescription) || r.kategoriProduk || "FARMA";
             itList.push({
@@ -710,12 +747,16 @@ export default function Home() {
           }
         }
 
-        const payload: FirestoreFakturDoc[] = Array.from(invMap.values()).map(({ _soSet, _hasPreservedItems, ...rest }) => ({
-          ...rest,
-          id: String(rest.no_faktur),
-          no_sales_order: (_soSet as Set<string>).size > 0 ? Array.from(_soSet as Set<string>).join(", ") : rest.no_sales_order,
-          updated_at: new Date().toISOString(),
-        })) as unknown as FirestoreFakturDoc[];
+        const payload: FirestoreFakturDoc[] = Array.from(invMap.values()).map(({ _soSet, _hasPreservedItems, ...rest }) => {
+          const soArr = Array.from(_soSet as Set<string>).filter((s) => s && s !== "-");
+          const finalSO = soArr.length > 0 ? soArr.join(", ") : (rest.no_sales_order && rest.no_sales_order !== "-" ? String(rest.no_sales_order) : "-");
+          return {
+            ...rest,
+            id: String(rest.no_faktur),
+            no_sales_order: finalSO,
+            updated_at: new Date().toISOString(),
+          };
+        }) as unknown as FirestoreFakturDoc[];
 
         // Calculate min/max invoices per category (1P, 2P, 3P, ORA, DOO) in uploaded file
         let minUploaded1PNum = Infinity;
