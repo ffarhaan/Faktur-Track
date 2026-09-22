@@ -2793,24 +2793,6 @@ export default function Home() {
                   </button>
 
                   <button
-                    onClick={() => { setFilter("sudah"); setPage(0); }}
-                    className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 ${
-                      filter === "sudah" && !isGlobalSearchActive
-                        ? "bg-white text-emerald-700 font-bold shadow-xs"
-                        : "text-gray-600 hover:text-gray-900"
-                    }`}
-                  >
-                    <span>Sudah Terprint</span>
-                    <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
-                      filter === "sudah" && !isGlobalSearchActive
-                        ? "bg-emerald-100 text-emerald-800"
-                        : "bg-gray-200 text-gray-700"
-                    }`}>
-                      {summary.sudahTerprint}
-                    </span>
-                  </button>
-
-                  <button
                     onClick={() => { setFilter("all"); setPage(0); }}
                     className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 ${
                       filter === "all" && !isGlobalSearchActive
