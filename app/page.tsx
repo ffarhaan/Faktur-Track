@@ -493,7 +493,9 @@ export default function Home() {
       try {
         const parsed = await parseExcelFile(file);
         if (parsed.length === 0) {
-          setError("File berhasil dibaca tapi tidak ada data.");
+          setError(
+            `File "${file.name}" berhasil dibaca tetapi tidak memiliki baris data transaksi (0 baris). Pastikan file hasil export dari Oracle memiliki data dan parameter export terisi dengan benar (misal: Entity "MBI LE").`
+          );
           setLoading(false);
           return;
         }
