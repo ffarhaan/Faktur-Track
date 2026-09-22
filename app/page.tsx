@@ -1144,6 +1144,8 @@ export default function Home() {
           }
         });
 
+        const newUnprintedKeyList: string[] = [];
+
         // Merge incoming records into invMap
         for (const r of parsed) {
           const isOra = isOraCustomer(r.customerName);
@@ -1154,17 +1156,28 @@ export default function Home() {
           if (!noFaktur || noFaktur === "SO-" || noFaktur === "-1P") continue;
 
           const targetKey = noFaktur;
-          const prevInfo = existingStatusMap.get(noFaktur) || (r.orderNumber ? existingStatusMap.get(`SO-${r.orderNumber}`) : undefined);
-          const isAlreadyPrinted =
+          // Determine if this is a genuinely new invoice being uploaded in this batch
+          const isNewInvoice = isOra
+            ? (prevOraNum > 0 && num > prevOraNum) || !existingStatusMap.has(noFaktur)
+            : (prevDooNum > 0 && num > prevDooNum) || !existingStatusMap.has(noFaktur);
+
+          if (isNewInvoice) {
+            newUnprintedKeyList.push(targetKey);
+          }
+
+          const prevInfo = !isNewInvoice ? (existingStatusMap.get(noFaktur) || (r.orderNumber ? existingStatusMap.get(`SO-${r.orderNumber}`) : undefined)) : undefined;
+          const isAlreadyPrinted = !isNewInvoice && (
             Boolean(prevInfo?.status_cetak) ||
             currentActivePrintedSet.has(noFaktur) ||
-            Boolean(latestPrintStateRef.current?.printedKeys?.includes(noFaktur));
+            Boolean(latestPrintStateRef.current?.printedKeys?.includes(noFaktur))
+          );
           const isPrinted = isAlreadyPrinted;
-          const printedAt =
-            currentActivePrintedAtMap[noFaktur] ||
-            prevInfo?.printed_at ||
-            latestPrintStateRef.current?.printedAtMap?.[noFaktur] ||
-            null;
+          const printedAt = isPrinted
+            ? currentActivePrintedAtMap[noFaktur] ||
+              prevInfo?.printed_at ||
+              latestPrintStateRef.current?.printedAtMap?.[noFaktur] ||
+              null
+            : null;
           const prevExtra = (prevInfo?.extra as Record<string, unknown>) || null;
           const prevItems = (prevExtra?.items as Array<Record<string, unknown>>) || [];
           const hasExistingRichItems =
@@ -1270,7 +1283,10 @@ export default function Home() {
           }
 
           const existing = invMap.get(targetKey)!;
-          if (isPrinted) {
+          if (isNewInvoice) {
+            existing.status_cetak = false;
+            existing.printed_at = null;
+          } else if (isPrinted) {
             existing.status_cetak = true;
             if (printedAt) existing.printed_at = printedAt;
           } else if (existing.status_cetak === undefined) {
@@ -1614,14 +1630,22 @@ export default function Home() {
         const mergedPrintedSet = new Set([...currentActivePrintedSet, ...localPrintedSet]);
         const mergedPrintedMap = { ...currentActivePrintedAtMap, ...localPrintedAtMap };
 
+        // For all genuinely new invoices uploaded in this file, ensure they are NOT in the printed set
+        newUnprintedKeyList.forEach((k) => {
+          mergedPrintedSet.delete(k);
+          delete mergedPrintedMap[k];
+        });
+
         // Retain recent local toggles (< 10s old) to prevent any toggle from being dropped
         recentTogglesRef.current.forEach((val, key) => {
-          if (val.printed) {
-            mergedPrintedSet.add(key);
-            if (!mergedPrintedMap[key]) mergedPrintedMap[key] = new Date(val.time).toISOString();
-          } else {
-            mergedPrintedSet.delete(key);
-            delete mergedPrintedMap[key];
+          if (!newUnprintedKeyList.includes(key)) {
+            if (val.printed) {
+              mergedPrintedSet.add(key);
+              if (!mergedPrintedMap[key]) mergedPrintedMap[key] = new Date(val.time).toISOString();
+            } else {
+              mergedPrintedSet.delete(key);
+              delete mergedPrintedMap[key];
+            }
           }
         });
 
@@ -1657,7 +1681,8 @@ export default function Home() {
             printedKeys: Array.from(mergedPrintedSet),
             printedAtMap: mergedPrintedMap,
             updatedAt: new Date().toISOString(),
-          }
+          },
+          newUnprintedKeyList
         );
         setPage(0);
       } catch (e) {

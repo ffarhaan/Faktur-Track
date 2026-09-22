@@ -270,8 +270,11 @@ function createSafeChunks(items: FirestoreFakturDoc[]): FirestoreFakturDoc[][] {
 export async function saveFaktursBatch(
   fakturs: FirestoreFakturDoc[],
   progression?: InvoiceProgression | null,
-  existingPrintState?: PrintState | null
+  existingPrintState?: PrintState | null,
+  newUnprintedKeys?: string[]
 ): Promise<void> {
+  const newUnprintedSet = new Set(newUnprintedKeys || []);
+
   // CRITICAL CONCURRENCY GUARD:
   // Fetch live print state directly from Firestore so print checkmarks made by colleagues
   // while this upload was preparing are NEVER lost or overwritten!
@@ -282,30 +285,39 @@ export async function saveFaktursBatch(
     const printSnap = await getDoc(doc(db, APP_DATA_COLLECTION, PRINT_STATE_DOC));
     if (printSnap.exists()) {
       const liveData = printSnap.data() as PrintState;
-      livePrintedKeys = liveData.printedKeys || [];
-      livePrintedAtMap = liveData.printedAtMap || {};
+      // Genuinely new invoices being uploaded MUST be excluded from live printed keys
+      livePrintedKeys = (liveData.printedKeys || []).filter((k) => !newUnprintedSet.has(k));
+      livePrintedAtMap = { ...(liveData.printedAtMap || {}) };
+      newUnprintedSet.forEach((k) => delete livePrintedAtMap[k]);
     }
   } catch (err) {
     console.warn("Could not read live print state during batch upload:", err);
   }
 
-  // UNION MERGE: Print status is strictly additive during upload.
-  // Any invoice printed anywhere (live DB or locally) remains printed.
+  // UNION MERGE: Print status of existing invoices is preserved.
+  // New unprinted invoices are strictly excluded.
+  const localPrintedKeys = (existingPrintState?.printedKeys || []).filter((k) => !newUnprintedSet.has(k));
   const unifiedPrintedSet = new Set<string>([
     ...livePrintedKeys,
-    ...(existingPrintState?.printedKeys || []),
+    ...localPrintedKeys,
   ]);
   const unifiedPrintedAtMap: Record<string, string> = {
     ...livePrintedAtMap,
     ...(existingPrintState?.printedAtMap || {}),
   };
+  newUnprintedSet.forEach((k) => delete unifiedPrintedAtMap[k]);
 
   // Sync the unified print status into the chunk items
   for (const item of fakturs) {
     const key = item.id || item.no_faktur;
-    if (key && unifiedPrintedSet.has(key)) {
-      item.status_cetak = true;
-      item.printed_at = unifiedPrintedAtMap[key] || item.printed_at || new Date().toISOString();
+    if (key) {
+      if (newUnprintedSet.has(key)) {
+        item.status_cetak = false;
+        item.printed_at = null;
+      } else if (unifiedPrintedSet.has(key)) {
+        item.status_cetak = true;
+        item.printed_at = unifiedPrintedAtMap[key] || item.printed_at || new Date().toISOString();
+      }
     }
   }
 
