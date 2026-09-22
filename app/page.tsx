@@ -713,8 +713,8 @@ export default function Home() {
   const printedAtMapRef = useRef<Record<string, string>>({});
 
   useEffect(() => {
-    // Show update modal on first visit for this version
-    const hasSeen = localStorage.getItem("ft_seen_update_v2_1");
+    // Show update modal on first visit for this version (v2.2)
+    const hasSeen = localStorage.getItem("ft_seen_update_v2_2");
     if (!hasSeen) {
       setShowUpdateModal(true);
     }
@@ -3233,11 +3233,11 @@ export default function Home() {
       <UpdateNoticeModal
         isOpen={showUpdateModal}
         onClose={() => {
-          localStorage.setItem("ft_seen_update_v2_1", "true");
+          localStorage.setItem("ft_seen_update_v2_2", "true");
           setShowUpdateModal(false);
         }}
         onOpenFeedback={() => {
-          localStorage.setItem("ft_seen_update_v2_1", "true");
+          localStorage.setItem("ft_seen_update_v2_2", "true");
           setShowUpdateModal(false);
           setShowFeedbackModal(true);
         }}
@@ -3798,7 +3798,7 @@ function UpdateNoticeModal({
             <div className="flex items-center gap-2">
               <h2 className="text-base font-bold text-gray-900">UPDATE SISTEM FAKTUR TRACKER</h2>
               <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-300">
-                v2.1
+                v2.2
               </span>
             </div>
             <p className="text-xs text-gray-500">Halo tim, sistem sudah selesai di-update ya:</p>
@@ -3807,6 +3807,16 @@ function UpdateNoticeModal({
 
         {/* Update Bullet Points */}
         <div className="space-y-2.5 text-xs">
+          <div className="p-3 bg-teal-50/80 border border-teal-200 rounded-xl flex items-start gap-3">
+            <span className="text-base leading-none">🛡️</span>
+            <div>
+              <p className="font-bold text-teal-950">Anti-Reset Print (Aman Tabrakan Upload)</p>
+              <p className="text-gray-600 mt-0.5">
+                Faktur yang sudah dicentang print dijamin <strong>aman permanen & tidak akan ke-reset</strong>, meskipun ada yang mengupload file di saat bersamaan.
+              </p>
+            </div>
+          </div>
+
           <div className="p-3 bg-amber-50/70 border border-amber-200/80 rounded-xl flex items-start gap-3">
             <span className="text-base leading-none">⚡</span>
             <div>
