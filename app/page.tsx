@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect, useCallback, useRef, Fragment } from "react";
+import { useState, useMemo, useEffect, useCallback, useRef, Fragment, memo } from "react";
 import * as XLSX from "xlsx";
 import { parseExcelFile, categorize, isOraCustomer, getProductCategory, getPrekursorOOTClassification } from "@/lib/parser";
 import { FakturRecord } from "@/lib/types";
@@ -280,6 +280,382 @@ function dbRowsToFakturRecords(rows: Array<Record<string, unknown>>): {
   return { records, printedSet, printedAtMap, progression };
 }
 
+// System maintenance and update state flag (Alert banner & upload prevention)
+const IS_SYSTEM_UPDATING = true;
+
+const FakturTableRow = memo(function FakturTableRow({
+  g,
+  rowIdx,
+  isRowSelected,
+  selectedColIdx,
+  expanded,
+  onSelectRow,
+  onSelectCell,
+  onToggleExpand,
+  onTogglePrint,
+}: {
+  g: FakturGroup;
+  rowIdx: number;
+  isRowSelected: boolean;
+  selectedColIdx: number | null;
+  expanded: boolean;
+  onSelectRow: (idx: number) => void;
+  onSelectCell: (rowIdx: number, colIdx: number) => void;
+  onToggleExpand: (key: string) => void;
+  onTogglePrint: (group: FakturGroup) => void;
+}) {
+  const hasInvoice = !!g.invoiceNumber && g.invoiceNumber !== "0" && g.invoiceNumber !== "-";
+
+  const getCellCls = (colIdx: number) => {
+    if (isRowSelected && selectedColIdx === colIdx) {
+      return "ring-2 ring-blue-600 ring-inset bg-blue-100/90 font-semibold relative z-10";
+    }
+    return "";
+  };
+
+  return (
+    <Fragment>
+      <tr
+        id={`faktur-row-${rowIdx}`}
+        onClick={() => onSelectRow(rowIdx)}
+        onDoubleClick={() => onToggleExpand(g.key)}
+        className={`cursor-pointer transition-colors ${
+          isRowSelected
+            ? "bg-blue-50/70 border-l-4 border-l-blue-600 shadow-sm"
+            : g.isDoubleInv
+            ? "bg-red-50 hover:bg-red-100/70"
+            : g.allPrinted
+            ? "bg-green-50/50 hover:bg-green-100/50"
+            : "hover:bg-gray-50"
+        }`}
+      >
+        {/* Col 0: Expand */}
+        <td
+          onClick={(e) => {
+            e.stopPropagation();
+            onSelectCell(rowIdx, 0);
+            onToggleExpand(g.key);
+          }}
+          className={`px-2 py-2 text-center text-gray-400 text-xs ${getCellCls(0)}`}
+          title="Klik atau tekan Enter untuk buka rincian"
+        >
+          {expanded ? "▼" : "▶"}
+        </td>
+
+        {/* Col 1: Print Status */}
+        <td
+          onClick={(e) => {
+            e.stopPropagation();
+            onSelectCell(rowIdx, 1);
+          }}
+          className={`px-2 py-2 ${getCellCls(1)}`}
+        >
+          <button
+            type="button"
+            tabIndex={-1}
+            onKeyDown={(e) => {
+              if (e.key === " " || e.code === "Space") {
+                e.preventDefault();
+                e.stopPropagation();
+              }
+            }}
+            onClick={(e) => {
+              e.stopPropagation();
+              onTogglePrint(g);
+            }}
+            disabled={!hasInvoice}
+            className={`w-6 h-6 rounded flex items-center justify-center text-xs font-bold transition-all shadow-sm ${
+              !hasInvoice
+                ? "bg-gray-100 text-gray-300 cursor-not-allowed"
+                : g.allPrinted
+                ? "bg-green-500 text-white hover:bg-orange-500 hover:rotate-180"
+                : g.anyPrinted
+                ? "bg-yellow-400 text-white hover:bg-yellow-500"
+                : "bg-gray-200 text-gray-600 hover:bg-green-500 hover:text-white"
+            }`}
+            title={
+              !hasInvoice
+                ? "Menunggu No Faktur (Belum bisa diprint)"
+                : g.allPrinted
+                ? "Sudah Terprint · Klik untuk UNPRINT (Batal Cetak)"
+                : g.anyPrinted
+                ? "Sebagian terprint · Klik untuk tandai"
+                : "Belum terprint · Klik atau tekan Space untuk SUDAH PRINT"
+            }
+          >
+            {!hasInvoice ? "–" : g.allPrinted ? "✓" : g.anyPrinted ? "◑" : "○"}
+          </button>
+        </td>
+
+        {/* Col 2: No SO */}
+        <td
+          onClick={(e) => {
+            e.stopPropagation();
+            onSelectCell(rowIdx, 2);
+          }}
+          className={`px-2 py-2 font-mono text-xs text-gray-900 whitespace-nowrap ${getCellCls(2)}`}
+        >
+          <div className="flex items-center gap-1">
+            <span>{g.so}</span>
+            {g.isDoubleInv && <span className="text-red-600 font-bold" title="SO ini memiliki lebih dari 1 faktur">⚠</span>}
+          </div>
+          {g.totalHarga < 0 && (
+            <div className="mt-0.5">
+              <span className="inline-block text-[9px] font-semibold text-rose-600 bg-rose-50 border border-rose-200 px-1 py-0.2 rounded leading-none">
+                Memo Retur
+              </span>
+            </div>
+          )}
+        </td>
+
+        {/* Col 3: No Invoice */}
+        <td
+          onClick={(e) => {
+            e.stopPropagation();
+            onSelectCell(rowIdx, 3);
+          }}
+          className={`px-2 py-2 font-mono text-xs text-gray-900 whitespace-nowrap font-medium ${getCellCls(3)}`}
+        >
+          {hasInvoice ? (
+            g.invoiceNumber
+          ) : (
+            <span className="text-gray-400 italic text-xs">Menunggu Faktur</span>
+          )}
+        </td>
+
+        {/* Col 4: Kat Produk (Dominant Category) */}
+        <td
+          onClick={(e) => {
+            e.stopPropagation();
+            onSelectCell(rowIdx, 4);
+          }}
+          className={`px-2 py-2 whitespace-nowrap ${getCellCls(4)}`}
+        >
+          <div className="flex flex-wrap gap-1 items-center">
+            <span
+              className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-bold tracking-wider border shadow-2xs ${
+                g.kategoriProduk === "ALKES"
+                  ? "bg-teal-100 text-teal-800 border-teal-300"
+                  : g.kategoriProduk === "CCP"
+                  ? "bg-sky-100 text-sky-900 border-sky-300"
+                  : g.kategoriProduk === "PREKURSOR"
+                  ? "bg-amber-100 text-amber-900 border-amber-300"
+                  : g.kategoriProduk === "OOT"
+                  ? "bg-purple-100 text-purple-900 border-purple-300"
+                  : "bg-indigo-50 text-indigo-700 border-indigo-200"
+              }`}
+            >
+              {g.kategoriProduk === "CCP" ? "❄️ CCP" : g.kategoriProduk}
+            </span>
+            {g.hasPrekursor && g.kategoriProduk !== "PREKURSOR" && (
+              <span className="inline-block px-1 py-0.2 rounded text-[9px] font-bold bg-amber-50 text-amber-800 border border-amber-300" title="Mengandung item Prekursor">
+                💊 Prekursor
+              </span>
+            )}
+            {g.hasOOT && g.kategoriProduk !== "OOT" && (
+              <span className="inline-block px-1 py-0.2 rounded text-[9px] font-bold bg-purple-50 text-purple-800 border border-purple-300" title="Mengandung item OOT">
+                🧪 OOT
+              </span>
+            )}
+            {g.hasCCP && g.kategoriProduk !== "CCP" && (
+              <span className="inline-block px-1 py-0.2 rounded text-[9px] font-bold bg-sky-50 text-sky-800 border border-sky-300" title="Mengandung item CCP (Cold Chain)">
+                ❄️ CCP
+              </span>
+            )}
+          </div>
+        </td>
+
+        {/* Col 5: Jenis Transaksi */}
+        <td
+          onClick={(e) => {
+            e.stopPropagation();
+            onSelectCell(rowIdx, 5);
+          }}
+          className={`px-2 py-2 whitespace-nowrap ${getCellCls(5)}`}
+        >
+          <span className={`inline-block px-2 py-0.5 rounded text-xs font-bold ${
+            g.jenisTransaksi === "ORA"
+              ? "bg-blue-100 text-blue-800"
+              : "bg-emerald-100 text-emerald-800"
+          }`}>
+            {g.jenisTransaksi}
+          </span>
+        </td>
+
+        {/* Col 6: Pelanggan */}
+        <td
+          onClick={(e) => {
+            e.stopPropagation();
+            onSelectCell(rowIdx, 6);
+          }}
+          className={`px-2 py-2 text-gray-700 whitespace-nowrap max-w-xs truncate ${getCellCls(6)}`}
+        >
+          {g.customerName}
+        </td>
+
+        {/* Col 7: Order Date */}
+        <td
+          onClick={(e) => {
+            e.stopPropagation();
+            onSelectCell(rowIdx, 7);
+          }}
+          className={`px-2 py-2 text-gray-600 whitespace-nowrap text-xs ${getCellCls(7)}`}
+        >
+          {g.orderDate}
+        </td>
+
+        {/* Col 8: Kategori */}
+        <td
+          onClick={(e) => {
+            e.stopPropagation();
+            onSelectCell(rowIdx, 8);
+          }}
+          className={`px-2 py-2 ${getCellCls(8)}`}
+        >
+          <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${
+            g.kategori === "1P" ? "bg-blue-100 text-blue-700"
+            : g.kategori === "2P" ? "bg-green-100 text-green-700"
+            : "bg-purple-100 text-purple-700"
+          }`}>
+            {g.kategori}
+          </span>
+        </td>
+
+        {/* Col 9: Done Print Time */}
+        <td
+          onClick={(e) => {
+            e.stopPropagation();
+            onSelectCell(rowIdx, 9);
+          }}
+          className={`px-2 py-2 whitespace-nowrap ${getCellCls(9)}`}
+        >
+          {g.allPrinted && g.printedAt ? (
+            <span className="inline-flex items-center gap-1 text-[11px] font-mono font-medium text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200" title={`Selesai diprint pada: ${formatPrintTime(g.printedAt)}`}>
+              <span className="text-emerald-600 font-bold">⏱</span>
+              {formatPrintTime(g.printedAt)}
+            </span>
+          ) : g.anyPrinted ? (
+            <span className="text-xs text-yellow-600 italic">Sebagian</span>
+          ) : (
+            <span className="text-xs text-gray-300">-</span>
+          )}
+        </td>
+
+        {/* Col 10: Total Harga */}
+        <td
+          onClick={(e) => {
+            e.stopPropagation();
+            onSelectCell(rowIdx, 10);
+          }}
+          className={`px-2 py-2 text-right text-gray-900 whitespace-nowrap font-medium text-xs ${getCellCls(10)}`}
+        >
+          {formatRupiah(g.totalHarga)}
+        </td>
+      </tr>
+
+      {expanded && (
+        <tr className="bg-gray-50">
+          <td colSpan={11} className="px-4 py-3">
+            <div className="flex flex-wrap items-center justify-between pb-2 mb-2 border-b border-gray-200 gap-2">
+              <div className="text-xs text-gray-600">
+                <span className="font-semibold text-gray-900">Invoice: <span className="font-mono text-blue-700 font-bold">{g.invoiceNumber}</span></span> · SO: <span className="font-semibold text-gray-900">{g.so}</span> {g.totalHarga < 0 && <span className="text-[10px] font-semibold text-rose-700 bg-rose-100 border border-rose-200 px-1.5 py-0.2 rounded">Memo Retur</span>} · Pelanggan: <span className="font-semibold text-gray-900">{g.customerName}</span>
+                <span className="ml-2 inline-flex items-center gap-1">
+                  <span className="font-medium text-gray-500">Kat Dominan:</span>
+                  <span
+                    className={`inline-block px-1.5 py-0.2 rounded text-[10px] font-bold border ${
+                      g.kategoriProduk === "ALKES"
+                        ? "bg-teal-100 text-teal-800 border-teal-300"
+                        : g.kategoriProduk === "PREKURSOR"
+                        ? "bg-amber-100 text-amber-900 border-amber-300"
+                        : g.kategoriProduk === "OOT"
+                        ? "bg-purple-100 text-purple-900 border-purple-300"
+                        : "bg-indigo-50 text-indigo-700 border-indigo-200"
+                    }`}
+                  >
+                    {g.kategoriProduk}
+                  </span>
+                </span>
+                {g.allPrinted && g.printedAt && (
+                  <span className="ml-2 inline-flex items-center gap-1 font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                    <span>⏱ Selesai Print:</span>
+                    <span className="font-mono font-bold text-emerald-900">{formatPrintTime(g.printedAt)}</span>
+                  </span>
+                )}
+              </div>
+              <div>
+                {g.allPrinted ? (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onTogglePrint(g); }}
+                    className="px-3 py-1 bg-orange-100 text-orange-800 border border-orange-300 rounded-lg text-xs font-bold hover:bg-orange-200 transition-colors flex items-center gap-1.5 shadow-sm"
+                  >
+                    <span>↩</span> Unprint Faktur Ini
+                  </button>
+                ) : (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onTogglePrint(g); }}
+                    className="px-3 py-1 bg-green-600 text-white rounded-lg text-xs font-bold hover:bg-green-700 transition-colors flex items-center gap-1.5 shadow-sm"
+                  >
+                    <span>✓</span> Tandai Sudah Terprint
+                  </button>
+                )}
+              </div>
+            </div>
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-gray-200">
+                  <th className="px-2 py-1 text-left font-medium text-gray-500">No Invoice</th>
+                  <th className="px-2 py-1 text-left font-medium text-gray-500">Item Code</th>
+                  <th className="px-2 py-1 text-left font-medium text-gray-500">Kat Produk</th>
+                  <th className="px-2 py-1 text-left font-medium text-gray-500">Item Description</th>
+                  <th className="px-2 py-1 text-right font-medium text-gray-500">Qty</th>
+                  <th className="px-2 py-1 text-left font-medium text-gray-500">UOM</th>
+                  <th className="px-2 py-1 text-left font-medium text-gray-500">LOT Number</th>
+                  <th className="px-2 py-1 text-right font-medium text-gray-500">Total Harga</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {g.items.map((item, i) => (
+                  <tr key={i} className="hover:bg-gray-100">
+                    <td className="px-2 py-1 font-mono text-gray-900 whitespace-nowrap">{item.invoiceNumber}</td>
+                    <td className="px-2 py-1 font-mono text-gray-600 whitespace-nowrap">{item.itemCode}</td>
+                    <td className="px-2 py-1 whitespace-nowrap">
+                      {(() => {
+                        const itemCat = (item.kategoriProduk || getProductCategory(item.itemCode, item.itemDescription) || "FARMA").toUpperCase();
+                        return (
+                          <span
+                            className={`inline-block px-1.5 py-0.2 rounded text-[10px] font-bold border ${
+                              itemCat === "ALKES"
+                                ? "bg-teal-100 text-teal-800 border-teal-300"
+                                : itemCat === "CCP"
+                                ? "bg-sky-100 text-sky-900 border-sky-300"
+                                : itemCat === "PREKURSOR"
+                                ? "bg-amber-100 text-amber-900 border-amber-300"
+                                : itemCat === "OOT"
+                                ? "bg-purple-100 text-purple-900 border-purple-300"
+                                : "bg-indigo-50 text-indigo-700 border-indigo-200"
+                            }`}
+                          >
+                            {itemCat === "CCP" ? "❄️ CCP" : itemCat}
+                          </span>
+                        );
+                      })()}
+                    </td>
+                    <td className="px-2 py-1 text-gray-700">{item.itemDescription}</td>
+                    <td className="px-2 py-1 text-right text-gray-900">{item.qty}</td>
+                    <td className="px-2 py-1 text-gray-600">{item.uom}</td>
+                    <td className="px-2 py-1 font-mono text-gray-600 whitespace-nowrap">{item.lotNumber}</td>
+                    <td className="px-2 py-1 text-right text-gray-900 whitespace-nowrap">{formatRupiah(item.totalHarga)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </td>
+        </tr>
+      )}
+    </Fragment>
+  );
+});
+
 export default function Home() {
   const [records, setRecords] = useState<FakturRecord[]>([]);
   const [loading, setLoading] = useState(false);
@@ -321,6 +697,7 @@ export default function Home() {
   const [showApotekModal, setShowApotekModal] = useState(false);
   const [showProductModal, setShowProductModal] = useState(false);
   const inFlightToggleRef = useRef<Set<string>>(new Set());
+  const recentTogglesRef = useRef<Map<string, { printed: boolean; time: number }>>(new Map());
   const latestDBDocsRef = useRef<FirestoreFakturDoc[]>([]);
   const latestProgressionRef = useRef<InvoiceProgression | null>(null);
   const latestPrintStateRef = useRef<{ printedKeys: string[]; printedAtMap: Record<string, string>; updatedAt: string } | null>(null);
@@ -342,23 +719,50 @@ export default function Home() {
   useEffect(() => {
     setLoading(true);
     const unsubscribe = subscribeToFakturs(
-      (docs, prog, printState) => {
-        latestDBDocsRef.current = docs;
+      (docs, prog, printState, reason) => {
         if (prog) {
           latestProgressionRef.current = prog;
           setInvoiceProgression(prog);
         }
         if (printState) {
           latestPrintStateRef.current = printState;
+
+          // Reconcile incoming print state with optimistic local toggles (< 4000ms old) to prevent checkmark flicker
+          const now = Date.now();
+          const incomingPrintedSet = new Set(printState.printedKeys || []);
+          const incomingPrintedMap = { ...(printState.printedAtMap || {}) };
+
+          recentTogglesRef.current.forEach((val, key) => {
+            if (now - val.time < 4000) {
+              if (val.printed) {
+                incomingPrintedSet.add(key);
+                if (!incomingPrintedMap[key]) incomingPrintedMap[key] = new Date(val.time).toISOString();
+              } else {
+                incomingPrintedSet.delete(key);
+                delete incomingPrintedMap[key];
+              }
+            } else {
+              recentTogglesRef.current.delete(key);
+            }
+          });
+
+          setPrintedInvoices(incomingPrintedSet);
+          setPrintedAtMap(incomingPrintedMap);
         }
 
+        // If this is ONLY a printState update or metadata update, DO NOT re-create or touch records!
+        if (reason === "print" || reason === "meta") {
+          setLoading(false);
+          return;
+        }
+
+        // Only recreate records when chunk data actually changes (file upload or clear)
+        latestDBDocsRef.current = docs;
         if (docs.length > 0) {
-          const { records: recs, printedSet, printedAtMap: pMap } = dbRowsToFakturRecords(
+          const { records: recs } = dbRowsToFakturRecords(
             docs as unknown as Array<Record<string, unknown>>
           );
           setRecords(recs);
-          setPrintedInvoices(printedSet);
-          setPrintedAtMap(pMap);
         } else {
           setRecords([]);
           setPrintedInvoices(new Set());
@@ -405,6 +809,15 @@ export default function Home() {
     });
   }, []);
 
+  const onSelectRow = useCallback((idx: number) => {
+    setSelectedRowIndex(idx);
+  }, []);
+
+  const onSelectCell = useCallback((rowIdx: number, colIdx: number) => {
+    setSelectedRowIndex(rowIdx);
+    setSelectedColIdx(colIdx);
+  }, []);
+
   const handleManualRefresh = useCallback(() => {
     setSessionPrintedKeys(new Set());
     setLoading(true);
@@ -442,6 +855,7 @@ export default function Home() {
       }, 300);
 
       const nowIso = new Date().toISOString();
+      recentTogglesRef.current.set(targetKey, { printed: willBePrinted, time: Date.now() });
       const next = new Set(printedInvoices);
 
       if (willBePrinted) {
@@ -1233,6 +1647,10 @@ export default function Home() {
     (e: React.DragEvent) => {
       e.preventDefault();
       setDragOver(false);
+      if (IS_SYSTEM_UPDATING) {
+        alert("⚠️ SISTEM SEDANG DALAM PROSES UPDATE & OPTIMASI PERFORMA.\n\nMohon jangan upload file apapun dulu yaa hingga pembaruan selesai.");
+        return;
+      }
       const file = e.dataTransfer.files[0];
       if (file) handleUpload(file);
     },
@@ -1241,6 +1659,11 @@ export default function Home() {
 
   const onFileInput = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (IS_SYSTEM_UPDATING) {
+        alert("⚠️ SISTEM SEDANG DALAM PROSES UPDATE & OPTIMASI PERFORMA.\n\nMohon jangan upload file apapun dulu yaa hingga pembaruan selesai.");
+        e.target.value = "";
+        return;
+      }
       const file = e.target.files?.[0];
       if (file) handleUpload(file);
       e.target.value = "";
@@ -1277,8 +1700,8 @@ export default function Home() {
     setLoading(false);
   };
 
-  // Group strictly by Invoice Key so every individual faktur/invoice is isolated with exact total harga
-  const grouped = useMemo<FakturGroup[]>(() => {
+  // 1. Heavy grouping and sorting - ONLY runs when records, sortBy, or sortOrder change!
+  const baseGrouped = useMemo<FakturGroup[]>(() => {
     const map: Record<string, FakturRecord[]> = {};
     for (const r of records) {
       const gKey = r.invoiceKey || r.invoiceNumber;
@@ -1329,9 +1752,6 @@ export default function Home() {
           ? (isOra ? finalSoList[0] : finalSoList.join(", "))
           : "-";
         const isDouble = soList.some((s) => (soInvMap[s]?.size || 0) > 1);
-        const cleanInv = (invNum || invKey || "").replace(/-1P$/i, "");
-        const isPrinted = printedInvoices.has(invKey);
-        const pAt = printedAtMap[invKey] || null;
 
         const catCounts: Record<string, number> = {};
         let hasPrekursor = false;
@@ -1389,9 +1809,9 @@ export default function Home() {
           isDoubleInv: isDouble,
           totalHarga: items.reduce((sum, i) => sum + i.totalHarga, 0),
           totalItems: items.length,
-          allPrinted: isPrinted,
-          anyPrinted: isPrinted,
-          printedAt: pAt,
+          allPrinted: false,
+          anyPrinted: false,
+          printedAt: null,
         };
       })
       .sort((a, b) => {
@@ -1410,7 +1830,24 @@ export default function Home() {
         }
         return sortOrder === "desc" ? -diff : diff;
       });
-  }, [records, printedInvoices, printedAtMap, sortBy, sortOrder]);
+  }, [records, sortBy, sortOrder]);
+
+  // 2. Ultra-lightweight print status mapping (< 1ms, reuses objects when unchanged)
+  const grouped = useMemo<FakturGroup[]>(() => {
+    return baseGrouped.map((g) => {
+      const isPrinted = printedInvoices.has(g.invoiceKey);
+      const pAt = printedAtMap[g.invoiceKey] || null;
+      if (g.allPrinted === isPrinted && g.printedAt === pAt) {
+        return g;
+      }
+      return {
+        ...g,
+        allPrinted: isPrinted,
+        anyPrinted: isPrinted,
+        printedAt: pAt,
+      };
+    });
+  }, [baseGrouped, printedInvoices, printedAtMap]);
 
   const highestInvoices = useMemo(() => {
     let max1POra = { invoiceNumber: "-", totalHarga: 0, orderDate: "-", isPrinted: false, customerName: "", jenisTransaksi: "ORA" };
@@ -1975,7 +2412,30 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-gray-50">
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-10 shadow-sm">
+      {/* MAINTENANCE / UPDATE BANNER */}
+      {IS_SYSTEM_UPDATING && (
+        <div className="bg-gradient-to-r from-amber-600 via-amber-500 to-amber-600 text-white px-4 py-2.5 shadow-md sticky top-0 z-50 border-b-2 border-amber-700">
+          <div className="max-w-7xl mx-auto flex items-center justify-between gap-3 text-xs sm:text-sm">
+            <div className="flex items-center gap-2">
+              <span className="text-base sm:text-lg animate-bounce">⚠️</span>
+              <span>
+                <strong className="font-extrabold uppercase tracking-wide">PEMBERITAHUAN SISTEM:</strong>{" "}
+                Sistem sedang dalam proses optimasi performa & update.{" "}
+                <span className="bg-amber-900/90 px-2 py-0.5 rounded font-extrabold text-amber-100 border border-amber-300">
+                  MOHON JANGAN UPLOAD FILE APAPUN DULU
+                </span>{" "}
+                sampai proses pembaruan ini selesai.
+              </span>
+            </div>
+            <span className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-900/70 text-amber-200 border border-amber-400/40 whitespace-nowrap animate-pulse">
+              <span className="w-2 h-2 rounded-full bg-amber-300"></span>
+              Sedang Diupdate
+            </span>
+          </div>
+        </div>
+      )}
+
+      <header className={`bg-white border-b border-gray-200 sticky ${IS_SYSTEM_UPDATING ? "top-[41px]" : "top-0"} z-10 shadow-sm`}>
         <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold text-sm shadow-xs">
@@ -1984,6 +2444,12 @@ export default function Home() {
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-lg font-bold text-gray-900">Faktur Tracker</h1>
+                {IS_SYSTEM_UPDATING && (
+                  <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-800 border border-amber-300 flex items-center gap-1 animate-pulse">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                    Sedang Diupdate
+                  </span>
+                )}
               </div>
               <p className="text-xs text-gray-500">Tracking faktur dari Oracle export</p>
             </div>
@@ -2112,11 +2578,27 @@ export default function Home() {
             <p className="text-xs text-gray-500 mb-4 max-w-md mx-auto">
               Silakan upload file Excel export dari Oracle (.xlsx / .xls) untuk tracking faktur dan sinkronisasi otomatis antar perangkat.
             </p>
-            <label className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl cursor-pointer text-sm font-semibold shadow transition-colors">
-              <span>📁</span>
-              <span>Upload File Excel</span>
-              <input type="file" accept=".xlsx,.xls" onChange={onFileInput} className="hidden" />
-            </label>
+            {IS_SYSTEM_UPDATING ? (
+              <div className="flex flex-col items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => alert("⚠️ SISTEM SEDANG DALAM PROSES UPDATE & OPTIMASI PERFORMA.\n\nMohon jangan upload file apapun dulu yaa hingga pembaruan selesai.")}
+                  className="inline-flex items-center gap-2 bg-amber-100 border border-amber-300 text-amber-900 px-5 py-2.5 rounded-xl cursor-not-allowed text-sm font-semibold shadow-xs"
+                >
+                  <span>🔒</span>
+                  <span>Upload Ditangguhkan (Sedang Update Performa)</span>
+                </button>
+                <span className="text-[11px] text-amber-700 font-medium">
+                  Harap tunggu sampai proses update dan optimasi selesai.
+                </span>
+              </div>
+            ) : (
+              <label className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl cursor-pointer text-sm font-semibold shadow transition-colors">
+                <span>📁</span>
+                <span>Upload File Excel</span>
+                <input type="file" accept=".xlsx,.xls" onChange={onFileInput} className="hidden" />
+              </label>
+            )}
             {loading && <p className="text-xs text-gray-500 mt-3 animate-pulse">Membaca file...</p>}
           </div>
         )}
@@ -2427,11 +2909,23 @@ export default function Home() {
                   </div>
                 </div>
 
-                <label className="bg-blue-600 hover:bg-blue-700 text-white px-3.5 py-1.5 rounded-lg cursor-pointer text-xs font-semibold whitespace-nowrap shadow-sm flex items-center gap-1.5 transition-colors">
-                  <span>📁</span>
-                  <span>Upload Excel</span>
-                  <input type="file" accept=".xlsx,.xls" onChange={onFileInput} className="hidden" />
-                </label>
+                {IS_SYSTEM_UPDATING ? (
+                  <button
+                    type="button"
+                    onClick={() => alert("⚠️ SISTEM SEDANG DALAM PROSES UPDATE & OPTIMASI PERFORMA.\n\nMohon jangan upload file apapun dulu yaa hingga pembaruan selesai.")}
+                    className="bg-amber-100 border border-amber-300 text-amber-800 px-3.5 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap shadow-xs flex items-center gap-1.5 cursor-not-allowed opacity-90"
+                    title="Upload dinonaktifkan sementara karena sistem sedang dalam proses optimasi performa"
+                  >
+                    <span>🔒</span>
+                    <span>Upload Ditangguhkan (Sedang Update)</span>
+                  </button>
+                ) : (
+                  <label className="bg-blue-600 hover:bg-blue-700 text-white px-3.5 py-1.5 rounded-lg cursor-pointer text-xs font-semibold whitespace-nowrap shadow-sm flex items-center gap-1.5 transition-colors">
+                    <span>📁</span>
+                    <span>Upload Excel</span>
+                    <input type="file" accept=".xlsx,.xls" onChange={onFileInput} className="hidden" />
+                  </label>
+                )}
                 {loading && <span className="text-xs text-gray-500 animate-pulse whitespace-nowrap">Membaca...</span>}
               </div>
             </div>
@@ -2497,370 +2991,20 @@ export default function Home() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
-                    {pageData.map((g, rowIdx) => {
-                      const expanded = expandedInvoices.has(g.key);
-                      const hasInvoice = !!g.invoiceNumber && g.invoiceNumber !== "0" && g.invoiceNumber !== "-";
-                      const isRowSelected = selectedRowIndex === rowIdx;
-
-                      const getCellCls = (colIdx: number) => {
-                        if (isRowSelected && selectedColIdx === colIdx) {
-                          return "ring-2 ring-blue-600 ring-inset bg-blue-100/90 font-semibold relative z-10";
-                        }
-                        return "";
-                      };
-
-                      return (
-                        <Fragment key={g.key}>
-                          <tr
-                            id={`faktur-row-${rowIdx}`}
-                            onClick={() => setSelectedRowIndex(rowIdx)}
-                            onDoubleClick={() => toggleExpand(g.key)}
-                            className={`cursor-pointer transition-colors ${
-                              isRowSelected
-                                ? "bg-blue-50/70 border-l-4 border-l-blue-600 shadow-sm"
-                                : g.isDoubleInv
-                                ? "bg-red-50 hover:bg-red-100/70"
-                                : g.allPrinted
-                                ? "bg-green-50/50 hover:bg-green-100/50"
-                                : "hover:bg-gray-50"
-                            }`}
-                          >
-                            {/* Col 0: Expand */}
-                            <td
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSelectedRowIndex(rowIdx);
-                                setSelectedColIdx(0);
-                                toggleExpand(g.key);
-                              }}
-                              className={`px-2 py-2 text-center text-gray-400 text-xs ${getCellCls(0)}`}
-                              title="Klik atau tekan Enter untuk buka rincian"
-                            >
-                              {expanded ? "▼" : "▶"}
-                            </td>
-
-                            {/* Col 1: Print Status */}
-                            <td
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSelectedRowIndex(rowIdx);
-                                setSelectedColIdx(1);
-                              }}
-                              className={`px-2 py-2 ${getCellCls(1)}`}
-                            >
-                              <button
-                                type="button"
-                                tabIndex={-1}
-                                onKeyDown={(e) => {
-                                  if (e.key === " " || e.code === "Space") {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                  }
-                                }}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  togglePrint(g);
-                                }}
-                                disabled={!hasInvoice}
-                                className={`w-6 h-6 rounded flex items-center justify-center text-xs font-bold transition-all shadow-sm ${
-                                   !hasInvoice
-                                    ? "bg-gray-100 text-gray-300 cursor-not-allowed"
-                                    : g.allPrinted
-                                    ? "bg-green-500 text-white hover:bg-orange-500 hover:rotate-180"
-                                    : g.anyPrinted
-                                    ? "bg-yellow-400 text-white hover:bg-yellow-500"
-                                    : "bg-gray-200 text-gray-600 hover:bg-green-500 hover:text-white"
-                                }`}
-                                title={
-                                  !hasInvoice
-                                    ? "Menunggu No Faktur (Belum bisa diprint)"
-                                    : g.allPrinted
-                                    ? "Sudah Terprint · Klik untuk UNPRINT (Batal Cetak)"
-                                    : g.anyPrinted
-                                    ? "Sebagian terprint · Klik untuk tandai"
-                                    : "Belum terprint · Klik atau tekan Space untuk SUDAH PRINT"
-                                }
-                              >
-                                {!hasInvoice ? "–" : g.allPrinted ? "✓" : g.anyPrinted ? "◑" : "○"}
-                              </button>
-                            </td>
-
-                            {/* Col 2: No SO */}
-                            <td
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSelectedRowIndex(rowIdx);
-                                setSelectedColIdx(2);
-                              }}
-                              className={`px-2 py-2 font-mono text-xs text-gray-900 whitespace-nowrap ${getCellCls(2)}`}
-                            >
-                              <div className="flex items-center gap-1">
-                                <span>{g.so}</span>
-                                {g.isDoubleInv && <span className="text-red-600 font-bold" title="SO ini memiliki lebih dari 1 faktur">⚠</span>}
-                              </div>
-                              {g.totalHarga < 0 && (
-                                <div className="mt-0.5">
-                                  <span className="inline-block text-[9px] font-semibold text-rose-600 bg-rose-50 border border-rose-200 px-1 py-0.2 rounded leading-none">
-                                    Memo Retur
-                                  </span>
-                                </div>
-                              )}
-                            </td>
-
-                            {/* Col 3: No Invoice */}
-                            <td
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSelectedRowIndex(rowIdx);
-                                setSelectedColIdx(3);
-                              }}
-                              className={`px-2 py-2 font-mono text-xs text-gray-900 whitespace-nowrap font-medium ${getCellCls(3)}`}
-                            >
-                              {hasInvoice ? (
-                                g.invoiceNumber
-                              ) : (
-                                <span className="text-gray-400 italic text-xs">Menunggu Faktur</span>
-                              )}
-                            </td>
-
-                            {/* Col 4: Kat Produk (Dominant Category) */}
-                            <td
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSelectedRowIndex(rowIdx);
-                                setSelectedColIdx(4);
-                              }}
-                              className={`px-2 py-2 whitespace-nowrap ${getCellCls(4)}`}
-                            >
-                              <div className="flex flex-wrap gap-1 items-center">
-                                <span
-                                  className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-bold tracking-wider border shadow-2xs ${
-                                    g.kategoriProduk === "ALKES"
-                                      ? "bg-teal-100 text-teal-800 border-teal-300"
-                                      : g.kategoriProduk === "CCP"
-                                      ? "bg-sky-100 text-sky-900 border-sky-300"
-                                      : g.kategoriProduk === "PREKURSOR"
-                                      ? "bg-amber-100 text-amber-900 border-amber-300"
-                                      : g.kategoriProduk === "OOT"
-                                      ? "bg-purple-100 text-purple-900 border-purple-300"
-                                      : "bg-indigo-50 text-indigo-700 border-indigo-200"
-                                  }`}
-                                >
-                                  {g.kategoriProduk === "CCP" ? "❄️ CCP" : g.kategoriProduk}
-                                </span>
-                                {g.hasPrekursor && g.kategoriProduk !== "PREKURSOR" && (
-                                  <span className="inline-block px-1 py-0.2 rounded text-[9px] font-bold bg-amber-50 text-amber-800 border border-amber-300" title="Mengandung item Prekursor">
-                                    💊 Prekursor
-                                  </span>
-                                )}
-                                {g.hasOOT && g.kategoriProduk !== "OOT" && (
-                                  <span className="inline-block px-1 py-0.2 rounded text-[9px] font-bold bg-purple-50 text-purple-800 border border-purple-300" title="Mengandung item OOT">
-                                    🧪 OOT
-                                  </span>
-                                )}
-                                {g.hasCCP && g.kategoriProduk !== "CCP" && (
-                                  <span className="inline-block px-1 py-0.2 rounded text-[9px] font-bold bg-sky-50 text-sky-800 border border-sky-300" title="Mengandung item CCP (Cold Chain)">
-                                    ❄️ CCP
-                                  </span>
-                                )}
-                              </div>
-                            </td>
-
-                            {/* Col 5: Jenis Transaksi */}
-                            <td
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSelectedRowIndex(rowIdx);
-                                setSelectedColIdx(5);
-                              }}
-                              className={`px-2 py-2 whitespace-nowrap ${getCellCls(5)}`}
-                            >
-                              <span className={`inline-block px-2 py-0.5 rounded text-xs font-bold ${
-                                g.jenisTransaksi === "ORA"
-                                  ? "bg-blue-100 text-blue-800"
-                                  : "bg-emerald-100 text-emerald-800"
-                              }`}>
-                                {g.jenisTransaksi}
-                              </span>
-                            </td>
-
-                            {/* Col 6: Pelanggan */}
-                            <td
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSelectedRowIndex(rowIdx);
-                                setSelectedColIdx(6);
-                              }}
-                              className={`px-2 py-2 text-gray-700 whitespace-nowrap max-w-xs truncate ${getCellCls(6)}`}
-                            >
-                              {g.customerName}
-                            </td>
-
-                            {/* Col 7: Order Date */}
-                            <td
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSelectedRowIndex(rowIdx);
-                                setSelectedColIdx(7);
-                              }}
-                              className={`px-2 py-2 text-gray-600 whitespace-nowrap text-xs ${getCellCls(7)}`}
-                            >
-                              {g.orderDate}
-                            </td>
-
-                            {/* Col 8: Kategori */}
-                            <td
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSelectedRowIndex(rowIdx);
-                                setSelectedColIdx(8);
-                              }}
-                              className={`px-2 py-2 ${getCellCls(8)}`}
-                            >
-                              <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${
-                                g.kategori === "1P" ? "bg-blue-100 text-blue-700"
-                                : g.kategori === "2P" ? "bg-green-100 text-green-700"
-                                : "bg-purple-100 text-purple-700"
-                              }`}>
-                                {g.kategori}
-                              </span>
-                            </td>
-
-                            {/* Col 9: Done Print Time */}
-                            <td
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSelectedRowIndex(rowIdx);
-                                setSelectedColIdx(9);
-                              }}
-                              className={`px-2 py-2 whitespace-nowrap ${getCellCls(9)}`}
-                            >
-                              {g.allPrinted && g.printedAt ? (
-                                <span className="inline-flex items-center gap-1 text-[11px] font-mono font-medium text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200" title={`Selesai diprint pada: ${formatPrintTime(g.printedAt)}`}>
-                                  <span className="text-emerald-600 font-bold">⏱</span>
-                                  {formatPrintTime(g.printedAt)}
-                                </span>
-                              ) : g.anyPrinted ? (
-                                <span className="text-xs text-yellow-600 italic">Sebagian</span>
-                              ) : (
-                                <span className="text-xs text-gray-300">-</span>
-                              )}
-                            </td>
-
-                            {/* Col 10: Total Harga */}
-                            <td
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSelectedRowIndex(rowIdx);
-                                setSelectedColIdx(10);
-                              }}
-                              className={`px-2 py-2 text-right text-gray-900 whitespace-nowrap font-medium text-xs ${getCellCls(10)}`}
-                            >
-                              {formatRupiah(g.totalHarga)}
-                            </td>
-                          </tr>
-                          {expanded && (
-                            <tr className="bg-gray-50">
-                              <td colSpan={11} className="px-4 py-3">
-                                <div className="flex flex-wrap items-center justify-between pb-2 mb-2 border-b border-gray-200 gap-2">
-                                  <div className="text-xs text-gray-600">
-                                    <span className="font-semibold text-gray-900">Invoice: <span className="font-mono text-blue-700 font-bold">{g.invoiceNumber}</span></span> · SO: <span className="font-semibold text-gray-900">{g.so}</span> {g.totalHarga < 0 && <span className="text-[10px] font-semibold text-rose-700 bg-rose-100 border border-rose-200 px-1.5 py-0.2 rounded">Memo Retur</span>} · Pelanggan: <span className="font-semibold text-gray-900">{g.customerName}</span>
-                                    <span className="ml-2 inline-flex items-center gap-1">
-                                      <span className="font-medium text-gray-500">Kat Dominan:</span>
-                                      <span
-                                        className={`inline-block px-1.5 py-0.2 rounded text-[10px] font-bold border ${
-                                          g.kategoriProduk === "ALKES"
-                                            ? "bg-teal-100 text-teal-800 border-teal-300"
-                                            : g.kategoriProduk === "PREKURSOR"
-                                            ? "bg-amber-100 text-amber-900 border-amber-300"
-                                            : g.kategoriProduk === "OOT"
-                                            ? "bg-purple-100 text-purple-900 border-purple-300"
-                                            : "bg-indigo-50 text-indigo-700 border-indigo-200"
-                                        }`}
-                                      >
-                                        {g.kategoriProduk}
-                                      </span>
-                                    </span>
-                                    {g.allPrinted && g.printedAt && (
-                                      <span className="ml-2 inline-flex items-center gap-1 font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                                        <span>⏱ Selesai Print:</span>
-                                        <span className="font-mono font-bold text-emerald-900">{formatPrintTime(g.printedAt)}</span>
-                                      </span>
-                                    )}
-                                  </div>
-                                  <div>
-                                    {g.allPrinted ? (
-                                      <button
-                                        onClick={(e) => { e.stopPropagation(); togglePrint(g); }}
-                                        className="px-3 py-1 bg-orange-100 text-orange-800 border border-orange-300 rounded-lg text-xs font-bold hover:bg-orange-200 transition-colors flex items-center gap-1.5 shadow-sm"
-                                      >
-                                        <span>↩</span> Unprint Faktur Ini
-                                      </button>
-                                    ) : (
-                                      <button
-                                        onClick={(e) => { e.stopPropagation(); togglePrint(g); }}
-                                        className="px-3 py-1 bg-green-600 text-white rounded-lg text-xs font-bold hover:bg-green-700 transition-colors flex items-center gap-1.5 shadow-sm"
-                                      >
-                                        <span>✓</span> Tandai Sudah Terprint
-                                      </button>
-                                    )}
-                                  </div>
-                                </div>
-                                <table className="w-full text-xs">
-                                  <thead>
-                                    <tr className="border-b border-gray-200">
-                                      <th className="px-2 py-1 text-left font-medium text-gray-500">No Invoice</th>
-                                      <th className="px-2 py-1 text-left font-medium text-gray-500">Item Code</th>
-                                      <th className="px-2 py-1 text-left font-medium text-gray-500">Kat Produk</th>
-                                      <th className="px-2 py-1 text-left font-medium text-gray-500">Item Description</th>
-                                      <th className="px-2 py-1 text-right font-medium text-gray-500">Qty</th>
-                                      <th className="px-2 py-1 text-left font-medium text-gray-500">UOM</th>
-                                      <th className="px-2 py-1 text-left font-medium text-gray-500">LOT Number</th>
-                                      <th className="px-2 py-1 text-right font-medium text-gray-500">Total Harga</th>
-                                    </tr>
-                                  </thead>
-                                  <tbody className="divide-y divide-gray-100">
-                                    {g.items.map((item, i) => (
-                                      <tr key={i} className="hover:bg-gray-100">
-                                        <td className="px-2 py-1 font-mono text-gray-900 whitespace-nowrap">{item.invoiceNumber}</td>
-                                        <td className="px-2 py-1 font-mono text-gray-600 whitespace-nowrap">{item.itemCode}</td>
-                                        <td className="px-2 py-1 whitespace-nowrap">
-                                          {(() => {
-                                            const itemCat = (item.kategoriProduk || getProductCategory(item.itemCode, item.itemDescription) || "FARMA").toUpperCase();
-                                            return (
-                                              <span
-                                                className={`inline-block px-1.5 py-0.2 rounded text-[10px] font-bold border ${
-                                                  itemCat === "ALKES"
-                                                    ? "bg-teal-100 text-teal-800 border-teal-300"
-                                                    : itemCat === "CCP"
-                                                    ? "bg-sky-100 text-sky-900 border-sky-300"
-                                                    : itemCat === "PREKURSOR"
-                                                    ? "bg-amber-100 text-amber-900 border-amber-300"
-                                                    : itemCat === "OOT"
-                                                    ? "bg-purple-100 text-purple-900 border-purple-300"
-                                                    : "bg-indigo-50 text-indigo-700 border-indigo-200"
-                                                }`}
-                                              >
-                                                {itemCat === "CCP" ? "❄️ CCP" : itemCat}
-                                              </span>
-                                            );
-                                          })()}
-                                        </td>
-                                        <td className="px-2 py-1 text-gray-700">{item.itemDescription}</td>
-                                        <td className="px-2 py-1 text-right text-gray-900">{item.qty}</td>
-                                        <td className="px-2 py-1 text-gray-600">{item.uom}</td>
-                                        <td className="px-2 py-1 font-mono text-gray-600 whitespace-nowrap">{item.lotNumber}</td>
-                                        <td className="px-2 py-1 text-right text-gray-900 whitespace-nowrap">{formatRupiah(item.totalHarga)}</td>
-                                      </tr>
-                                    ))}
-                                  </tbody>
-                                </table>
-                              </td>
-                            </tr>
-                          )}
-                        </Fragment>
-                      );
-                    })}
+                    {pageData.map((g, rowIdx) => (
+                      <FakturTableRow
+                        key={g.key}
+                        g={g}
+                        rowIdx={rowIdx}
+                        isRowSelected={selectedRowIndex === rowIdx}
+                        selectedColIdx={selectedRowIndex === rowIdx ? selectedColIdx : null}
+                        expanded={expandedInvoices.has(g.key)}
+                        onSelectRow={onSelectRow}
+                        onSelectCell={onSelectCell}
+                        onToggleExpand={toggleExpand}
+                        onTogglePrint={togglePrint}
+                      />
+                    ))}
                   </tbody>
                 </table>
               </div>

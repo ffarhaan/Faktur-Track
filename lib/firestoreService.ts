@@ -39,6 +39,8 @@ const CHUNKS_COLLECTION = "faktur_chunks";
 
 const CHUNK_SIZE = 120; // ~120 items per doc (~250KB, comfortably under 1MB Firestore doc limit)
 
+export type SubscribeChangeReason = "chunks" | "print" | "meta";
+
 /**
  * Realtime listener for Chunked Fakturs and Print State
  * Loads in < 100ms and uses only ~5-8 document reads total!
@@ -47,7 +49,8 @@ export function subscribeToFakturs(
   onData: (
     fakturs: FirestoreFakturDoc[],
     progression: InvoiceProgression | null,
-    printState?: PrintState | null
+    printState?: PrintState | null,
+    reason?: SubscribeChangeReason
   ) => void,
   onError?: (err: Error) => void
 ): Unsubscribe {
@@ -59,8 +62,9 @@ export function subscribeToFakturs(
     updatedAt: "",
   };
   let emitTimer: ReturnType<typeof setTimeout> | null = null;
+  let hasEmittedInitialChunks = false;
 
-  const emitData = () => {
+  const emitData = (reason: SubscribeChangeReason = "chunks") => {
     // Merge all chunks in order
     const sortedChunkKeys = Array.from(currentChunksMap.keys()).sort((a, b) => {
       const na = parseInt(a.replace(/\D/g, ""), 10) || 0;
@@ -94,20 +98,21 @@ export function subscribeToFakturs(
       d.printed_at = pMap[key] || null;
     }
 
-    onData(allDocs, currentProgression, currentPrintState);
+    hasEmittedInitialChunks = true;
+    onData(allDocs, currentProgression, currentPrintState, reason);
   };
 
   let expectedChunks = 0;
 
-  const debouncedEmit = () => {
+  const debouncedEmit = (reason: SubscribeChangeReason = "chunks") => {
     if (emitTimer) clearTimeout(emitTimer);
     emitTimer = setTimeout(() => {
       // Guard against emitting incomplete chunks if totalChunks is known
       if (expectedChunks > 0 && currentChunksMap.size < expectedChunks) {
         return;
       }
-      emitData();
-    }, 200);
+      emitData(reason);
+    }, 150);
   };
 
   // 1. Subscribe to Metadata
@@ -123,19 +128,28 @@ export function subscribeToFakturs(
           expectedChunks = data.totalChunks;
         }
       }
-      debouncedEmit();
+      if (hasEmittedInitialChunks) {
+        onData([], currentProgression, currentPrintState, "meta");
+      } else {
+        debouncedEmit("meta");
+      }
     },
     (err) => console.warn("Metadata sync warning:", err)
   );
 
-  // 2. Subscribe to Print State (Ultra fast toggle & mark all)
+  // 2. Subscribe to Print State (Ultra fast toggle & mark all - decoupled from chunk merging!)
   const unsubPrint = onSnapshot(
     doc(db, APP_DATA_COLLECTION, PRINT_STATE_DOC),
     (snap) => {
       if (snap.exists()) {
         currentPrintState = snap.data() as PrintState;
       }
-      debouncedEmit();
+      // If chunks are already loaded in memory, emit print update IMMEDIATELY (<1ms) without re-merging chunks!
+      if (hasEmittedInitialChunks) {
+        onData([], currentProgression, currentPrintState, "print");
+      } else {
+        debouncedEmit("print");
+      }
     },
     (err) => console.warn("PrintState sync warning:", err)
   );
@@ -152,7 +166,7 @@ export function subscribeToFakturs(
         }
       });
       currentChunksMap = newMap;
-      debouncedEmit();
+      debouncedEmit("chunks");
     },
     (err) => {
       console.error("Chunks sync error:", err);
