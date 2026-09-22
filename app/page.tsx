@@ -2776,27 +2776,99 @@ export default function Home() {
             </div>
 
             {/* Filters & Sorting Toolbar */}
-            <div className="bg-white rounded-lg border border-gray-200 p-2.5 mb-4 space-y-2 shadow-xs">
-              {/* Row 1: All Filters & Sorting in 1 strict line */}
-              <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5 select-none">
-                <button
-                  onClick={handleManualRefresh}
-                  className="px-2.5 py-1 text-xs font-semibold rounded-md border border-blue-400 bg-blue-50 text-blue-800 hover:bg-blue-100 flex items-center gap-1 whitespace-nowrap shadow-2xs transition-colors shrink-0"
-                  title="Refresh dan perbarui data dari database cloud"
-                >
-                  <span>🔄</span>
-                  <span>Refresh</span>
-                  {sessionPrintedKeys.size > 0 && (
-                    <span className="px-1.5 py-0.2 bg-blue-600 text-white text-[10px] font-bold rounded-full">
-                      {sessionPrintedKeys.size}
+            {/* Filters & Sorting Toolbar (Opsi 1: Clean Tabs + Minimalist Dropdowns) */}
+            <div className="bg-white rounded-xl border border-gray-200 p-3 mb-4 space-y-2.5 shadow-xs">
+              {/* Row 1: Primary Status Tabs & Main Actions */}
+              <div className="flex flex-wrap items-center justify-between gap-2.5">
+                {/* Segmented Status Tabs */}
+                <div className="inline-flex rounded-xl bg-gray-100 p-1 text-xs font-semibold shadow-inner">
+                  <button
+                    onClick={() => { setFilter("belum"); setPage(0); }}
+                    className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 ${
+                      filter === "belum" && !isGlobalSearchActive
+                        ? "bg-white text-orange-700 font-bold shadow-xs"
+                        : "text-gray-600 hover:text-gray-900"
+                    }`}
+                  >
+                    <span>Belum Terprint</span>
+                    <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
+                      filter === "belum" && !isGlobalSearchActive
+                        ? "bg-orange-100 text-orange-800"
+                        : "bg-gray-200 text-gray-700"
+                    }`}>
+                      {summary.belumTerprint}
                     </span>
+                  </button>
+
+                  <button
+                    onClick={() => { setFilter("sudah"); setPage(0); }}
+                    className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 ${
+                      filter === "sudah" && !isGlobalSearchActive
+                        ? "bg-white text-emerald-700 font-bold shadow-xs"
+                        : "text-gray-600 hover:text-gray-900"
+                    }`}
+                  >
+                    <span>Sudah Terprint</span>
+                    <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
+                      filter === "sudah" && !isGlobalSearchActive
+                        ? "bg-emerald-100 text-emerald-800"
+                        : "bg-gray-200 text-gray-700"
+                    }`}>
+                      {summary.sudahTerprint}
+                    </span>
+                  </button>
+
+                  <button
+                    onClick={() => { setFilter("all"); setPage(0); }}
+                    className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 ${
+                      filter === "all" && !isGlobalSearchActive
+                        ? "bg-white text-blue-700 font-bold shadow-xs"
+                        : "text-gray-600 hover:text-gray-900"
+                    }`}
+                  >
+                    <span>Semua Data</span>
+                    <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
+                      filter === "all" && !isGlobalSearchActive
+                        ? "bg-blue-100 text-blue-800"
+                        : "bg-gray-200 text-gray-700"
+                    }`}>
+                      {summary.totalInvoices}
+                    </span>
+                  </button>
+
+                  <button
+                    onClick={() => { setFilter("double"); setPage(0); }}
+                    className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 ${
+                      filter === "double" && !isGlobalSearchActive
+                        ? "bg-white text-rose-700 font-bold shadow-xs"
+                        : "text-rose-600 hover:text-rose-800"
+                    }`}
+                  >
+                    <span>Double INV</span>
+                    {summary.doubleInv > 0 && (
+                      <span className="px-1.5 py-0.2 bg-rose-100 text-rose-800 rounded-full text-[10px] font-bold">
+                        {summary.doubleInv}
+                      </span>
+                    )}
+                  </button>
+                </div>
+
+                {/* Right side actions of Row 1 */}
+                <div className="flex items-center gap-2">
+                  {/* Tandai Semua Selesai Button */}
+                  {unprintedCountInFiltered > 0 && (
+                    <button
+                      onClick={handleMarkAllPrinted}
+                      className="px-3 py-1.5 text-xs font-bold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1.5 shadow-xs transition-all active:scale-95 animate-pulse hover:animate-none"
+                      title={`Tandai ${unprintedCountInFiltered} faktur yang belum selesai di tampilan ini sebagai SUDAH TERPRINT`}
+                    >
+                      <span>✓✓</span>
+                      <span>Tandai Semua Selesai ({unprintedCountInFiltered})</span>
+                    </button>
                   )}
-                </button>
-                <div className="h-5 w-px bg-gray-200 mx-0.5 shrink-0" />
-                
-                {/* Reset Filter Button (Muncul jika ada filter aktif / search aktif) */}
-                {(filter !== "belum" || katFilter !== "all" || jenisFilter !== "all" || klasFilter !== "all" || dateFilter !== "all" || Boolean(search.trim())) && (
-                  <>
+
+                  {/* Reset Filter Button */}
+                  {(filter !== "belum" || katFilter !== "all" || jenisFilter !== "all" || klasFilter !== "all" || dateFilter !== "all" || Boolean(search.trim())) && (
                     <button
                       onClick={() => {
                         setFilter("belum");
@@ -2807,107 +2879,130 @@ export default function Home() {
                         setSearch("");
                         setPage(0);
                       }}
-                      className="px-2 py-1 text-xs font-semibold rounded-md border border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100 flex items-center gap-1 whitespace-nowrap shadow-2xs transition-colors shrink-0"
+                      className="px-2.5 py-1.5 text-xs font-semibold rounded-lg border border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100 flex items-center gap-1 shadow-2xs transition-colors"
                       title="Reset semua filter kembali ke default (Belum Terprint)"
                     >
                       <span>✕</span>
                       <span>Reset Filter</span>
                     </button>
-                    <div className="h-5 w-px bg-gray-200 mx-0.5 shrink-0" />
-                  </>
-                )}
-
-                {/* Tab Status */}
-                <div className="flex items-center gap-1 shrink-0">
-                  <FBtn active={filter === "belum"} onClick={() => setFilter("belum")} color="orange">Belum Terprint</FBtn>
-                  <FBtn active={filter === "sudah"} onClick={() => setFilter("sudah")} color="green">Sudah Terprint</FBtn>
-                  <FBtn active={filter === "all"} onClick={() => setFilter("all")}>Semua</FBtn>
-                  <FBtn active={filter === "double"} onClick={() => setFilter("double")} color="red">Double INV</FBtn>
-                  {isGlobalSearchActive && (
-                    <span className="ml-1 text-[10px] font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded border border-emerald-300 shrink-0">
-                      Tab dilepas oleh Search
-                    </span>
                   )}
+
+                  {/* Refresh Button */}
+                  <button
+                    onClick={handleManualRefresh}
+                    className="px-2.5 py-1.5 text-xs font-semibold rounded-lg border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 flex items-center gap-1 shadow-2xs transition-colors"
+                    title="Refresh dan perbarui data dari database cloud"
+                  >
+                    <span>🔄</span>
+                    <span>Refresh</span>
+                    {sessionPrintedKeys.size > 0 && (
+                      <span className="px-1.5 py-0.2 bg-blue-600 text-white text-[10px] font-bold rounded-full">
+                        {sessionPrintedKeys.size}
+                      </span>
+                    )}
+                  </button>
                 </div>
-                <div className="h-5 w-px bg-gray-200 mx-0.5 shrink-0" />
+              </div>
 
-                {/* Tandai Semua Selesai Button */}
-                {unprintedCountInFiltered > 0 && (
-                  <>
-                    <button
-                      onClick={handleMarkAllPrinted}
-                      className="px-2.5 py-1 text-xs font-bold rounded-md bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1 shadow-2xs transition-all shrink-0 active:scale-95 animate-pulse hover:animate-none"
-                      title={`Tandai ${unprintedCountInFiltered} faktur yang belum selesai di tampilan ini sebagai SUDAH TERPRINT`}
-                    >
-                      <span>✓✓</span>
-                      <span>Tandai Semua Selesai ({unprintedCountInFiltered})</span>
-                    </button>
-                    <div className="h-5 w-px bg-gray-200 mx-0.5 shrink-0" />
-                  </>
-                )}
+              {/* Row 2: Secondary Dropdown Pills & Sorting */}
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-gray-100">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Filter:</span>
 
-                {/* Kategori */}
-                <div className="flex gap-1 shrink-0">
-                  <FBtn active={katFilter === "all"} onClick={() => setKatFilter("all")}>All Kat</FBtn>
-                  <FBtn active={katFilter === "1P"} onClick={() => setKatFilter("1P")} color="blue">1P</FBtn>
-                  <FBtn active={katFilter === "2P"} onClick={() => setKatFilter("2P")} color="green">2P</FBtn>
-                  <FBtn active={katFilter === "3P"} onClick={() => setKatFilter("3P")} color="purple">3P</FBtn>
-                </div>
-                <div className="h-5 w-px bg-gray-200 mx-0.5 shrink-0" />
-
-                {/* Jenis Transaksi */}
-                <div className="flex gap-1 shrink-0">
-                  <FBtn active={jenisFilter === "all"} onClick={() => setJenisFilter("all")}>All Jenis</FBtn>
-                  <FBtn active={jenisFilter === "ORA"} onClick={() => setJenisFilter("ORA")} color="blue">ORA</FBtn>
-                  <FBtn active={jenisFilter === "DOO"} onClick={() => setJenisFilter("DOO")} color="emerald">DOO</FBtn>
-                </div>
-                <div className="h-5 w-px bg-gray-200 mx-0.5 shrink-0" />
-
-                {/* Kategori Produk & Regulasi */}
-                <div className="flex gap-1 shrink-0">
-                  <FBtn active={klasFilter === "all"} onClick={() => setKlasFilter("all")}>All Produk</FBtn>
-                  <FBtn active={klasFilter === "prekursor"} onClick={() => setKlasFilter((prev) => (prev === "prekursor" ? "all" : "prekursor"))} color="amber">💊 Prekursor</FBtn>
-                  <FBtn active={klasFilter === "oot"} onClick={() => setKlasFilter((prev) => (prev === "oot" ? "all" : "oot"))} color="purple">🧪 OOT</FBtn>
-                  <FBtn active={klasFilter === "ccp"} onClick={() => setKlasFilter((prev) => (prev === "ccp" ? "all" : "ccp"))} color="sky">❄️ CCP</FBtn>
-                  <FBtn active={klasFilter === "alkes"} onClick={() => setKlasFilter((prev) => (prev === "alkes" ? "all" : "alkes"))} color="teal">🩺 Alkes</FBtn>
-                  <FBtn active={klasFilter === "farma"} onClick={() => setKlasFilter((prev) => (prev === "farma" ? "all" : "farma"))} color="indigo">💊 Farma</FBtn>
-                </div>
-                <div className="h-5 w-px bg-gray-200 mx-0.5 shrink-0" />
-
-                {/* Filter Tanggal */}
-                {availableDates.length > 0 && (
-                  <div className="flex items-center shrink-0">
+                  {/* 1. Kategori Dropdown */}
+                  <div className="relative">
                     <select
-                      value={dateFilter}
-                      onChange={(e) => setDateFilter(e.target.value)}
-                      className="px-2 py-1 text-xs font-semibold rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer shadow-2xs"
-                      title="Filter berdasarkan tanggal order tertentu"
+                      value={katFilter}
+                      onChange={(e) => { setKatFilter(e.target.value as KatFilter); setPage(0); }}
+                      className={`text-xs rounded-lg px-2.5 py-1.5 font-semibold border transition-all cursor-pointer shadow-2xs focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                        katFilter !== "all"
+                          ? "bg-blue-50 border-blue-400 text-blue-800"
+                          : "bg-white border-gray-300 text-gray-700 hover:bg-gray-50"
+                      }`}
                     >
-                      <option value="all">📅 Semua Tanggal ({availableDates.length})</option>
-                      {availableDates.map((d) => (
-                        <option key={d} value={d}>
-                          📅 {d}
-                        </option>
-                      ))}
+                      <option value="all">Kategori: Semua (1P, 2P, 3P)</option>
+                      <option value="1P">Kategori: 1P Saja</option>
+                      <option value="2P">Kategori: 2P Saja</option>
+                      <option value="3P">Kategori: 3P Saja</option>
                     </select>
                   </div>
-                )}
 
-                {/* Pengurutan (Sorting) - Sebelah Semua Tanggal */}
-                <div className="flex items-center gap-1 bg-gray-100 p-0.5 rounded-md border border-gray-300 shadow-2xs shrink-0">
+                  {/* 2. Jenis Transaksi Dropdown */}
+                  <div className="relative">
+                    <select
+                      value={jenisFilter}
+                      onChange={(e) => { setJenisFilter(e.target.value as JenisFilter); setPage(0); }}
+                      className={`text-xs rounded-lg px-2.5 py-1.5 font-semibold border transition-all cursor-pointer shadow-2xs focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                        jenisFilter !== "all"
+                          ? "bg-emerald-50 border-emerald-400 text-emerald-800"
+                          : "bg-white border-gray-300 text-gray-700 hover:bg-gray-50"
+                      }`}
+                    >
+                      <option value="all">Transaksi: Semua (ORA & DOO)</option>
+                      <option value="ORA">Transaksi: ORA Saja</option>
+                      <option value="DOO">Transaksi: DOO Saja</option>
+                    </select>
+                  </div>
+
+                  {/* 3. Produk & Regulasi Dropdown */}
+                  <div className="relative">
+                    <select
+                      value={klasFilter}
+                      onChange={(e) => { setKlasFilter(e.target.value as KlasFilter); setPage(0); }}
+                      className={`text-xs rounded-lg px-2.5 py-1.5 font-semibold border transition-all cursor-pointer shadow-2xs focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                        klasFilter !== "all"
+                          ? "bg-purple-50 border-purple-400 text-purple-900"
+                          : "bg-white border-gray-300 text-gray-700 hover:bg-gray-50"
+                      }`}
+                    >
+                      <option value="all">Produk: Semua Jenis</option>
+                      <option value="prekursor">💊 Produk: Prekursor Saja</option>
+                      <option value="oot">🧪 Produk: OOT Saja</option>
+                      <option value="ccp">❄️ Produk: CCP (Cold Chain) Saja</option>
+                      <option value="alkes">🩺 Produk: Alkes Saja</option>
+                      <option value="farma">💊 Produk: Farma Saja</option>
+                    </select>
+                  </div>
+
+                  {/* 4. Tanggal Dropdown */}
+                  {availableDates.length > 0 && (
+                    <div className="relative">
+                      <select
+                        value={dateFilter}
+                        onChange={(e) => { setDateFilter(e.target.value); setPage(0); }}
+                        className={`text-xs rounded-lg px-2.5 py-1.5 font-semibold border transition-all cursor-pointer shadow-2xs focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                          dateFilter !== "all"
+                            ? "bg-blue-50 border-blue-400 text-blue-900"
+                            : "bg-white border-gray-300 text-gray-700 hover:bg-gray-50"
+                        }`}
+                      >
+                        <option value="all">📅 Tanggal: Semua ({availableDates.length})</option>
+                        {availableDates.map((d) => (
+                          <option key={d} value={d}>
+                            📅 {d}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                </div>
+
+                {/* Sorting Controls */}
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Urut:</span>
                   <select
                     value={sortBy}
                     onChange={(e) => setSortBy(e.target.value as "invoice" | "date" | "totalHarga")}
-                    className="bg-transparent text-xs font-semibold text-gray-800 px-1 py-0.5 focus:outline-none cursor-pointer"
-                    title="Pilih kolom yang ingin diurutkan"
+                    className="text-xs bg-white border border-gray-300 text-gray-700 rounded-lg px-2 py-1.5 font-medium shadow-2xs focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
                   >
-                    <option value="invoice">🔢 No Faktur</option>
-                    <option value="date">📅 Tanggal Order</option>
-                    <option value="totalHarga">💰 Total Harga</option>
+                    <option value="invoice">No Faktur</option>
+                    <option value="date">Tanggal</option>
+                    <option value="totalHarga">Total Harga</option>
                   </select>
+
                   <button
                     onClick={() => setSortOrder((prev) => (prev === "desc" ? "asc" : "desc"))}
-                    className="px-1.5 py-0.5 text-xs font-bold rounded bg-white hover:bg-gray-50 text-blue-700 border border-gray-300 flex items-center gap-0.5 shadow-2xs transition-colors"
+                    className="px-2 py-1.5 text-xs font-bold rounded-lg bg-white hover:bg-gray-50 text-blue-700 border border-gray-300 flex items-center gap-1 shadow-2xs transition-colors"
                     title="Klik untuk mengubah arah urutan (Ascending / Descending)"
                   >
                     {sortOrder === "desc" ? "⬇ Terbesar" : "⬆ Terkecil"}
