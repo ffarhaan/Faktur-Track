@@ -1908,46 +1908,14 @@ export default function Home() {
     return Array.from(set).sort((a, b) => parseDateMs(b) - parseDateMs(a));
   }, [records]);
 
+  const isGlobalSearchActive = Boolean(search.trim());
+
   const filtered = useMemo(() => {
-    let result = grouped;
-
-    // 1. Status Tab Filter (Belum / Sudah / Double)
-    if (filter === "belum") {
-      result = result.filter(
-        (g) => !g.allPrinted || sessionPrintedKeys.has(g.invoiceKey)
-      );
-    } else if (filter === "sudah") {
-      result = result.filter((g) => g.allPrinted);
-    } else if (filter === "double") {
-      result = result.filter((g) => g.isDoubleInv);
-    }
-
-    // 2. Date Filter
-    if (dateFilter !== "all") {
-      result = result.filter((g) => g.orderDate === dateFilter);
-    }
-
-    // 3. Category Filter (1P / 2P / 3P)
-    if (katFilter !== "all") {
-      result = result.filter((g) => g.kategori === katFilter);
-    }
-
-    // 4. Jenis Transaksi Filter (ORA / DOO)
-    if (jenisFilter !== "all") {
-      result = result.filter((g) => g.jenisTransaksi === jenisFilter);
-    }
-
-    // 5. Product Classification Filter (Prekursor / OOT / CCP / Alkes / Farma)
-    if (klasFilter === "prekursor") result = result.filter((g) => g.hasPrekursor);
-    else if (klasFilter === "oot") result = result.filter((g) => g.hasOOT);
-    else if (klasFilter === "ccp") result = result.filter((g) => g.hasCCP);
-    else if (klasFilter === "alkes") result = result.filter((g) => g.hasAlkes);
-    else if (klasFilter === "farma") result = result.filter((g) => g.hasFarma);
-
-    // 6. Search Query
+    // 1. JIKA KOTAK PENCARIAN DIISI:
+    // Langsung lakukan GLOBAL SEARCH ke seluruh database (bypass tab & filter lain agar no SO/Inv selalu ketemu)
     if (search.trim()) {
       const s = search.toLowerCase().trim();
-      result = result.filter(
+      return grouped.filter(
         (g) =>
           g.so.toLowerCase().includes(s) ||
           g.invoiceNumber.toLowerCase().includes(s) ||
@@ -1962,6 +1930,42 @@ export default function Home() {
           )
       );
     }
+
+    // 2. JIKA KOTAK PENCARIAN KOSONG: Terapkan filter tab & dropdown normal
+    let result = grouped;
+
+    // Filter Status (Belum / Sudah / Double)
+    if (filter === "belum") {
+      result = result.filter(
+        (g) => !g.allPrinted || sessionPrintedKeys.has(g.invoiceKey)
+      );
+    } else if (filter === "sudah") {
+      result = result.filter((g) => g.allPrinted);
+    } else if (filter === "double") {
+      result = result.filter((g) => g.isDoubleInv);
+    }
+
+    // Filter Tanggal
+    if (dateFilter !== "all") {
+      result = result.filter((g) => g.orderDate === dateFilter);
+    }
+
+    // Filter Kategori (1P / 2P / 3P)
+    if (katFilter !== "all") {
+      result = result.filter((g) => g.kategori === katFilter);
+    }
+
+    // Filter Jenis Transaksi (ORA / DOO)
+    if (jenisFilter !== "all") {
+      result = result.filter((g) => g.jenisTransaksi === jenisFilter);
+    }
+
+    // Filter Klasifikasi Obat
+    if (klasFilter === "prekursor") result = result.filter((g) => g.hasPrekursor);
+    else if (klasFilter === "oot") result = result.filter((g) => g.hasOOT);
+    else if (klasFilter === "ccp") result = result.filter((g) => g.hasCCP);
+    else if (klasFilter === "alkes") result = result.filter((g) => g.hasAlkes);
+    else if (klasFilter === "farma") result = result.filter((g) => g.hasFarma);
 
     return result;
   }, [grouped, filter, katFilter, jenisFilter, klasFilter, dateFilter, search, sessionPrintedKeys]);
@@ -2790,12 +2794,40 @@ export default function Home() {
                 </button>
                 <div className="h-5 w-px bg-gray-200 mx-0.5 shrink-0" />
                 
+                {/* Reset Filter Button (Muncul jika ada filter aktif / search aktif) */}
+                {(filter !== "belum" || katFilter !== "all" || jenisFilter !== "all" || klasFilter !== "all" || dateFilter !== "all" || Boolean(search.trim())) && (
+                  <>
+                    <button
+                      onClick={() => {
+                        setFilter("belum");
+                        setKatFilter("all");
+                        setJenisFilter("all");
+                        setKlasFilter("all");
+                        setDateFilter("all");
+                        setSearch("");
+                        setPage(0);
+                      }}
+                      className="px-2 py-1 text-xs font-semibold rounded-md border border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100 flex items-center gap-1 whitespace-nowrap shadow-2xs transition-colors shrink-0"
+                      title="Reset semua filter kembali ke default (Belum Terprint)"
+                    >
+                      <span>✕</span>
+                      <span>Reset Filter</span>
+                    </button>
+                    <div className="h-5 w-px bg-gray-200 mx-0.5 shrink-0" />
+                  </>
+                )}
+
                 {/* Tab Status */}
-                <div className="flex gap-1 shrink-0">
+                <div className="flex items-center gap-1 shrink-0">
                   <FBtn active={filter === "belum"} onClick={() => setFilter("belum")} color="orange">Belum Terprint</FBtn>
                   <FBtn active={filter === "sudah"} onClick={() => setFilter("sudah")} color="green">Sudah Terprint</FBtn>
                   <FBtn active={filter === "all"} onClick={() => setFilter("all")}>Semua</FBtn>
                   <FBtn active={filter === "double"} onClick={() => setFilter("double")} color="red">Double INV</FBtn>
+                  {isGlobalSearchActive && (
+                    <span className="ml-1 text-[10px] font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded border border-emerald-300 shrink-0">
+                      Tab dilepas oleh Search
+                    </span>
+                  )}
                 </div>
                 <div className="h-5 w-px bg-gray-200 mx-0.5 shrink-0" />
 
@@ -2884,49 +2916,82 @@ export default function Home() {
               </div>
 
               {/* Row 2: Long Search Bar & Upload Excel Button */}
-              <div className="flex items-center gap-2 pt-1 border-t border-gray-100">
-                <div className="flex-1 flex items-center">
-                  <div className="relative w-full">
-                    <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400 text-xs">
-                      🔍
-                    </span>
-                    <input
-                      type="text"
-                      placeholder="Cari nomor SO, no Invoice, nama Apotek / Pelanggan, item obat..."
-                      value={search}
-                      onChange={(e) => setSearch(e.target.value)}
-                      className="w-full pl-8 pr-8 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-2xs"
-                    />
-                    {search && (
-                      <button
-                        onClick={() => setSearch("")}
-                        className="absolute inset-y-0 right-0 pr-2.5 flex items-center text-gray-400 hover:text-gray-600 font-bold text-xs"
-                        title="Hapus pencarian"
-                      >
-                        ✕
-                      </button>
-                    )}
+              <div className="pt-1 border-t border-gray-100 space-y-1.5">
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 flex items-center">
+                    <div className="relative w-full">
+                      <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400 text-xs">
+                        🔍
+                      </span>
+                      <input
+                        type="text"
+                        placeholder="Cari nomor SO, no Invoice, nama Apotek / Pelanggan, item obat (Global Search)..."
+                        value={search}
+                        onChange={(e) => {
+                          setSearch(e.target.value);
+                          setPage(0);
+                        }}
+                        className={`w-full pl-8 pr-10 py-1.5 text-sm border rounded-lg focus:outline-none focus:ring-2 bg-white shadow-2xs transition-all ${
+                          isGlobalSearchActive
+                            ? "border-emerald-400 focus:ring-emerald-500 text-emerald-950 font-medium"
+                            : "border-gray-300 focus:ring-blue-500"
+                        }`}
+                      />
+                      {search && (
+                        <button
+                          onClick={() => {
+                            setSearch("");
+                            setPage(0);
+                          }}
+                          className="absolute inset-y-0 right-0 pr-2.5 flex items-center text-gray-400 hover:text-gray-700 font-bold text-xs"
+                          title="Hapus pencarian dan kembali ke filter normal"
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
                   </div>
+
+                  {IS_SYSTEM_UPDATING ? (
+                    <button
+                      type="button"
+                      onClick={() => alert("⚠️ SISTEM SEDANG DALAM PROSES UPDATE & OPTIMASI PERFORMA.\n\nMohon jangan upload file apapun dulu yaa hingga pembaruan selesai.")}
+                      className="bg-amber-100 border border-amber-300 text-amber-800 px-3.5 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap shadow-xs flex items-center gap-1.5 cursor-not-allowed opacity-90"
+                      title="Upload dinonaktifkan sementara karena sistem sedang dalam proses optimasi performa"
+                    >
+                      <span>🔒</span>
+                      <span>Upload Ditangguhkan (Sedang Update)</span>
+                    </button>
+                  ) : (
+                    <label className="bg-blue-600 hover:bg-blue-700 text-white px-3.5 py-1.5 rounded-lg cursor-pointer text-xs font-semibold whitespace-nowrap shadow-sm flex items-center gap-1.5 transition-colors">
+                      <span>📁</span>
+                      <span>Upload Excel</span>
+                      <input type="file" accept=".xlsx,.xls" onChange={onFileInput} className="hidden" />
+                    </label>
+                  )}
+                  {loading && <span className="text-xs text-gray-500 animate-pulse whitespace-nowrap">Membaca...</span>}
                 </div>
 
-                {IS_SYSTEM_UPDATING ? (
-                  <button
-                    type="button"
-                    onClick={() => alert("⚠️ SISTEM SEDANG DALAM PROSES UPDATE & OPTIMASI PERFORMA.\n\nMohon jangan upload file apapun dulu yaa hingga pembaruan selesai.")}
-                    className="bg-amber-100 border border-amber-300 text-amber-800 px-3.5 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap shadow-xs flex items-center gap-1.5 cursor-not-allowed opacity-90"
-                    title="Upload dinonaktifkan sementara karena sistem sedang dalam proses optimasi performa"
-                  >
-                    <span>🔒</span>
-                    <span>Upload Ditangguhkan (Sedang Update)</span>
-                  </button>
-                ) : (
-                  <label className="bg-blue-600 hover:bg-blue-700 text-white px-3.5 py-1.5 rounded-lg cursor-pointer text-xs font-semibold whitespace-nowrap shadow-sm flex items-center gap-1.5 transition-colors">
-                    <span>📁</span>
-                    <span>Upload Excel</span>
-                    <input type="file" accept=".xlsx,.xls" onChange={onFileInput} className="hidden" />
-                  </label>
+                {/* Global Search Active Banner */}
+                {isGlobalSearchActive && (
+                  <div className="flex flex-wrap items-center justify-between text-xs bg-emerald-50 border border-emerald-300 text-emerald-950 px-3 py-1 rounded-lg gap-2 shadow-2xs">
+                    <div className="flex items-center gap-1.5 font-medium">
+                      <span className="text-emerald-700 font-bold">🌐</span>
+                      <span>
+                        <strong>Pencarian Global Aktif:</strong> Menampilkan hasil pencarian <strong>"{search}"</strong> di seluruh database ({filtered.length} faktur ditemukan). Tab filter diabaikan agar data selalu ketemu.
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => {
+                        setSearch("");
+                        setPage(0);
+                      }}
+                      className="text-xs font-bold text-emerald-800 hover:text-emerald-950 underline shrink-0 hover:bg-emerald-100 px-1.5 py-0.5 rounded transition-colors"
+                    >
+                      Kembali ke Filter Normal ✕
+                    </button>
+                  </div>
                 )}
-                {loading && <span className="text-xs text-gray-500 animate-pulse whitespace-nowrap">Membaca...</span>}
               </div>
             </div>
 
