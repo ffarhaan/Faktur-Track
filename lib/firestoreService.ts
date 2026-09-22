@@ -272,6 +272,43 @@ export async function saveFaktursBatch(
   progression?: InvoiceProgression | null,
   existingPrintState?: PrintState | null
 ): Promise<void> {
+  // CRITICAL CONCURRENCY GUARD:
+  // Fetch live print state directly from Firestore so print checkmarks made by colleagues
+  // while this upload was preparing are NEVER lost or overwritten!
+  let livePrintedKeys: string[] = [];
+  let livePrintedAtMap: Record<string, string> = {};
+
+  try {
+    const printSnap = await getDoc(doc(db, APP_DATA_COLLECTION, PRINT_STATE_DOC));
+    if (printSnap.exists()) {
+      const liveData = printSnap.data() as PrintState;
+      livePrintedKeys = liveData.printedKeys || [];
+      livePrintedAtMap = liveData.printedAtMap || {};
+    }
+  } catch (err) {
+    console.warn("Could not read live print state during batch upload:", err);
+  }
+
+  // UNION MERGE: Print status is strictly additive during upload.
+  // Any invoice printed anywhere (live DB or locally) remains printed.
+  const unifiedPrintedSet = new Set<string>([
+    ...livePrintedKeys,
+    ...(existingPrintState?.printedKeys || []),
+  ]);
+  const unifiedPrintedAtMap: Record<string, string> = {
+    ...livePrintedAtMap,
+    ...(existingPrintState?.printedAtMap || {}),
+  };
+
+  // Sync the unified print status into the chunk items
+  for (const item of fakturs) {
+    const key = item.id || item.no_faktur;
+    if (key && unifiedPrintedSet.has(key)) {
+      item.status_cetak = true;
+      item.printed_at = unifiedPrintedAtMap[key] || item.printed_at || new Date().toISOString();
+    }
+  }
+
   const chunks = createSafeChunks(fakturs);
   const nowIso = new Date().toISOString();
   const chunkIds: string[] = [];
@@ -314,10 +351,8 @@ export async function saveFaktursBatch(
     { merge: true }
   );
 
-  // If print state provided, save print state
-  if (existingPrintState) {
-    await updatePrintState(existingPrintState.printedKeys, existingPrintState.printedAtMap);
-  }
+  // Save the union-merged print state back to Firestore so no print status is ever wiped out
+  await updatePrintState(Array.from(unifiedPrintedSet), unifiedPrintedAtMap);
 }
 
 /**

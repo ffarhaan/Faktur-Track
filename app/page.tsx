@@ -1154,10 +1154,17 @@ export default function Home() {
           if (!noFaktur || noFaktur === "SO-" || noFaktur === "-1P") continue;
 
           const targetKey = noFaktur;
-          const isNewInvoice = (isOra ? (prevOraNum > 0 && num > prevOraNum) : (prevDooNum > 0 && num > prevDooNum)) || !existingStatusMap.has(noFaktur);
-          const prevInfo = !isNewInvoice ? (existingStatusMap.get(noFaktur) || (r.orderNumber ? existingStatusMap.get(`SO-${r.orderNumber}`) : undefined)) : undefined;
-          const isPrinted = !isNewInvoice && prevInfo ? Boolean(prevInfo.status_cetak) : false;
-          const printedAt = !isNewInvoice && prevInfo ? prevInfo.printed_at : null;
+          const prevInfo = existingStatusMap.get(noFaktur) || (r.orderNumber ? existingStatusMap.get(`SO-${r.orderNumber}`) : undefined);
+          const isAlreadyPrinted =
+            Boolean(prevInfo?.status_cetak) ||
+            currentActivePrintedSet.has(noFaktur) ||
+            Boolean(latestPrintStateRef.current?.printedKeys?.includes(noFaktur));
+          const isPrinted = isAlreadyPrinted;
+          const printedAt =
+            currentActivePrintedAtMap[noFaktur] ||
+            prevInfo?.printed_at ||
+            latestPrintStateRef.current?.printedAtMap?.[noFaktur] ||
+            null;
           const prevExtra = (prevInfo?.extra as Record<string, unknown>) || null;
           const prevItems = (prevExtra?.items as Array<Record<string, unknown>>) || [];
           const hasExistingRichItems =
@@ -1263,12 +1270,12 @@ export default function Home() {
           }
 
           const existing = invMap.get(targetKey)!;
-          if (isNewInvoice) {
-            existing.status_cetak = false;
-            existing.printed_at = null;
-          } else if (isPrinted) {
+          if (isPrinted) {
             existing.status_cetak = true;
             if (printedAt) existing.printed_at = printedAt;
+          } else if (existing.status_cetak === undefined) {
+            existing.status_cetak = false;
+            existing.printed_at = null;
           }
 
           // For ORA: XXCUST supplies the official Sales Order
@@ -1607,18 +1614,16 @@ export default function Home() {
         const mergedPrintedSet = new Set([...currentActivePrintedSet, ...localPrintedSet]);
         const mergedPrintedMap = { ...currentActivePrintedAtMap, ...localPrintedAtMap };
 
-        // For all new invoices in the uploaded file, guarantee they are NEVER in the printed set!
-        for (const r of parsed) {
-          const isOra = isOraCustomer(r.customerName);
-          const cleanInv = String(r.invoiceNumber || "").trim().replace(/-1P$/i, "");
-          const num = parseInvNum(cleanInv);
-          const invKey = isOra ? `${cleanInv}-1P` : cleanInv;
-          const isNewInvoice = (isOra ? (prevOraNum > 0 && num > prevOraNum) : (prevDooNum > 0 && num > prevDooNum)) || !existingStatusMap.has(invKey);
-          if (isNewInvoice) {
-            mergedPrintedSet.delete(invKey);
-            delete mergedPrintedMap[invKey];
+        // Retain recent local toggles (< 10s old) to prevent any toggle from being dropped
+        recentTogglesRef.current.forEach((val, key) => {
+          if (val.printed) {
+            mergedPrintedSet.add(key);
+            if (!mergedPrintedMap[key]) mergedPrintedMap[key] = new Date(val.time).toISOString();
+          } else {
+            mergedPrintedSet.delete(key);
+            delete mergedPrintedMap[key];
           }
-        }
+        });
 
         setPrintedInvoices(mergedPrintedSet);
         setPrintedAtMap(mergedPrintedMap);
