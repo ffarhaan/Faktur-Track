@@ -1027,10 +1027,10 @@ export default function Home() {
           };
 
           if (rawFaktur) existingStatusMap.set(rawFaktur, statusInfo);
-          if (row.no_sales_order) {
+          if (row.no_sales_order && row.no_sales_order !== "-") {
             String(row.no_sales_order).split(",").forEach((s) => {
               const soClean = s.trim();
-              if (soClean) existingStatusMap.set(`SO-${soClean}`, statusInfo);
+              if (soClean && soClean !== "-" && soClean !== "0") existingStatusMap.set(`SO-${soClean}`, statusInfo);
             });
           }
         });
@@ -1152,8 +1152,9 @@ export default function Home() {
           const cleanInv = String(r.invoiceNumber || "").trim().replace(/-1P$/i, "");
           const num = parseInvNum(cleanInv);
           const hasInv = cleanInv && cleanInv !== "0" && cleanInv !== "-";
-          const noFaktur = hasInv ? (isOra ? `${cleanInv}-1P` : cleanInv) : (r.orderNumber ? `SO-${r.orderNumber}` : `ROW-${r.rowIndex}`);
-          if (!noFaktur || noFaktur === "SO-" || noFaktur === "-1P") continue;
+          const hasValidSO = Boolean(r.orderNumber && r.orderNumber !== "-" && r.orderNumber !== "0");
+          const noFaktur = hasInv ? (isOra ? `${cleanInv}-1P` : cleanInv) : (hasValidSO ? `SO-${r.orderNumber}` : `ROW-${r.rowIndex}`);
+          if (!noFaktur || noFaktur === "SO-" || noFaktur === "SO--" || noFaktur === "-1P") continue;
 
           const targetKey = noFaktur;
           // Determine if this is a genuinely new invoice being uploaded in this batch
@@ -1165,7 +1166,7 @@ export default function Home() {
             newUnprintedKeyList.push(targetKey);
           }
 
-          const prevInfo = !isNewInvoice ? (existingStatusMap.get(noFaktur) || (r.orderNumber ? existingStatusMap.get(`SO-${r.orderNumber}`) : undefined)) : undefined;
+          const prevInfo = !isNewInvoice ? (existingStatusMap.get(noFaktur) || (hasValidSO ? existingStatusMap.get(`SO-${r.orderNumber}`) : undefined)) : undefined;
           const isAlreadyPrinted = !isNewInvoice && (
             Boolean(prevInfo?.status_cetak) ||
             currentActivePrintedSet.has(noFaktur) ||
