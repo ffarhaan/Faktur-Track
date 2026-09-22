@@ -1351,13 +1351,21 @@ export default function Home() {
           catCounts[itemCat] = (catCounts[itemCat] || 0) + 1;
         });
 
-        // Tentukan kategori dominan (prioritas pengawasan: PREKURSOR > OOT > CCP > ALKES > FARMA jika ada)
+        // Tentukan kategori dominan: kategori dengan jumlah item terbanyak (paling dominan di SO/faktur ini)
         const prioOrder = ["PREKURSOR", "OOT", "CCP", "ALKES", "FARMA"];
         let dominantCategory = "FARMA";
-        for (const p of prioOrder) {
-          if (catCounts[p]) {
-            dominantCategory = p;
-            break;
+        let maxCount = -1;
+        for (const [cat, count] of Object.entries(catCounts)) {
+          if (count > maxCount) {
+            maxCount = count;
+            dominantCategory = cat;
+          } else if (count === maxCount && count > 0) {
+            // Jika jumlah item sama persis (seri), pilih prioritas regulasi yang lebih tinggi
+            const currPrio = prioOrder.indexOf(dominantCategory);
+            const candPrio = prioOrder.indexOf(cat);
+            if (candPrio !== -1 && (currPrio === -1 || candPrio < currPrio)) {
+              dominantCategory = cat;
+            }
           }
         }
 
@@ -1828,10 +1836,17 @@ export default function Home() {
 
       const prioOrder = ["PREKURSOR", "OOT", "CCP", "ALKES", "FARMA"];
       let dominantCategory = "FARMA";
-      for (const p of prioOrder) {
-        if (catCounts[p]) {
-          dominantCategory = p;
-          break;
+      let maxCount = -1;
+      for (const [cat, count] of Object.entries(catCounts)) {
+        if (count > maxCount) {
+          maxCount = count;
+          dominantCategory = cat;
+        } else if (count === maxCount && count > 0) {
+          const currPrio = prioOrder.indexOf(dominantCategory);
+          const candPrio = prioOrder.indexOf(cat);
+          if (candPrio !== -1 && (currPrio === -1 || candPrio < currPrio)) {
+            dominantCategory = cat;
+          }
         }
       }
 
