@@ -281,7 +281,7 @@ function dbRowsToFakturRecords(rows: Array<Record<string, unknown>>): {
 }
 
 // System maintenance and update state flag (Alert banner & upload prevention)
-const IS_SYSTEM_UPDATING = true;
+const IS_SYSTEM_UPDATING = false;
 
 const FakturTableRow = memo(function FakturTableRow({
   g,
@@ -2503,14 +2503,6 @@ export default function Home() {
               >
                 <span>📥</span>
                 <span>Ekspor Excel (Ascending)</span>
-              </button>
-            )}
-            {records.length > 0 && (
-              <button
-                onClick={clearAll}
-                className="text-xs text-red-600 hover:text-red-700 px-3 py-1.5 rounded-lg hover:bg-red-50 border border-transparent hover:border-red-200"
-              >
-                Hapus Semua Data
               </button>
             )}
           </div>
