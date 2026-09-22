@@ -419,3 +419,55 @@ export async function clearAllFakturs(): Promise<void> {
     }),
   ]);
 }
+
+export interface TeamFeedback {
+  id?: string;
+  senderName: string;
+  category: "kendala" | "lemot" | "saran" | "lainnya";
+  message: string;
+  createdAt: string;
+  status?: "baru" | "dibaca" | "selesai";
+}
+
+/**
+ * Submit feedback or complaint from team members directly into Firestore
+ */
+export async function submitTeamFeedback(
+  data: Omit<TeamFeedback, "id" | "createdAt" | "status">
+): Promise<void> {
+  const docRef = doc(collection(db, "app_feedback"));
+  await setDoc(docRef, {
+    ...data,
+    id: docRef.id,
+    createdAt: new Date().toISOString(),
+    status: "baru",
+  });
+}
+
+/**
+ * Realtime listener for team feedbacks
+ */
+export function subscribeToTeamFeedbacks(
+  onData: (items: TeamFeedback[]) => void,
+  onError?: (err: Error) => void
+): Unsubscribe {
+  return onSnapshot(
+    collection(db, "app_feedback"),
+    (snapshot) => {
+      const items: TeamFeedback[] = [];
+      snapshot.forEach((d) => {
+        items.push({ id: d.id, ...d.data() } as TeamFeedback);
+      });
+      items.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      onData(items);
+    },
+    onError
+  );
+}
+
+/**
+ * Delete a feedback item
+ */
+export async function deleteTeamFeedback(id: string): Promise<void> {
+  await deleteDoc(doc(db, "app_feedback", id));
+}

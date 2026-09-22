@@ -13,6 +13,10 @@ import {
   updatePrintState,
   clearAllFakturs,
   FirestoreFakturDoc,
+  submitTeamFeedback,
+  subscribeToTeamFeedbacks,
+  deleteTeamFeedback,
+  TeamFeedback,
 } from "@/lib/firestoreService";
 import { db } from "@/lib/firebase";
 import { collection, getDocs } from "firebase/firestore";
@@ -696,6 +700,9 @@ export default function Home() {
   const [showHelpModal, setShowHelpModal] = useState(false);
   const [showApotekModal, setShowApotekModal] = useState(false);
   const [showProductModal, setShowProductModal] = useState(false);
+  const [showUpdateModal, setShowUpdateModal] = useState(false);
+  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+  const [feedbacks, setFeedbacks] = useState<TeamFeedback[]>([]);
   const inFlightToggleRef = useRef<Set<string>>(new Set());
   const recentTogglesRef = useRef<Map<string, { printed: boolean; time: number }>>(new Map());
   const latestDBDocsRef = useRef<FirestoreFakturDoc[]>([]);
@@ -704,6 +711,21 @@ export default function Home() {
   const recordsRef = useRef<FakturRecord[]>([]);
   const printedInvoicesRef = useRef<Set<string>>(new Set());
   const printedAtMapRef = useRef<Record<string, string>>({});
+
+  useEffect(() => {
+    // Show update modal on first visit for this version
+    const hasSeen = localStorage.getItem("ft_seen_update_v2_1");
+    if (!hasSeen) {
+      setShowUpdateModal(true);
+    }
+
+    // Subscribe to feedback/complaints from team
+    const unsubFeedbacks = subscribeToTeamFeedbacks(
+      (items) => setFeedbacks(items),
+      (err) => console.warn("Feedback listener err:", err)
+    );
+    return () => unsubFeedbacks();
+  }, []);
 
   useEffect(() => {
     recordsRef.current = records;
@@ -2460,6 +2482,30 @@ export default function Home() {
           </div>
           <div className="flex items-center gap-2">
             <button
+              onClick={() => setShowUpdateModal(true)}
+              className="inline-flex items-center gap-1.5 text-xs font-bold text-amber-900 bg-amber-50 hover:bg-amber-100 border border-amber-300 px-2.5 py-1.5 rounded-lg shadow-xs transition-transform hover:scale-105"
+              title="Lihat info pembaruan sistem terbaru"
+            >
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+              </span>
+              <span>📢 Info Update</span>
+            </button>
+            <button
+              onClick={() => setShowFeedbackModal(true)}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 px-2.5 py-1.5 rounded-lg shadow-xs transition-colors"
+              title="Ada kendala atau keluhan? Ketik di sini"
+            >
+              <span>💬</span>
+              <span>Lapor Kendala</span>
+              {feedbacks.length > 0 && (
+                <span className="px-1.5 py-0.2 bg-rose-600 text-white text-[10px] font-bold rounded-full">
+                  {feedbacks.length}
+                </span>
+              )}
+            </button>
+            <button
               onClick={() => setShowHelpModal(true)}
               className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 flex items-center justify-center text-sm shadow-xs transition-all hover:scale-105"
               title="Panduan & Pintasan Keyboard"
@@ -3177,6 +3223,27 @@ export default function Home() {
 
       {/* Master Product Modal */}
       <MasterProductModal isOpen={showProductModal} onClose={() => setShowProductModal(false)} />
+
+      {/* Update Notice Modal */}
+      <UpdateNoticeModal
+        isOpen={showUpdateModal}
+        onClose={() => {
+          localStorage.setItem("ft_seen_update_v2_1", "true");
+          setShowUpdateModal(false);
+        }}
+        onOpenFeedback={() => {
+          localStorage.setItem("ft_seen_update_v2_1", "true");
+          setShowUpdateModal(false);
+          setShowFeedbackModal(true);
+        }}
+      />
+
+      {/* Team Feedback & Complaint Modal */}
+      <TeamFeedbackModal
+        isOpen={showFeedbackModal}
+        onClose={() => setShowFeedbackModal(false)}
+        feedbacks={feedbacks}
+      />
     </main>
   );
 }
@@ -3694,3 +3761,456 @@ function FBtn({ active, onClick, children, color = "gray" }: {
     </button>
   );
 }
+
+function UpdateNoticeModal({
+  isOpen,
+  onClose,
+  onOpenFeedback,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  onOpenFeedback: () => void;
+}) {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs animate-in fade-in duration-150">
+      <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-gray-100 relative">
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 w-8 h-8 rounded-full flex items-center justify-center hover:bg-gray-100 transition-colors text-lg"
+          title="Tutup"
+        >
+          ✕
+        </button>
+
+        {/* Modal Header */}
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-amber-500 to-amber-400 text-white flex items-center justify-center text-2xl shadow-md">
+            📢
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h2 className="text-base font-bold text-gray-900">UPDATE SISTEM FAKTUR TRACKER</h2>
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                v2.1
+              </span>
+            </div>
+            <p className="text-xs text-gray-500">Halo tim, sistem sudah selesai di-update ya:</p>
+          </div>
+        </div>
+
+        {/* Update Bullet Points */}
+        <div className="space-y-2.5 text-xs">
+          <div className="p-3 bg-amber-50/70 border border-amber-200/80 rounded-xl flex items-start gap-3">
+            <span className="text-base leading-none">⚡</span>
+            <div>
+              <p className="font-bold text-amber-950">Jauh Lebih Cepat & Enteng</p>
+              <p className="text-gray-600 mt-0.5">
+                Klik centang print sekarang instan & ga lemot lagi (zero delay). Navigasi panah keyboard juga jauh lebih halus.
+              </p>
+            </div>
+          </div>
+
+          <div className="p-3 bg-blue-50/70 border border-blue-200/80 rounded-xl flex items-start gap-3">
+            <span className="text-base leading-none">🔍</span>
+            <div>
+              <p className="font-bold text-blue-950">Smart Search (Pencarian Pintar)</p>
+              <p className="text-gray-600 mt-0.5">
+                Kolom pencarian otomatis nyari ke <strong>seluruh data faktur</strong> tanpa perlu bingung ganti-ganti tab atau filter.
+              </p>
+            </div>
+          </div>
+
+          <div className="p-3 bg-purple-50/70 border border-purple-200/80 rounded-xl flex items-start gap-3">
+            <span className="text-base leading-none">🎛️</span>
+            <div>
+              <p className="font-bold text-purple-950">Tampilan Filter Lebih Rapi</p>
+              <p className="text-gray-600 mt-0.5">
+                Menu filter kini berbentuk dropdown ringkas + ada tombol <strong>Reset Filter</strong> untuk kembali ke setelan awal dengan 1 klik.
+              </p>
+            </div>
+          </div>
+
+          <div className="p-3 bg-emerald-50/70 border border-emerald-200/80 rounded-xl flex items-start gap-3">
+            <span className="text-base leading-none">📂</span>
+            <div>
+              <p className="font-bold text-emerald-950">Upload File Normal Kembali</p>
+              <p className="text-gray-600 mt-0.5">
+                Sistem database sudah sinkron dan fitur upload file Excel sudah aktif normal kembali seperti biasa.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Tip Box */}
+        <div className="mt-3 p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[11px] text-slate-600 flex items-center justify-between">
+          <span className="flex items-center gap-1.5">
+            <span>💡</span> Tekan <strong>Ctrl + Shift + R</strong> jika tampilan belum berubah.
+          </span>
+        </div>
+
+        {/* Feedback Promo Card */}
+        <div className="mt-3 p-3 bg-rose-50 border border-rose-200 rounded-xl flex items-center justify-between gap-3">
+          <div className="text-xs">
+            <p className="font-bold text-rose-900">Ada keluhan atau kendala?</p>
+            <p className="text-rose-700 text-[11px]">Bisa langsung ketik masukan atau laporkan masalah ke sistem.</p>
+          </div>
+          <button
+            onClick={onOpenFeedback}
+            className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-lg shadow-xs transition-colors shrink-0 flex items-center gap-1"
+          >
+            <span>💬</span>
+            <span>Tulis Keluhan</span>
+          </button>
+        </div>
+
+        {/* Footer Actions */}
+        <div className="mt-4 flex items-center justify-end">
+          <button
+            onClick={onClose}
+            className="px-5 py-2 bg-gray-900 hover:bg-gray-800 text-white text-xs font-semibold rounded-xl shadow transition-colors"
+          >
+            Mengerti & Tutup
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TeamFeedbackModal({
+  isOpen,
+  onClose,
+  feedbacks,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  feedbacks: TeamFeedback[];
+}) {
+  const [tab, setTab] = useState<"form" | "history">("form");
+  const [senderName, setSenderName] = useState("");
+  const [category, setCategory] = useState<"kendala" | "lemot" | "saran" | "lainnya">("kendala");
+  const [message, setMessage] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [successNotice, setSuccessNotice] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("ft_sender_name");
+      if (saved) setSenderName(saved);
+    }
+  }, []);
+
+  if (!isOpen) return null;
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!message.trim()) {
+      alert("Mohon ketikkan isi keluhan atau masukan Anda.");
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      const name = senderName.trim() || "Anonim (Tim Faktur)";
+      localStorage.setItem("ft_sender_name", name);
+
+      await submitTeamFeedback({
+        senderName: name,
+        category,
+        message: message.trim(),
+      });
+
+      setMessage("");
+      setSuccessNotice(true);
+      setTimeout(() => setSuccessNotice(false), 5000);
+    } catch (err) {
+      console.error("Gagal submit feedback:", err);
+      alert("Terjadi kesalahan saat menyimpan keluhan ke database.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleShareWa = () => {
+    if (!message.trim()) {
+      alert("Ketik keluhan atau masukan terlebih dahulu sebelum kirim ke WhatsApp.");
+      return;
+    }
+    const catLabel =
+      category === "kendala"
+        ? "🚨 Kendala / Bug"
+        : category === "lemot"
+        ? "⏱️ Sistem Lemot"
+        : category === "saran"
+        ? "💡 Saran Fitur"
+        : "💬 Pertanyaan / Lainnya";
+
+    const text = `*LAPORAN / KELUHAN FAKTUR TRACKER*%0A%0A👤 *Pengirim:* ${encodeURIComponent(
+      senderName || "Tim Faktur"
+    )}%0A🏷️ *Kategori:* ${encodeURIComponent(catLabel)}%0A📝 *Pesan / Kendala:*%0A${encodeURIComponent(
+      message
+    )}%0A%0A_Dikirim melalui Sistem Faktur Tracker_`;
+
+    window.open(`https://api.whatsapp.com/send?text=${text}`, "_blank");
+  };
+
+  const handleDeleteFeedback = async (id?: string) => {
+    if (!id) return;
+    if (confirm("Hapus catatan keluhan ini?")) {
+      try {
+        await deleteTeamFeedback(id);
+      } catch (err) {
+        console.error("Gagal hapus feedback:", err);
+      }
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs animate-in fade-in duration-150">
+      <div className="bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl border border-gray-100 relative flex flex-col max-h-[90vh]">
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 w-8 h-8 rounded-full flex items-center justify-center hover:bg-gray-100 transition-colors text-lg"
+          title="Tutup"
+        >
+          ✕
+        </button>
+
+        {/* Modal Header */}
+        <div className="flex items-center gap-3 pb-3 border-b border-gray-200 shrink-0">
+          <div className="w-10 h-10 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center text-xl shadow-xs">
+            💬
+          </div>
+          <div>
+            <h2 className="text-base font-bold text-gray-900">Kotak Saran & Keluhan Tim</h2>
+            <p className="text-xs text-gray-500">
+              Sampaikan kendala, sistem lemot, atau saran perbaikan langsung ke sistem
+            </p>
+          </div>
+        </div>
+
+        {/* Tab Switcher */}
+        <div className="flex items-center gap-2 pt-3 pb-2 shrink-0">
+          <button
+            onClick={() => setTab("form")}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              tab === "form"
+                ? "bg-rose-600 text-white shadow-xs"
+                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+            }`}
+          >
+            📝 Tulis Keluhan / Saran
+          </button>
+          <button
+            onClick={() => setTab("history")}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+              tab === "history"
+                ? "bg-rose-600 text-white shadow-xs"
+                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+            }`}
+          >
+            <span>📋 Riwayat Masukan</span>
+            <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
+              tab === "history" ? "bg-white text-rose-700" : "bg-gray-200 text-gray-700"
+            }`}>
+              {feedbacks.length}
+            </span>
+          </button>
+        </div>
+
+        {/* Tab Content */}
+        <div className="flex-1 overflow-y-auto pt-2 space-y-4 text-xs">
+          {tab === "form" ? (
+            <form onSubmit={handleSubmit} className="space-y-3.5">
+              {successNotice && (
+                <div className="p-3 bg-emerald-50 border border-emerald-300 rounded-xl text-emerald-900 flex items-center gap-2 animate-in fade-in">
+                  <span className="text-base">✓</span>
+                  <div>
+                    <p className="font-bold">Laporan berhasil terkirim ke sistem!</p>
+                    <p className="text-[11px] text-emerald-700">Terima kasih, tim pengembang akan segera mengecek kendala ini.</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Sender Name */}
+              <div>
+                <label className="block font-bold text-gray-700 mb-1">
+                  Nama Anda / Bagian Tim <span className="text-gray-400 font-normal">(opsional)</span>:
+                </label>
+                <input
+                  type="text"
+                  placeholder="Contoh: Budi - Tim Cetak / Logistik"
+                  value={senderName}
+                  onChange={(e) => setSenderName(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-rose-500 bg-white"
+                />
+              </div>
+
+              {/* Category Radio Pills */}
+              <div>
+                <label className="block font-bold text-gray-700 mb-1.5">Kategori Masukan:</label>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setCategory("kendala")}
+                    className={`px-2.5 py-2 rounded-lg border text-left flex items-center gap-2 transition-all ${
+                      category === "kendala"
+                        ? "border-rose-500 bg-rose-50 text-rose-900 font-bold shadow-2xs"
+                        : "border-gray-200 hover:bg-gray-50 text-gray-700"
+                    }`}
+                  >
+                    <span>🚨</span>
+                    <span>Kendala / Bug</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setCategory("lemot")}
+                    className={`px-2.5 py-2 rounded-lg border text-left flex items-center gap-2 transition-all ${
+                      category === "lemot"
+                        ? "border-amber-500 bg-amber-50 text-amber-900 font-bold shadow-2xs"
+                        : "border-gray-200 hover:bg-gray-50 text-gray-700"
+                    }`}
+                  >
+                    <span>⏱️</span>
+                    <span>Sistem Lemot</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setCategory("saran")}
+                    className={`px-2.5 py-2 rounded-lg border text-left flex items-center gap-2 transition-all ${
+                      category === "saran"
+                        ? "border-emerald-500 bg-emerald-50 text-emerald-900 font-bold shadow-2xs"
+                        : "border-gray-200 hover:bg-gray-50 text-gray-700"
+                    }`}
+                  >
+                    <span>💡</span>
+                    <span>Usul Fitur</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setCategory("lainnya")}
+                    className={`px-2.5 py-2 rounded-lg border text-left flex items-center gap-2 transition-all ${
+                      category === "lainnya"
+                        ? "border-blue-500 bg-blue-50 text-blue-900 font-bold shadow-2xs"
+                        : "border-gray-200 hover:bg-gray-50 text-gray-700"
+                    }`}
+                  >
+                    <span>💬</span>
+                    <span>Lainnya</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Message Textarea */}
+              <div>
+                <label className="block font-bold text-gray-700 mb-1">
+                  Detail Keluhan / Masukan: <span className="text-rose-500">*</span>
+                </label>
+                <textarea
+                  rows={4}
+                  required
+                  placeholder="Ketikkan apa yang terjadi atau yang ingin diperbaiki di sini (contoh: barusan faktur no 100234 waktu dicentang ga berubah, atau browser berat saat scroll)..."
+                  value={message}
+                  onChange={(e) => setMessage(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-rose-500 bg-white leading-relaxed resize-none"
+                />
+              </div>
+
+              {/* Action Buttons */}
+              <div className="pt-2 flex flex-wrap items-center justify-between gap-2">
+                <button
+                  type="button"
+                  onClick={handleShareWa}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-semibold shadow-xs transition-colors"
+                  title="Kirim keluhan ini langsung via WhatsApp admin"
+                >
+                  <span>📲</span>
+                  <span>Kirim ke WA Admin</span>
+                </button>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    className="px-3.5 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-medium transition-colors"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={submitting || !message.trim()}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white rounded-xl font-bold shadow transition-all"
+                  >
+                    <span>{submitting ? "Mengirim..." : "🚀 Kirim ke Sistem"}</span>
+                  </button>
+                </div>
+              </div>
+            </form>
+          ) : (
+            <div className="space-y-3">
+              {feedbacks.length === 0 ? (
+                <div className="text-center py-10 text-gray-400">
+                  <p className="text-2xl mb-1">📭</p>
+                  <p>Belum ada masukan atau keluhan yang masuk.</p>
+                </div>
+              ) : (
+                feedbacks.map((item) => (
+                  <div key={item.id} className="p-3 bg-gray-50 border border-gray-200 rounded-xl relative group">
+                    <div className="flex items-center justify-between gap-2 mb-1.5">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                            item.category === "kendala"
+                              ? "bg-rose-100 text-rose-800 border border-rose-300"
+                              : item.category === "lemot"
+                              ? "bg-amber-100 text-amber-800 border border-amber-300"
+                              : item.category === "saran"
+                              ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
+                              : "bg-blue-100 text-blue-800 border border-blue-300"
+                          }`}
+                        >
+                          {item.category === "kendala"
+                            ? "🚨 Kendala"
+                            : item.category === "lemot"
+                            ? "⏱️ Lemot"
+                            : item.category === "saran"
+                            ? "💡 Usul Fitur"
+                            : "💬 Lainnya"}
+                        </span>
+                        <span className="font-bold text-gray-800 text-[11px]">{item.senderName}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] text-gray-400 font-mono">
+                          {new Date(item.createdAt).toLocaleString("id-ID", {
+                            day: "numeric",
+                            month: "short",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </span>
+                        <button
+                          onClick={() => handleDeleteFeedback(item.id)}
+                          className="text-gray-300 hover:text-red-600 transition-colors p-1"
+                          title="Hapus laporan ini"
+                        >
+                          🗑️
+                        </button>
+                      </div>
+                    </div>
+                    <p className="text-gray-700 whitespace-pre-wrap leading-relaxed">{item.message}</p>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
