@@ -323,13 +323,13 @@ function createSafeChunks(items: FirestoreFakturDoc[]): FirestoreFakturDoc[][] {
   const chunks: FirestoreFakturDoc[][] = [];
   let currentChunk: FirestoreFakturDoc[] = [];
   let currentEstimatedBytes = 0;
-  const MAX_CHUNK_BYTES = 500 * 1024; // 500 KB safety limit (Firestore hard limit is 1048 KB)
+  const MAX_CHUNK_BYTES = 350 * 1024; // 350 KB safe limit (well below Firestore 1048 KB limit)
 
   for (const item of items) {
     const itemBytes = JSON.stringify(item).length;
     if (
       currentChunk.length > 0 &&
-      (currentEstimatedBytes + itemBytes > MAX_CHUNK_BYTES || currentChunk.length >= 150)
+      (currentEstimatedBytes + itemBytes > MAX_CHUNK_BYTES || currentChunk.length >= 100)
     ) {
       chunks.push(currentChunk);
       currentChunk = [];
@@ -404,31 +404,49 @@ export async function saveFaktursBatch(
 
   const chunks = createSafeChunks(fakturs);
   const nowIso = new Date().toISOString();
-  const chunkIds: string[] = [];
+  const chunkIds: string[] = chunks.map((_, idx) => `chunk_${idx}`);
 
-  // Write all chunks in parallel
-  await Promise.all(
-    chunks.map(async (chunk, idx) => {
-      const chunkId = `chunk_${idx}`;
-      chunkIds.push(chunkId);
-      const chunkRef = doc(db, CHUNKS_COLLECTION, chunkId);
-      await setDoc(chunkRef, {
-        chunkIndex: idx,
-        count: chunk.length,
-        items: chunk,
-        updatedAt: nowIso,
-      });
-    })
-  );
+  // Write chunks in controlled batches of 3 with auto-retry to prevent network pipeline overflow
+  const BATCH_CONCURRENCY = 3;
+  for (let i = 0; i < chunks.length; i += BATCH_CONCURRENCY) {
+    const slice = chunks.slice(i, i + BATCH_CONCURRENCY);
+    await Promise.all(
+      slice.map(async (chunk, sIdx) => {
+        const idx = i + sIdx;
+        const chunkId = `chunk_${idx}`;
+        const chunkRef = doc(db, CHUNKS_COLLECTION, chunkId);
+        let lastErr: unknown = null;
+        for (let attempt = 0; attempt < 3; attempt++) {
+          try {
+            await setDoc(chunkRef, {
+              chunkIndex: idx,
+              count: chunk.length,
+              items: chunk,
+              updatedAt: nowIso,
+            });
+            return;
+          } catch (err) {
+            lastErr = err;
+            await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
+          }
+        }
+        throw lastErr || new Error(`Gagal menyimpan ${chunkId}`);
+      })
+    );
+  }
 
   // Clean up any old unused chunks (e.g. if previous upload had more chunks)
-  const existingChunksSnap = await getDocs(collection(db, CHUNKS_COLLECTION));
-  const currentChunkSet = new Set(chunkIds);
-  await Promise.all(
-    existingChunksSnap.docs
-      .filter((d) => !currentChunkSet.has(d.id))
-      .map((d) => deleteDoc(d.ref))
-  );
+  try {
+    const existingChunksSnap = await getDocs(collection(db, CHUNKS_COLLECTION));
+    const currentChunkSet = new Set(chunkIds);
+    await Promise.all(
+      existingChunksSnap.docs
+        .filter((d) => !currentChunkSet.has(d.id))
+        .map((d) => deleteDoc(d.ref))
+    );
+  } catch (err) {
+    console.warn("Could not clean old chunks:", err);
+  }
 
   // Save metadata
   localLastUploadTimestamp = nowIso;

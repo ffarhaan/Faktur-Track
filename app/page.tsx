@@ -1654,6 +1654,18 @@ export default function Home() {
         setPrintedAtMap(mergedPrintedMap);
         setInvoiceProgression(progObj);
 
+        // 2. FIRESTORE SYNC
+        await saveFaktursBatch(
+          payload as FirestoreFakturDoc[],
+          progObj,
+          {
+            printedKeys: Array.from(mergedPrintedSet),
+            printedAtMap: mergedPrintedMap,
+            updatedAt: new Date().toISOString(),
+          },
+          newUnprintedKeyList
+        );
+
         setUploadNotification({
           fileName: file.name,
           prevOra,
@@ -1672,19 +1684,6 @@ export default function Home() {
           ...prev,
           { name: file.name, count: parsed.length, time: new Date().toLocaleString("id-ID") },
         ]);
-        setPage(0);
-
-        // 2. FIRESTORE SYNC
-        await saveFaktursBatch(
-          payload as FirestoreFakturDoc[],
-          progObj,
-          {
-            printedKeys: Array.from(mergedPrintedSet),
-            printedAtMap: mergedPrintedMap,
-            updatedAt: new Date().toISOString(),
-          },
-          newUnprintedKeyList
-        );
         setPage(0);
       } catch (e) {
         console.error("Upload error:", e);
