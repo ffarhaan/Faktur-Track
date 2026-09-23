@@ -711,6 +711,7 @@ export default function Home() {
   const recordsRef = useRef<FakturRecord[]>([]);
   const printedInvoicesRef = useRef<Set<string>>(new Set());
   const printedAtMapRef = useRef<Record<string, string>>({});
+  const isUploadingRef = useRef(false);
 
   useEffect(() => {
     // Show update modal on first visit for this version (v2.2)
@@ -813,8 +814,11 @@ export default function Home() {
         if (currentVersion === null) {
           currentVersion = data.version;
         } else if (currentVersion !== data.version) {
-          window.location.reload();
+          if (!isUploadingRef.current) {
+            window.location.reload();
+          }
         }
+
       } catch {}
     };
     checkVersion();
@@ -924,6 +928,7 @@ export default function Home() {
   // Upload: Parse & Save directly to Supabase cloud DB so all devices see it
   const handleUpload = useCallback(
     async (file: File) => {
+      isUploadingRef.current = true;
       setLoading(true);
       setError(null);
       try {
@@ -1689,8 +1694,10 @@ export default function Home() {
         console.error("Upload error:", e);
         setError(e instanceof Error ? e.message : "Gagal membaca file.");
       } finally {
+        isUploadingRef.current = false;
         setLoading(false);
       }
+
     },
     []
   );

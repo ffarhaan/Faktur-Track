@@ -323,13 +323,13 @@ function createSafeChunks(items: FirestoreFakturDoc[]): FirestoreFakturDoc[][] {
   const chunks: FirestoreFakturDoc[][] = [];
   let currentChunk: FirestoreFakturDoc[] = [];
   let currentEstimatedBytes = 0;
-  const MAX_CHUNK_BYTES = 350 * 1024; // 350 KB safe limit (well below Firestore 1048 KB limit)
+  const MAX_CHUNK_BYTES = 500 * 1024; // 500 KB safe limit (Firestore limit is 1048 KB)
 
   for (const item of items) {
     const itemBytes = JSON.stringify(item).length;
     if (
       currentChunk.length > 0 &&
-      (currentEstimatedBytes + itemBytes > MAX_CHUNK_BYTES || currentChunk.length >= 100)
+      (currentEstimatedBytes + itemBytes > MAX_CHUNK_BYTES || currentChunk.length >= 250)
     ) {
       chunks.push(currentChunk);
       currentChunk = [];
@@ -406,8 +406,8 @@ export async function saveFaktursBatch(
   const nowIso = new Date().toISOString();
   const chunkIds: string[] = chunks.map((_, idx) => `chunk_${idx}`);
 
-  // Write chunks in controlled batches of 3 with auto-retry to prevent network pipeline overflow
-  const BATCH_CONCURRENCY = 3;
+  // Write chunks in batches of 5 with auto-retry
+  const BATCH_CONCURRENCY = 5;
   for (let i = 0; i < chunks.length; i += BATCH_CONCURRENCY) {
     const slice = chunks.slice(i, i + BATCH_CONCURRENCY);
     await Promise.all(
