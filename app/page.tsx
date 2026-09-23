@@ -1168,20 +1168,26 @@ export default function Home() {
           const targetKey = noFaktur;
           // Determine if this is a genuinely new invoice being uploaded in this batch
           const isNewInvoice = isOra
-            ? (prevOraNum > 0 && num > prevOraNum) || !existingStatusMap.has(noFaktur)
-            : (prevDooNum > 0 && num > prevDooNum) || !existingStatusMap.has(noFaktur);
+            ? (num > 0 ? (prevOraNum > 0 && num > prevOraNum) : !existingStatusMap.has(noFaktur))
+            : (num > 0 ? (prevDooNum > 0 && num > prevDooNum) : !existingStatusMap.has(noFaktur));
 
           if (isNewInvoice) {
             newUnprintedKeyList.push(targetKey);
           }
 
           const prevInfo = !isNewInvoice ? (existingStatusMap.get(noFaktur) || (hasValidSO ? existingStatusMap.get(`SO-${r.orderNumber}`) : undefined)) : undefined;
+          const isHistoricalPrinted = num > 0 && (
+            (isOra && prevOraNum > 0 && num <= prevOraNum) ||
+            (!isOra && prevDooNum > 0 && num <= prevDooNum)
+          );
           const isAlreadyPrinted = !isNewInvoice && (
+            isHistoricalPrinted ||
             Boolean(prevInfo?.status_cetak) ||
             currentActivePrintedSet.has(noFaktur) ||
             Boolean(latestPrintStateRef.current?.printedKeys?.includes(noFaktur))
           );
           const isPrinted = isAlreadyPrinted;
+
           const printedAt = isPrinted
             ? currentActivePrintedAtMap[noFaktur] ||
               prevInfo?.printed_at ||
