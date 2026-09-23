@@ -139,9 +139,8 @@ export function subscribeToFakturs(
         );
         lastMetaUpdatedAt = newUpdatedAt;
 
-        if (isRemoteUpload) {
-          // A new upload just completed on another laptop/tab!
-          // Instantly refresh chunks from server so all colleagues see the new invoices & pending SO!
+        if (isFirstLoad || isRemoteUpload) {
+          // Instantly fetch all chunks atomically from server so all colleagues see the new invoices & pending SO!
           try {
             const chunksSnap = await getDocsFromServer(collection(db, CHUNKS_COLLECTION));
             const newMap = new Map<string, FirestoreFakturDoc[]>();
@@ -158,6 +157,7 @@ export function subscribeToFakturs(
             console.warn("Auto-sync chunks on metadata change error:", err);
           }
         }
+
       }
       if (hasEmittedInitialChunks) {
         onData([], currentProgression, currentPrintState, "meta");
@@ -230,27 +230,8 @@ export function subscribeToFakturs(
     (err) => console.warn("PrintState sync warning:", err)
   );
 
-  // 3. Subscribe to Faktur Chunks
-  const unsubChunks = onSnapshot(
-    collection(db, CHUNKS_COLLECTION),
-    (snapshot) => {
-      const newMap = new Map<string, FirestoreFakturDoc[]>();
-      snapshot.forEach((d) => {
-        const data = d.data();
-        if (Array.isArray(data.items)) {
-          newMap.set(d.id, data.items as FirestoreFakturDoc[]);
-        }
-      });
-      currentChunksMap = newMap;
-      debouncedEmit("chunks");
-    },
-    (err) => {
-      console.error("Chunks sync error:", err);
-      if (onError) onError(err);
-    }
-  );
-
   return () => {
+
     if (emitTimer) clearTimeout(emitTimer);
     clearInterval(heartbeatTimer);
     if (typeof window !== "undefined") {
@@ -259,9 +240,9 @@ export function subscribeToFakturs(
     }
     unsubMeta();
     unsubPrint();
-    unsubChunks();
   };
 }
+
 
 /**
  * Fetch all existing faktur records and progression directly from server (bypassing any stale local cache)
@@ -323,13 +304,13 @@ function createSafeChunks(items: FirestoreFakturDoc[]): FirestoreFakturDoc[][] {
   const chunks: FirestoreFakturDoc[][] = [];
   let currentChunk: FirestoreFakturDoc[] = [];
   let currentEstimatedBytes = 0;
-  const MAX_CHUNK_BYTES = 500 * 1024; // 500 KB safe limit (Firestore limit is 1048 KB)
+  const MAX_CHUNK_BYTES = 600 * 1024; // 600 KB safe limit (Firestore limit is 1048 KB)
 
   for (const item of items) {
     const itemBytes = JSON.stringify(item).length;
     if (
       currentChunk.length > 0 &&
-      (currentEstimatedBytes + itemBytes > MAX_CHUNK_BYTES || currentChunk.length >= 250)
+      (currentEstimatedBytes + itemBytes > MAX_CHUNK_BYTES || currentChunk.length >= 350)
     ) {
       chunks.push(currentChunk);
       currentChunk = [];
@@ -406,8 +387,8 @@ export async function saveFaktursBatch(
   const nowIso = new Date().toISOString();
   const chunkIds: string[] = chunks.map((_, idx) => `chunk_${idx}`);
 
-  // Write chunks in batches of 5 with auto-retry
-  const BATCH_CONCURRENCY = 5;
+  // Write chunks in batches of 8 with auto-retry
+  const BATCH_CONCURRENCY = 8;
   for (let i = 0; i < chunks.length; i += BATCH_CONCURRENCY) {
     const slice = chunks.slice(i, i + BATCH_CONCURRENCY);
     await Promise.all(

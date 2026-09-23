@@ -743,7 +743,11 @@ export default function Home() {
     setLoading(true);
     const unsubscribe = subscribeToFakturs(
       (docs, prog, printState, reason) => {
+        if (isUploadingRef.current) {
+          return;
+        }
         if (prog) {
+
           latestProgressionRef.current = prog;
           setInvoiceProgression(prog);
         }
