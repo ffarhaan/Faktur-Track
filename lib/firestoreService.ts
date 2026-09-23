@@ -4,6 +4,8 @@ import {
   setDoc,
   getDocs,
   getDoc,
+  getDocsFromServer,
+  getDocFromServer,
   onSnapshot,
   deleteDoc,
   writeBatch,
@@ -139,9 +141,9 @@ export function subscribeToFakturs(
 
         if (isRemoteUpload) {
           // A new upload just completed on another laptop/tab!
-          // Instantly refresh chunks so all colleagues see the new invoices & pending SO!
+          // Instantly refresh chunks from server so all colleagues see the new invoices & pending SO!
           try {
-            const chunksSnap = await getDocs(collection(db, CHUNKS_COLLECTION));
+            const chunksSnap = await getDocsFromServer(collection(db, CHUNKS_COLLECTION));
             const newMap = new Map<string, FirestoreFakturDoc[]>();
             chunksSnap.forEach((d) => {
               const dData = d.data();
@@ -166,15 +168,14 @@ export function subscribeToFakturs(
     (err) => console.warn("Metadata sync warning:", err)
   );
 
-  // Heartbeat fallback: every 10s check if remote upload happened during sleep/background
-  const heartbeatTimer = setInterval(async () => {
+  // Wake-up check: When user switches back to tab or unlocks phone (visibilitychange/focus)
+  const checkRemoteUpdate = async () => {
     try {
-      const metaSnap = await getDoc(doc(db, APP_DATA_COLLECTION, METADATA_DOC));
+      const metaSnap = await getDocFromServer(doc(db, APP_DATA_COLLECTION, METADATA_DOC));
       if (metaSnap.exists()) {
         const data = metaSnap.data();
         const incomingTime = String(data.updatedAt || "");
         if (
-          lastMetaUpdatedAt &&
           incomingTime &&
           incomingTime !== lastMetaUpdatedAt &&
           incomingTime !== localLastUploadTimestamp
@@ -183,7 +184,7 @@ export function subscribeToFakturs(
           if (data.invoiceProgression) {
             currentProgression = data.invoiceProgression as InvoiceProgression;
           }
-          const chunksSnap = await getDocs(collection(db, CHUNKS_COLLECTION));
+          const chunksSnap = await getDocsFromServer(collection(db, CHUNKS_COLLECTION));
           const newMap = new Map<string, FirestoreFakturDoc[]>();
           chunksSnap.forEach((d) => {
             const dData = d.data();
@@ -196,7 +197,21 @@ export function subscribeToFakturs(
         }
       }
     } catch {}
-  }, 10000);
+  };
+
+  // Heartbeat fallback: every 10s check if remote upload happened during sleep/background
+  const heartbeatTimer = setInterval(checkRemoteUpdate, 10000);
+
+  const onVisibilityChange = () => {
+    if (typeof document !== "undefined" && document.visibilityState === "visible") {
+      checkRemoteUpdate();
+    }
+  };
+
+  if (typeof window !== "undefined") {
+    window.addEventListener("visibilitychange", onVisibilityChange);
+    window.addEventListener("focus", checkRemoteUpdate);
+  }
 
   // 2. Subscribe to Print State (Ultra fast toggle & mark all - decoupled from chunk merging!)
   const unsubPrint = onSnapshot(
@@ -238,6 +253,10 @@ export function subscribeToFakturs(
   return () => {
     if (emitTimer) clearTimeout(emitTimer);
     clearInterval(heartbeatTimer);
+    if (typeof window !== "undefined") {
+      window.removeEventListener("visibilitychange", onVisibilityChange);
+      window.removeEventListener("focus", checkRemoteUpdate);
+    }
     unsubMeta();
     unsubPrint();
     unsubChunks();
@@ -245,7 +264,7 @@ export function subscribeToFakturs(
 }
 
 /**
- * Fetch all existing faktur records and progression
+ * Fetch all existing faktur records and progression directly from server (bypassing any stale local cache)
  */
 export async function getExistingFakturs(): Promise<{
   docs: FirestoreFakturDoc[];
@@ -253,9 +272,9 @@ export async function getExistingFakturs(): Promise<{
   printState: PrintState | null;
 }> {
   const [chunksSnap, metaSnap, printSnap] = await Promise.all([
-    getDocs(collection(db, CHUNKS_COLLECTION)),
-    getDoc(doc(db, APP_DATA_COLLECTION, METADATA_DOC)),
-    getDoc(doc(db, APP_DATA_COLLECTION, PRINT_STATE_DOC)),
+    getDocsFromServer(collection(db, CHUNKS_COLLECTION)).catch(() => getDocs(collection(db, CHUNKS_COLLECTION))),
+    getDocFromServer(doc(db, APP_DATA_COLLECTION, METADATA_DOC)).catch(() => getDoc(doc(db, APP_DATA_COLLECTION, METADATA_DOC))),
+    getDocFromServer(doc(db, APP_DATA_COLLECTION, PRINT_STATE_DOC)).catch(() => getDoc(doc(db, APP_DATA_COLLECTION, PRINT_STATE_DOC))),
   ]);
 
   const sortedDocs = chunksSnap.docs.sort((a, b) => {
