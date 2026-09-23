@@ -37,6 +37,8 @@ const METADATA_DOC = "metadata";
 const PRINT_STATE_DOC = "print_state";
 const CHUNKS_COLLECTION = "faktur_chunks";
 
+let localLastUploadTimestamp: string | null = null;
+
 const CHUNK_SIZE = 120; // ~120 items per doc (~250KB, comfortably under 1MB Firestore doc limit)
 
 export type SubscribeChangeReason = "chunks" | "print" | "meta";
@@ -63,6 +65,7 @@ export function subscribeToFakturs(
   };
   let emitTimer: ReturnType<typeof setTimeout> | null = null;
   let hasEmittedInitialChunks = false;
+  let lastMetaUpdatedAt: string | null = null;
 
   const emitData = (reason: SubscribeChangeReason = "chunks") => {
     // Merge all chunks in order
@@ -114,7 +117,7 @@ export function subscribeToFakturs(
   // 1. Subscribe to Metadata
   const unsubMeta = onSnapshot(
     doc(db, APP_DATA_COLLECTION, METADATA_DOC),
-    (snap) => {
+    async (snap) => {
       if (snap.exists()) {
         const data = snap.data();
         if (data.invoiceProgression) {
@@ -122,6 +125,36 @@ export function subscribeToFakturs(
         }
         if (typeof data.totalChunks === "number") {
           expectedChunks = data.totalChunks;
+        }
+
+        const newUpdatedAt = String(data.updatedAt || "");
+        const isFirstLoad = lastMetaUpdatedAt === null;
+        const isRemoteUpload = Boolean(
+          !isFirstLoad &&
+          newUpdatedAt &&
+          newUpdatedAt !== lastMetaUpdatedAt &&
+          newUpdatedAt !== localLastUploadTimestamp
+        );
+        lastMetaUpdatedAt = newUpdatedAt;
+
+        if (isRemoteUpload) {
+          // A new upload just completed on another laptop/tab!
+          // Instantly refresh chunks so all colleagues see the new invoices & pending SO!
+          try {
+            const chunksSnap = await getDocs(collection(db, CHUNKS_COLLECTION));
+            const newMap = new Map<string, FirestoreFakturDoc[]>();
+            chunksSnap.forEach((d) => {
+              const dData = d.data();
+              if (Array.isArray(dData.items)) {
+                newMap.set(d.id, dData.items as FirestoreFakturDoc[]);
+              }
+            });
+            currentChunksMap = newMap;
+            emitData("chunks");
+            return;
+          } catch (err) {
+            console.warn("Auto-sync chunks on metadata change error:", err);
+          }
         }
       }
       if (hasEmittedInitialChunks) {
@@ -132,6 +165,38 @@ export function subscribeToFakturs(
     },
     (err) => console.warn("Metadata sync warning:", err)
   );
+
+  // Heartbeat fallback: every 10s check if remote upload happened during sleep/background
+  const heartbeatTimer = setInterval(async () => {
+    try {
+      const metaSnap = await getDoc(doc(db, APP_DATA_COLLECTION, METADATA_DOC));
+      if (metaSnap.exists()) {
+        const data = metaSnap.data();
+        const incomingTime = String(data.updatedAt || "");
+        if (
+          lastMetaUpdatedAt &&
+          incomingTime &&
+          incomingTime !== lastMetaUpdatedAt &&
+          incomingTime !== localLastUploadTimestamp
+        ) {
+          lastMetaUpdatedAt = incomingTime;
+          if (data.invoiceProgression) {
+            currentProgression = data.invoiceProgression as InvoiceProgression;
+          }
+          const chunksSnap = await getDocs(collection(db, CHUNKS_COLLECTION));
+          const newMap = new Map<string, FirestoreFakturDoc[]>();
+          chunksSnap.forEach((d) => {
+            const dData = d.data();
+            if (Array.isArray(dData.items)) {
+              newMap.set(d.id, dData.items as FirestoreFakturDoc[]);
+            }
+          });
+          currentChunksMap = newMap;
+          emitData("chunks");
+        }
+      }
+    } catch {}
+  }, 10000);
 
   // 2. Subscribe to Print State (Ultra fast toggle & mark all - decoupled from chunk merging!)
   const unsubPrint = onSnapshot(
@@ -172,6 +237,7 @@ export function subscribeToFakturs(
 
   return () => {
     if (emitTimer) clearTimeout(emitTimer);
+    clearInterval(heartbeatTimer);
     unsubMeta();
     unsubPrint();
     unsubChunks();
@@ -346,6 +412,7 @@ export async function saveFaktursBatch(
   );
 
   // Save metadata
+  localLastUploadTimestamp = nowIso;
   const metaDocRef = doc(db, APP_DATA_COLLECTION, METADATA_DOC);
   await setDoc(
     metaDocRef,
@@ -472,6 +539,7 @@ export async function clearAllFakturs(): Promise<void> {
   await Promise.all(chunksSnap.docs.map((d) => deleteDoc(d.ref)));
 
   const nowIso = new Date().toISOString();
+  localLastUploadTimestamp = nowIso;
   await Promise.all([
     setDoc(doc(db, APP_DATA_COLLECTION, METADATA_DOC), {
       invoiceProgression: null,
