@@ -373,8 +373,6 @@ const FakturTableRow = memo(function FakturTableRow({
                 ? "bg-gray-100 text-gray-300 cursor-not-allowed"
                 : g.allPrinted
                 ? "bg-green-500 text-white hover:bg-orange-500 hover:rotate-180"
-                : g.anyPrinted
-                ? "bg-yellow-400 text-white hover:bg-yellow-500"
                 : "bg-gray-200 text-gray-600 hover:bg-green-500 hover:text-white"
             }`}
             title={
@@ -382,12 +380,10 @@ const FakturTableRow = memo(function FakturTableRow({
                 ? "Menunggu No Faktur (Belum bisa diprint)"
                 : g.allPrinted
                 ? "Sudah Terprint · Klik untuk UNPRINT (Batal Cetak)"
-                : g.anyPrinted
-                ? "Sebagian terprint · Klik untuk tandai"
                 : "Belum terprint · Klik atau tekan Space untuk SUDAH PRINT"
             }
           >
-            {!hasInvoice ? "–" : g.allPrinted ? "✓" : g.anyPrinted ? "◑" : "○"}
+            {!hasInvoice ? "–" : g.allPrinted ? "✓" : "○"}
           </button>
         </td>
 
@@ -533,13 +529,18 @@ const FakturTableRow = memo(function FakturTableRow({
           }}
           className={`px-2 py-2 whitespace-nowrap ${getCellCls(9)}`}
         >
-          {g.allPrinted && g.printedAt ? (
-            <span className="inline-flex items-center gap-1 text-[11px] font-mono font-medium text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200" title={`Selesai diprint pada: ${formatPrintTime(g.printedAt)}`}>
-              <span className="text-emerald-600 font-bold">⏱</span>
-              {formatPrintTime(g.printedAt)}
-            </span>
-          ) : g.anyPrinted ? (
-            <span className="text-xs text-yellow-600 italic">Sebagian</span>
+          {g.allPrinted ? (
+            g.printedAt ? (
+              <span className="inline-flex items-center gap-1 text-[11px] font-mono font-medium text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200" title={`Selesai diprint pada: ${formatPrintTime(g.printedAt)}`}>
+                <span className="text-emerald-600 font-bold">⏱</span>
+                {formatPrintTime(g.printedAt)}
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                <span className="text-emerald-600 font-bold">✓</span>
+                Terprint
+              </span>
+            )
           ) : (
             <span className="text-xs text-gray-300">-</span>
           )}
@@ -1166,34 +1167,42 @@ export default function Home() {
           if (!noFaktur || noFaktur === "SO-" || noFaktur === "SO--" || noFaktur === "-1P") continue;
 
           const targetKey = noFaktur;
-          // Determine if this is a genuinely new invoice being uploaded in this batch
-          const isNewInvoice = isOra
-            ? (num > 0 ? (prevOraNum > 0 && num > prevOraNum) : !existingStatusMap.has(noFaktur))
-            : (num > 0 ? (prevDooNum > 0 && num > prevDooNum) : !existingStatusMap.has(noFaktur));
+          // Check if this invoice is already in DB
+          const prevInfo = existingStatusMap.get(noFaktur) || (hasValidSO ? existingStatusMap.get(`SO-${r.orderNumber}`) : undefined);
 
-          if (isNewInvoice) {
-            newUnprintedKeyList.push(targetKey);
+          let isPrinted = false;
+          let printedAt: string | null = null;
+          let isNewInvoice = false;
+
+          if (prevInfo !== undefined) {
+            // Already in database: STRICTLY preserve existing user/system print status!
+            // If user or previous file had it as unprinted, it STAYS unprinted!
+            // If it was printed, it STAYS printed!
+            isPrinted = Boolean(prevInfo.status_cetak);
+            printedAt = isPrinted
+              ? (currentActivePrintedAtMap[noFaktur] || prevInfo.printed_at || latestPrintStateRef.current?.printedAtMap?.[noFaktur] || null)
+              : null;
+            if (!isPrinted) {
+              newUnprintedKeyList.push(targetKey);
+            }
+          } else {
+            // Brand new to database: determine whether it is a genuinely new invoice or historical
+            const isHistoricalPrinted = num > 0 && (
+              (isOra && prevOraNum > 0 && num <= prevOraNum) ||
+              (!isOra && prevDooNum > 0 && num <= prevDooNum)
+            );
+
+            if (isHistoricalPrinted) {
+              isPrinted = true;
+              printedAt = null;
+            } else {
+              // Genuinely new invoice or waiting invoice -> Belum Terprint
+              isNewInvoice = true;
+              isPrinted = false;
+              printedAt = null;
+              newUnprintedKeyList.push(targetKey);
+            }
           }
-
-          const prevInfo = !isNewInvoice ? (existingStatusMap.get(noFaktur) || (hasValidSO ? existingStatusMap.get(`SO-${r.orderNumber}`) : undefined)) : undefined;
-          const isHistoricalPrinted = num > 0 && (
-            (isOra && prevOraNum > 0 && num <= prevOraNum) ||
-            (!isOra && prevDooNum > 0 && num <= prevDooNum)
-          );
-          const isAlreadyPrinted = !isNewInvoice && (
-            isHistoricalPrinted ||
-            Boolean(prevInfo?.status_cetak) ||
-            currentActivePrintedSet.has(noFaktur) ||
-            Boolean(latestPrintStateRef.current?.printedKeys?.includes(noFaktur))
-          );
-          const isPrinted = isAlreadyPrinted;
-
-          const printedAt = isPrinted
-            ? currentActivePrintedAtMap[noFaktur] ||
-              prevInfo?.printed_at ||
-              latestPrintStateRef.current?.printedAtMap?.[noFaktur] ||
-              null
-            : null;
           const prevExtra = (prevInfo?.extra as Record<string, unknown>) || null;
           const prevItems = (prevExtra?.items as Array<Record<string, unknown>>) || [];
           const hasExistingRichItems =
@@ -1299,16 +1308,8 @@ export default function Home() {
           }
 
           const existing = invMap.get(targetKey)!;
-          if (isNewInvoice) {
-            existing.status_cetak = false;
-            existing.printed_at = null;
-          } else if (isPrinted) {
-            existing.status_cetak = true;
-            if (printedAt) existing.printed_at = printedAt;
-          } else if (existing.status_cetak === undefined) {
-            existing.status_cetak = false;
-            existing.printed_at = null;
-          }
+          existing.status_cetak = isPrinted;
+          existing.printed_at = isPrinted ? printedAt : null;
 
           // For ORA: XXCUST supplies the official Sales Order
           // For DOO: Keep the DOO SO from DOO export unchanged!
@@ -1646,7 +1647,13 @@ export default function Home() {
         const mergedPrintedSet = new Set([...currentActivePrintedSet, ...localPrintedSet]);
         const mergedPrintedMap = { ...currentActivePrintedAtMap, ...localPrintedAtMap };
 
-        // For all genuinely new invoices uploaded in this file, ensure they are NOT in the printed set
+        // For all unprinted invoices, ensure they are NOT in the printed set
+        payload.forEach((doc) => {
+          if (!doc.status_cetak && doc.no_faktur && doc.no_faktur !== "__SYSTEM_METADATA__") {
+            mergedPrintedSet.delete(doc.no_faktur);
+            delete mergedPrintedMap[doc.no_faktur];
+          }
+        });
         newUnprintedKeyList.forEach((k) => {
           mergedPrintedSet.delete(k);
           delete mergedPrintedMap[k];
@@ -2318,7 +2325,7 @@ export default function Home() {
       "Jenis Transaksi": g.jenisTransaksi || "-",
       "Kategori": g.kategori || "-",
       "Pelanggan": g.customerName || "-",
-      "Status Cetak": g.allPrinted ? "Sudah Terprint" : g.anyPrinted ? "Sebagian Terprint" : "Belum Terprint",
+      "Status Cetak": g.allPrinted ? "Sudah Terprint" : "Belum Terprint",
       "Waktu Selesai Cetak": g.printedAt ? formatPrintTime(g.printedAt) : "-",
       "Jumlah Item": g.totalItems || g.items.length || 1,
       "Total Harga": g.totalHarga,
