@@ -107,12 +107,8 @@ export function subscribeToFakturs(
   const debouncedEmit = (reason: SubscribeChangeReason = "chunks") => {
     if (emitTimer) clearTimeout(emitTimer);
     emitTimer = setTimeout(() => {
-      // Guard against emitting incomplete chunks if totalChunks is known
-      if (expectedChunks > 0 && currentChunksMap.size < expectedChunks) {
-        return;
-      }
       emitData(reason);
-    }, 150);
+    }, 200);
   };
 
   // 1. Subscribe to Metadata
@@ -363,8 +359,16 @@ export async function saveFaktursBatch(
     { merge: true }
   );
 
-  // Save the union-merged print state back to Firestore so no print status is ever wiped out
-  await updatePrintState(Array.from(unifiedPrintedSet), unifiedPrintedAtMap);
+  // Only initialize print state if it does not exist yet; NEVER overwrite live print status!
+  try {
+    const printDocRef = doc(db, APP_DATA_COLLECTION, PRINT_STATE_DOC);
+    const printSnap = await getDoc(printDocRef);
+    if (!printSnap.exists()) {
+      await updatePrintState(Array.from(unifiedPrintedSet), unifiedPrintedAtMap);
+    }
+  } catch (err) {
+    console.warn("Could not check print state existence:", err);
+  }
 }
 
 /**
@@ -389,23 +393,40 @@ export async function updateFakturPrintStatus(
   invoiceKey: string,
   status: boolean,
   printedAt: string | null,
-  currentPrintedKeys: Set<string>,
-  currentPrintedAtMap: Record<string, string>
+  currentPrintedKeys?: Set<string>,
+  currentPrintedAtMap?: Record<string, string>
 ): Promise<void> {
-  const nextKeys = new Set(currentPrintedKeys);
-  const nextMap = { ...currentPrintedAtMap };
+  const printDocRef = doc(db, APP_DATA_COLLECTION, PRINT_STATE_DOC);
+  let liveKeys = new Set<string>();
+  let liveMap: Record<string, string> = {};
 
-  if (status) {
-    nextKeys.add(invoiceKey);
-    if (printedAt) {
-      nextMap[invoiceKey] = printedAt;
+  try {
+    const snap = await getDoc(printDocRef);
+    if (snap.exists()) {
+      const data = snap.data() as PrintState;
+      liveKeys = new Set(data.printedKeys || []);
+      liveMap = { ...(data.printedAtMap || {}) };
+    } else if (currentPrintedKeys) {
+      liveKeys = new Set(currentPrintedKeys);
+      liveMap = { ...(currentPrintedAtMap || {}) };
     }
-  } else {
-    nextKeys.delete(invoiceKey);
-    delete nextMap[invoiceKey];
+  } catch (err) {
+    console.warn("Could not fetch live print state, falling back to local:", err);
+    if (currentPrintedKeys) liveKeys = new Set(currentPrintedKeys);
+    if (currentPrintedAtMap) liveMap = { ...currentPrintedAtMap };
   }
 
-  await updatePrintState(Array.from(nextKeys), nextMap);
+  if (status) {
+    liveKeys.add(invoiceKey);
+    if (printedAt) {
+      liveMap[invoiceKey] = printedAt;
+    }
+  } else {
+    liveKeys.delete(invoiceKey);
+    delete liveMap[invoiceKey];
+  }
+
+  await updatePrintState(Array.from(liveKeys), liveMap);
 }
 
 /**
