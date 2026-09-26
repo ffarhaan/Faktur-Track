@@ -140,9 +140,15 @@ export function subscribeToFakturs(
         lastMetaUpdatedAt = newUpdatedAt;
 
         if (isFirstLoad || isRemoteUpload) {
-          // Instantly fetch all chunks atomically from server so all colleagues see the new invoices & pending SO!
+          // Instantly fetch all chunks & print state atomically from server so all colleagues on different devices see the latest state!
           try {
-            const chunksSnap = await getDocsFromServer(collection(db, CHUNKS_COLLECTION));
+            const [chunksSnap, printSnap] = await Promise.all([
+              getDocsFromServer(collection(db, CHUNKS_COLLECTION)),
+              getDocFromServer(doc(db, APP_DATA_COLLECTION, PRINT_STATE_DOC)).catch(() => getDoc(doc(db, APP_DATA_COLLECTION, PRINT_STATE_DOC))),
+            ]);
+            if (printSnap.exists()) {
+              currentPrintState = printSnap.data() as PrintState;
+            }
             const newMap = new Map<string, FirestoreFakturDoc[]>();
             chunksSnap.forEach((d) => {
               const dData = d.data();
@@ -378,6 +384,34 @@ export async function saveFaktursBatch(
     }
   }
 
+  // CRITICAL MULTI-DEVICE PROTECTION:
+  // Before building chunks, fetch any existing chunks from Firestore that might have been uploaded by colleagues on other devices,
+  // and merge them so one device NEVER deletes or overwrites another device's invoices!
+  try {
+    const liveChunksSnap = await getDocs(collection(db, CHUNKS_COLLECTION));
+    const currentKeys = new Set(fakturs.map((f) => f.id || f.no_faktur));
+    const missingDocs: FirestoreFakturDoc[] = [];
+
+    liveChunksSnap.forEach((d) => {
+      const data = d.data();
+      if (Array.isArray(data.items)) {
+        data.items.forEach((it: FirestoreFakturDoc) => {
+          const k = it.id || it.no_faktur;
+          if (k && !currentKeys.has(k)) {
+            currentKeys.add(k);
+            missingDocs.push(it);
+          }
+        });
+      }
+    });
+
+    if (missingDocs.length > 0) {
+      fakturs.push(...missingDocs);
+    }
+  } catch (err) {
+    console.warn("Could not check live chunks union:", err);
+  }
+
   const chunks = createSafeChunks(fakturs);
   const nowIso = new Date().toISOString();
   const chunkIds: string[] = chunks.map((_, idx) => `chunk_${idx}`);
@@ -409,19 +443,6 @@ export async function saveFaktursBatch(
         throw lastErr || new Error(`Gagal menyimpan ${chunkId}`);
       })
     );
-  }
-
-  // Clean up any old unused chunks (e.g. if previous upload had more chunks)
-  try {
-    const existingChunksSnap = await getDocs(collection(db, CHUNKS_COLLECTION));
-    const currentChunkSet = new Set(chunkIds);
-    await Promise.all(
-      existingChunksSnap.docs
-        .filter((d) => !currentChunkSet.has(d.id))
-        .map((d) => deleteDoc(d.ref))
-    );
-  } catch (err) {
-    console.warn("Could not clean old chunks:", err);
   }
 
   // Save metadata
