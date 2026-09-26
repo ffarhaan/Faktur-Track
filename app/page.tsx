@@ -162,8 +162,8 @@ function dbRowsToFakturRecords(rows: Array<Record<string, unknown>>): {
     const items = (extra.items as Array<Record<string, unknown>>) || [];
     const cust = String(extra.nama_pelanggan || r.customer_name || "");
     const date = String(extra.accounting_date || extra.order_date || r.order_date || r.imported_at || "");
-    const isOra = isOraCustomer(cust) || r.jenis_transaksi === "ORA" || rawInv.endsWith("-1P");
-    const invKey = rawInv || (isOra ? `${cleanInv}-1P` : cleanInv);
+    const isOra = isOraCustomer(cust);
+    const invKey = isOra ? `${cleanInv}-1P` : cleanInv;
     const cleanJenis: "DOO" | "ORA" = isOra ? "ORA" : "DOO";
     const kategori = (r.kategori as "1P" | "2P" | "3P") || categorize(cleanJenis, cust, cleanJenis);
     const pAt = (r.printed_at as string) || (extra.printed_at as string) || null;
@@ -1014,7 +1014,7 @@ export default function Home() {
           const cleanInv = rawInv.replace(/-1P$/i, "");
           const extra = (row.extra as Record<string, unknown>) || {};
           const cust = String(extra.nama_pelanggan || "");
-          const isOra = isOraCustomer(cust) || row.jenis_transaksi === "ORA" || rawInv.endsWith("-1P");
+          const isOra = isOraCustomer(cust);
           const num = parseInvNum(cleanInv);
           const kat = isOra ? "1P" : categorize("DOO", cust);
 
@@ -1073,9 +1073,14 @@ export default function Home() {
         const invMap = new Map<string, Record<string, unknown>>();
         existingDB.forEach((row) => {
           if (row.no_faktur === "__SYSTEM_METADATA__") return;
-          const k = String(row.no_faktur || row.id || "");
-          if (k) {
+          const rawK = String(row.no_faktur || row.id || "");
+          if (rawK) {
             const extra = (row.extra as Record<string, unknown>) || {};
+            const cust = String(extra.nama_pelanggan || row.customer_name || "");
+            const cleanInv = rawK.replace(/-1P$/i, "");
+            const isActuallyOra = isOraCustomer(cust);
+            const k = isActuallyOra ? (rawK.endsWith("-1P") ? rawK : `${cleanInv}-1P`) : cleanInv;
+
             const soSet = new Set<string>();
             if (row.no_sales_order) {
               String(row.no_sales_order).split(",").forEach((s) => {
@@ -1092,8 +1097,28 @@ export default function Home() {
               prevItems.length > 0 &&
               prevItems.some((it) => it.item_code && it.item_code !== "-" && it.item_code !== "");
 
+            if (invMap.has(k)) {
+              const existing = invMap.get(k)!;
+              const existingExtra = existing.extra as Record<string, unknown>;
+              if (!Array.isArray(existingExtra.items)) existingExtra.items = [];
+              const itList = existingExtra.items as Array<Record<string, unknown>>;
+              prevItems.forEach((it) => {
+                if (it.item_code && it.item_code !== "-") {
+                  const isDup = itList.some(
+                    (e) => e.item_code === it.item_code && e.lot_number === it.lot_number && e.qty === it.qty
+                  );
+                  if (!isDup) itList.push(it);
+                }
+              });
+              return;
+            }
+
             invMap.set(k, {
               ...row,
+              no_faktur: k,
+              id: k,
+              jenis_transaksi: isActuallyOra ? "ORA" : "DOO",
+              kategori: isActuallyOra ? "1P" : (row.kategori || categorize("DOO", cust)),
               _soSet: soSet,
               _hasPreservedItems: hasExistingRichItems,
             });
@@ -1173,7 +1198,7 @@ export default function Home() {
 
         // Merge incoming records into invMap
         for (const r of parsed) {
-          const isOra = isOraCustomer(r.customerName) || r.jenisTransaksi === "ORA" || String(r.invoiceKey || "").endsWith("-1P");
+          const isOra = isOraCustomer(r.customerName);
           const cleanInv = String(r.invoiceNumber || "").trim().replace(/-1P$/i, "");
           const num = parseInvNum(cleanInv);
           const hasInv = cleanInv && cleanInv !== "0" && cleanInv !== "-";
@@ -1489,7 +1514,7 @@ export default function Home() {
         }
 
         for (const r of parsed) {
-          const isOra = isOraCustomer(r.customerName) || r.jenisTransaksi === "ORA" || String(r.invoiceKey || "").endsWith("-1P");
+          const isOra = isOraCustomer(r.customerName);
           const cleanInv = String(r.invoiceNumber || "").trim().replace(/-1P$/i, "");
           const num = parseInvNum(cleanInv);
           const kat = isOra ? "1P" : (r.kategori || categorize("DOO", r.customerName));
@@ -1966,7 +1991,7 @@ export default function Home() {
         jenisTransaksi: g.jenisTransaksi,
       };
 
-      const isOra = g.jenisTransaksi === "ORA" || g.invoiceKey.endsWith("-1P") || isOraCustomer(g.customerName);
+      const isOra = isOraCustomer(g.customerName);
       if (isOra) {
         if (num > max1POraNum) {
           max1POraNum = num;
