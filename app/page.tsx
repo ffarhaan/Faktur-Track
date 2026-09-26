@@ -1279,12 +1279,10 @@ export default function Home() {
                 });
               }
               if (r.orderNumber && r.orderNumber !== "-" && r.orderNumber !== "") {
-                if (!isFileItemRich) {
-                  r.orderNumber.split(",").forEach((s) => {
-                    const t = s.trim();
-                    if (t && t !== "-") soSet.add(t);
-                  });
-                }
+                r.orderNumber.split(",").forEach((s) => {
+                  const t = s.trim();
+                  if (t && t !== "-") soSet.add(t);
+                });
               }
             }
 
@@ -1295,7 +1293,7 @@ export default function Home() {
 
             const initialSO = isOra
               ? (Array.from(soSet).filter(s => s.length > 5)[0] || Array.from(soSet)[Array.from(soSet).length - 1] || (r.orderNumber && r.orderNumber !== "-" ? r.orderNumber : "-"))
-              : (prevInfo?.no_sales_order ? String(prevInfo.no_sales_order).split(",")[0].trim() : (r.orderNumber && !isFileItemRich ? r.orderNumber : "-"));
+              : (prevInfo?.no_sales_order ? String(prevInfo.no_sales_order).split(",")[0].trim() : (r.orderNumber && r.orderNumber !== "-" ? r.orderNumber : "-"));
 
             invMap.set(targetKey, {
               no_faktur: targetKey,
@@ -1354,7 +1352,7 @@ export default function Home() {
                 const t = s.trim();
                 if (t && t !== "-") (existing._soSet as Set<string>).add(t);
               });
-            } else if (!isFileItemRich) {
+            } else if (!isFileItemRich || (existing._soSet as Set<string>).size === 0) {
               r.orderNumber.split(",").forEach((s) => {
                 const t = s.trim();
                 if (t && t !== "-") (existing._soSet as Set<string>).add(t);

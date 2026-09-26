@@ -335,7 +335,7 @@ function parseXXCUST(data: unknown[][], headerIdx: number): FakturRecord[] {
 
     const customerName = val(idx.customerName);
     const rawJenis = val(idx.jenisTransaksi).toUpperCase();
-    const isOra = rawJenis === "ORA" || rawJenis.includes("PRIORITY") || isOraCustomer(customerName);
+    const isOra = rawJenis === "ORA" || isOraCustomer(customerName);
     const jenisTransaksi: "ORA" | "DOO" = isOra ? "ORA" : "DOO";
     const kategori = categorize(jenisTransaksi, customerName, jenisTransaksi);
     const invoiceKey = isOra ? `${invoiceNumber}-1P` : invoiceNumber;
