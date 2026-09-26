@@ -199,9 +199,6 @@ export function subscribeToFakturs(
     } catch {}
   };
 
-  // Heartbeat fallback: every 10s check if remote upload happened during sleep/background
-  const heartbeatTimer = setInterval(checkRemoteUpdate, 10000);
-
   const onVisibilityChange = () => {
     if (typeof document !== "undefined" && document.visibilityState === "visible") {
       checkRemoteUpdate();
@@ -231,9 +228,7 @@ export function subscribeToFakturs(
   );
 
   return () => {
-
     if (emitTimer) clearTimeout(emitTimer);
-    clearInterval(heartbeatTimer);
     if (typeof window !== "undefined") {
       window.removeEventListener("visibilitychange", onVisibilityChange);
       window.removeEventListener("focus", checkRemoteUpdate);
@@ -444,15 +439,11 @@ export async function saveFaktursBatch(
     { merge: true }
   );
 
-  // Only initialize print state if it does not exist yet; NEVER overwrite live print status!
+  // Sync the unified print state to Firestore (1 write) so all newly added historical invoices stay printed on refresh!
   try {
-    const printDocRef = doc(db, APP_DATA_COLLECTION, PRINT_STATE_DOC);
-    const printSnap = await getDoc(printDocRef);
-    if (!printSnap.exists()) {
-      await updatePrintState(Array.from(unifiedPrintedSet), unifiedPrintedAtMap);
-    }
+    await updatePrintState(Array.from(unifiedPrintedSet), unifiedPrintedAtMap);
   } catch (err) {
-    console.warn("Could not check print state existence:", err);
+    console.warn("Could not update print state during batch upload:", err);
   }
 }
 
