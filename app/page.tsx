@@ -932,15 +932,30 @@ export default function Home() {
 
   // Upload: Parse & Save directly to Supabase cloud DB so all devices see it
   const handleUpload = useCallback(
-    async (file: File) => {
+    async (filesInput: File[] | FileList | File) => {
+      const files: File[] = Array.isArray(filesInput)
+        ? filesInput
+        : typeof FileList !== "undefined" && filesInput instanceof FileList
+        ? Array.from(filesInput)
+        : [filesInput as File];
+
+      if (files.length === 0) return;
+
       isUploadingRef.current = true;
       setLoading(true);
       setError(null);
       try {
-        const parsed = await parseExcelFile(file);
+        let parsed: FakturRecord[] = [];
+        const fileNames: string[] = [];
+        for (const file of files) {
+          fileNames.push(file.name);
+          const p = await parseExcelFile(file);
+          parsed.push(...p);
+        }
+
         if (parsed.length === 0) {
           setError(
-            `File "${file.name}" berhasil dibaca tetapi tidak memiliki baris data transaksi (0 baris). Pastikan file hasil export dari Oracle memiliki data dan parameter export terisi dengan benar (misal: Entity "MBI LE").`
+            `File yang dipilih (${fileNames.join(", ")}) berhasil dibaca tetapi tidak memiliki baris data transaksi (0 baris). Pastikan file hasil export dari Oracle memiliki data dan parameter export terisi dengan benar (misal: Entity "MBI LE").`
           );
           setLoading(false);
           return;
@@ -1689,7 +1704,7 @@ export default function Home() {
         );
 
         setUploadNotification({
-          fileName: file.name,
+          fileName: fileNames.join(", "),
           prevOra,
           maxOra: maxUploadedOraStr,
           rangeOra,
@@ -1704,7 +1719,11 @@ export default function Home() {
 
         setUploadedFiles((prev) => [
           ...prev,
-          { name: file.name, count: parsed.length, time: new Date().toLocaleString("id-ID") },
+          ...files.map((f) => ({
+            name: f.name,
+            count: parsed.length,
+            time: new Date().toLocaleString("id-ID"),
+          })),
         ]);
         setPage(0);
       } catch (e) {
@@ -1727,8 +1746,8 @@ export default function Home() {
         alert("⚠️ SISTEM SEDANG DALAM PROSES UPDATE & OPTIMASI PERFORMA.\n\nMohon jangan upload file apapun dulu yaa hingga pembaruan selesai.");
         return;
       }
-      const file = e.dataTransfer.files[0];
-      if (file) handleUpload(file);
+      const files = Array.from(e.dataTransfer.files || []);
+      if (files.length > 0) handleUpload(files);
     },
     [handleUpload]
   );
@@ -1740,8 +1759,8 @@ export default function Home() {
         e.target.value = "";
         return;
       }
-      const file = e.target.files?.[0];
-      if (file) handleUpload(file);
+      const files = e.target.files ? Array.from(e.target.files) : [];
+      if (files.length > 0) handleUpload(files);
       e.target.value = "";
     },
     [handleUpload]
@@ -2693,7 +2712,7 @@ export default function Home() {
               <label className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl cursor-pointer text-sm font-semibold shadow transition-colors">
                 <span>📁</span>
                 <span>Upload File Excel</span>
-                <input type="file" accept=".xlsx,.xls" onChange={onFileInput} className="hidden" />
+                <input type="file" accept=".xlsx,.xls" multiple onChange={onFileInput} className="hidden" />
               </label>
             )}
             {loading && <p className="text-xs text-gray-500 mt-3 animate-pulse">Membaca file...</p>}
@@ -3136,7 +3155,7 @@ export default function Home() {
                     <label className="bg-blue-600 hover:bg-blue-700 text-white px-3.5 py-1.5 rounded-lg cursor-pointer text-xs font-semibold whitespace-nowrap shadow-sm flex items-center gap-1.5 transition-colors">
                       <span>📁</span>
                       <span>Upload Excel</span>
-                      <input type="file" accept=".xlsx,.xls" onChange={onFileInput} className="hidden" />
+                      <input type="file" accept=".xlsx,.xls" multiple onChange={onFileInput} className="hidden" />
                     </label>
                   )}
                   {loading && <span className="text-xs text-gray-500 animate-pulse whitespace-nowrap">Membaca...</span>}
