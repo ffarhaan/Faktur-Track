@@ -162,7 +162,7 @@ function dbRowsToFakturRecords(rows: Array<Record<string, unknown>>): {
     const items = (extra.items as Array<Record<string, unknown>>) || [];
     const cust = String(extra.nama_pelanggan || r.customer_name || "");
     const date = String(extra.accounting_date || extra.order_date || r.order_date || r.imported_at || "");
-    const isOra = isOraCustomer(cust);
+    const isOra = isOraCustomer(cust) || r.jenis_transaksi === "ORA" || rawInv.endsWith("-1P");
     const invKey = rawInv || (isOra ? `${cleanInv}-1P` : cleanInv);
     const cleanJenis: "DOO" | "ORA" = isOra ? "ORA" : "DOO";
     const kategori = (r.kategori as "1P" | "2P" | "3P") || categorize(cleanJenis, cust, cleanJenis);
@@ -999,7 +999,7 @@ export default function Home() {
           const cleanInv = rawInv.replace(/-1P$/i, "");
           const extra = (row.extra as Record<string, unknown>) || {};
           const cust = String(extra.nama_pelanggan || "");
-          const isOra = isOraCustomer(cust);
+          const isOra = isOraCustomer(cust) || row.jenis_transaksi === "ORA" || rawInv.endsWith("-1P");
           const num = parseInvNum(cleanInv);
           const kat = isOra ? "1P" : categorize("DOO", cust);
 
@@ -1158,7 +1158,7 @@ export default function Home() {
 
         // Merge incoming records into invMap
         for (const r of parsed) {
-          const isOra = isOraCustomer(r.customerName);
+          const isOra = isOraCustomer(r.customerName) || r.jenisTransaksi === "ORA" || String(r.invoiceKey || "").endsWith("-1P");
           const cleanInv = String(r.invoiceNumber || "").trim().replace(/-1P$/i, "");
           const num = parseInvNum(cleanInv);
           const hasInv = cleanInv && cleanInv !== "0" && cleanInv !== "-";
@@ -1476,7 +1476,7 @@ export default function Home() {
         }
 
         for (const r of parsed) {
-          const isOra = isOraCustomer(r.customerName);
+          const isOra = isOraCustomer(r.customerName) || r.jenisTransaksi === "ORA" || String(r.invoiceKey || "").endsWith("-1P");
           const cleanInv = String(r.invoiceNumber || "").trim().replace(/-1P$/i, "");
           const num = parseInvNum(cleanInv);
           const kat = isOra ? "1P" : (r.kategori || categorize("DOO", r.customerName));
@@ -1949,22 +1949,23 @@ export default function Home() {
         jenisTransaksi: g.jenisTransaksi,
       };
 
-      if (g.kategori === "1P") {
-        if (g.jenisTransaksi === "ORA" && num > max1POraNum) {
+      const isOra = g.jenisTransaksi === "ORA" || g.invoiceKey.endsWith("-1P") || isOraCustomer(g.customerName);
+      if (isOra) {
+        if (num > max1POraNum) {
           max1POraNum = num;
           max1POra = itemInfo;
-        } else if (g.jenisTransaksi === "DOO" && num > max1PDooNum) {
+        }
+      } else {
+        if (g.kategori === "1P" && num > max1PDooNum) {
           max1PDooNum = num;
           max1PDoo = itemInfo;
+        } else if (g.kategori === "2P" && num > max2PNum) {
+          max2PNum = num;
+          max2P = itemInfo;
+        } else if (g.kategori === "3P" && num > max3PNum) {
+          max3PNum = num;
+          max3P = itemInfo;
         }
-      }
-      if (g.kategori === "2P" && num > max2PNum) {
-        max2PNum = num;
-        max2P = itemInfo;
-      }
-      if (g.kategori === "3P" && num > max3PNum) {
-        max3PNum = num;
-        max3P = itemInfo;
       }
     }
 
