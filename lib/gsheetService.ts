@@ -84,7 +84,7 @@ function toGSheetRow(
   return {
     no: index + 1,
     orderDate: item.order_date || String(extra.order_date || extra.accounting_date || ""),
-    invoiceNumber: item.no_faktur || "",
+    invoiceNumber: (item.no_faktur || "").replace(/-1P$/i, ""),
     so: validSO,
     customerName: item.customer_name || String(extra.nama_pelanggan || ""),
     jenisTransaksi: cleanJenis,

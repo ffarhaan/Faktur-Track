@@ -105,7 +105,7 @@ async function uploadAllToGSheets() {
     return {
       no: index + 1,
       orderDate: item.order_date || extra.order_date || extra.accounting_date || '',
-      invoiceNumber: item.no_faktur || '',
+      invoiceNumber: (item.no_faktur || '').replace(/-1P$/i, ''),
       so: validSO,
       customerName: item.customer_name || extra.nama_pelanggan || '',
       jenisTransaksi: cleanJenis,
