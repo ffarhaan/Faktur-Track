@@ -6,7 +6,7 @@
 import { FirestoreFakturDoc, PrintState } from "./firestoreService";
 
 const GSHEET_WEBHOOK_URL =
-  "https://script.google.com/macros/s/AKfycbzX4iJF_wHgTPINLHYZoNsPMKEG3kExdAtOrcLsjDcNaVFA0oPYeH6DqFekjHDtmqA/exec";
+  "https://script.google.com/macros/s/AKfycbye9lO65KFKp_iIwQG0r9tuTqxjwtQCykgDOteNon_W3dETK1RVCxrG-HEFB5UhvBA/exec";
 
 const BATCH_SIZE = 1000;
 
