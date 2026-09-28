@@ -22,6 +22,12 @@ import { db } from "@/lib/firebase";
 import { collection, getDocs } from "firebase/firestore";
 import masterApotekList from "@/lib/masterApotekList.json";
 import masterProductList from "@/lib/masterProduct.json";
+import {
+  appendNewToGSheet,
+  updateGSheetPrintStatus,
+  updateGSheetPrintStatusBatch,
+} from "@/lib/gsheetService";
+
 
 type Filter = "all" | "belum" | "sudah" | "double";
 type KatFilter = "all" | "1P" | "2P" | "3P";
@@ -923,6 +929,12 @@ export default function Home() {
           next,
           nextMap
         );
+        // Sync ke Google Sheets secara realtime
+        await updateGSheetPrintStatus(
+          targetKey,
+          willBePrinted,
+          willBePrinted ? nowIso : null
+        );
       } catch (err) {
         console.error("Failed to update print status in Firestore:", err);
       }
@@ -1195,6 +1207,8 @@ export default function Home() {
         });
 
         const newUnprintedKeyList: string[] = [];
+        const newGSheetKeys = new Set<string>(); // faktur genuinely baru → append ke GSheet
+        const uploadedBatchKeys = new Set<string>(); // semua faktur di file upload saat ini (baru + update)
 
         // Merge incoming records into invMap
         for (const r of parsed) {
@@ -1207,6 +1221,7 @@ export default function Home() {
           if (!noFaktur || noFaktur === "SO-" || noFaktur === "SO--" || noFaktur === "-1P") continue;
 
           const targetKey = noFaktur;
+          uploadedBatchKeys.add(targetKey);
           // Check if this invoice is already in DB
           const prevInfo = existingStatusMap.get(noFaktur) || (hasValidSO ? existingStatusMap.get(`SO-${r.orderNumber}`) : undefined);
 
@@ -1241,6 +1256,7 @@ export default function Home() {
               isPrinted = false;
               printedAt = null;
               newUnprintedKeyList.push(targetKey);
+              newGSheetKeys.add(targetKey); // tandai untuk dikirim ke GSheet
             }
           }
           const prevExtra = (prevInfo?.extra as Record<string, unknown>) || null;
@@ -1726,6 +1742,27 @@ export default function Home() {
           newUnprintedKeyList
         );
 
+        // 3. GOOGLE SHEETS BACKUP — kirim faktur baru & faktur yang diperbarui (ORA + XXCUST)
+        if (uploadedBatchKeys.size > 0) {
+          const batchFaktursForGSheet = (payload as FirestoreFakturDoc[]).filter(
+            (f) => uploadedBatchKeys.has(f.id || f.no_faktur)
+          );
+          const gsheetPrintState = {
+            printedKeys: Array.from(mergedPrintedSet),
+            printedAtMap: mergedPrintedMap,
+            updatedAt: new Date().toISOString(),
+          };
+          appendNewToGSheet(batchFaktursForGSheet, gsheetPrintState)
+            .then((result) => {
+              if (result.success) {
+                console.log(`✅ GSheet backup: ${result.count} faktur disinkronkan (baru/diperbarui).`);
+              } else {
+                console.warn("⚠️ GSheet backup gagal:", result.error);
+              }
+            })
+            .catch((err) => console.warn("⚠️ GSheet backup error:", err));
+        }
+
         setUploadNotification({
           fileName: fileNames.join(", "),
           prevOra,
@@ -2140,6 +2177,7 @@ export default function Home() {
     try {
       setLoading(true);
       await updateFaktursPrintStatusBatch(targetKeys, true, nowIso);
+      await updateGSheetPrintStatusBatch(targetKeys, true, nowIso);
       setCopyToast(`✓ Berhasil menandai ${targetKeys.length} faktur selesai diprint!`);
       setTimeout(() => setCopyToast(null), 3500);
     } catch (err) {
