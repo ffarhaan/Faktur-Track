@@ -10,7 +10,7 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-const WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbwe4ZXCOB2RDsFNwEn9qrDd8KfghIi51tY-b7QeDjzQmo8IZ3YXxc50et3fp14vJ0o/exec';
+const WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbzX4iJF_wHgTPINLHYZoNsPMKEG3kExdAtOrcLsjDcNaVFA0oPYeH6DqFekjHDtmqA/exec';
 
 async function uploadAllToGSheets() {
   console.log('1. Mengambil data dari Firebase...');
