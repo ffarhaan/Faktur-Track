@@ -154,6 +154,11 @@ export function subscribeToFakturs(
               const dData = d.data();
               if (Array.isArray(dData.items)) {
                 newMap.set(d.id, dData.items as FirestoreFakturDoc[]);
+              } else if (typeof dData.itemsJson === "string") {
+                try {
+                  const parsed = JSON.parse(dData.itemsJson);
+                  if (Array.isArray(parsed)) newMap.set(d.id, parsed as FirestoreFakturDoc[]);
+                } catch {}
               }
             });
             currentChunksMap = newMap;
@@ -196,6 +201,11 @@ export function subscribeToFakturs(
             const dData = d.data();
             if (Array.isArray(dData.items)) {
               newMap.set(d.id, dData.items as FirestoreFakturDoc[]);
+            } else if (typeof dData.itemsJson === "string") {
+              try {
+                const parsed = JSON.parse(dData.itemsJson);
+                if (Array.isArray(parsed)) newMap.set(d.id, parsed as FirestoreFakturDoc[]);
+              } catch {}
             }
           });
           currentChunksMap = newMap;
