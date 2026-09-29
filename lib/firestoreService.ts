@@ -65,9 +65,7 @@ export function subscribeToFakturs(
     printedAtMap: {},
     updatedAt: "",
   };
-  let emitTimer: ReturnType<typeof setTimeout> | null = null;
   let hasEmittedInitialChunks = false;
-  let lastMetaUpdatedAt: string | null = null;
 
   const emitData = (reason: SubscribeChangeReason = "chunks") => {
     // Merge all chunks in order
@@ -107,111 +105,98 @@ export function subscribeToFakturs(
     onData(allDocs, currentProgression, currentPrintState, reason);
   };
 
-  let expectedChunks = 0;
+  // 1. Pure Real-time stream for CHUNKS (Instant sync across all laptops whenever a file is uploaded or cleared)
+  const unsubChunks = onSnapshot(
+    collection(db, CHUNKS_COLLECTION),
+    (snap) => {
+      const newMap = new Map<string, FirestoreFakturDoc[]>();
+      snap.forEach((d) => {
+        const dData = d.data();
+        if (Array.isArray(dData.items)) {
+          newMap.set(d.id, dData.items as FirestoreFakturDoc[]);
+        } else if (typeof dData.itemsJson === "string") {
+          try {
+            const parsed = JSON.parse(dData.itemsJson);
+            if (Array.isArray(parsed)) newMap.set(d.id, parsed as FirestoreFakturDoc[]);
+          } catch {}
+        }
+      });
+      currentChunksMap = newMap;
+      emitData("chunks");
+    },
+    (err) => {
+      console.warn("Chunks realtime stream error:", err);
+      onError?.(err);
+    }
+  );
 
-  const debouncedEmit = (reason: SubscribeChangeReason = "chunks") => {
-    if (emitTimer) clearTimeout(emitTimer);
-    emitTimer = setTimeout(() => {
-      emitData(reason);
-    }, 200);
-  };
+  // 2. Pure Real-time stream for PRINT STATE (Instant sync when anyone marks an invoice as printed/unprinted)
+  const unsubPrint = onSnapshot(
+    doc(db, APP_DATA_COLLECTION, PRINT_STATE_DOC),
+    (snap) => {
+      if (snap.exists()) {
+        currentPrintState = snap.data() as PrintState;
+      }
+      if (hasEmittedInitialChunks) {
+        onData([], currentProgression, currentPrintState, "print");
+      }
+    },
+    (err) => console.warn("PrintState sync warning:", err)
+  );
 
-  // 1. Subscribe to Metadata
+  // 3. Pure Real-time stream for METADATA & PROGRESSION (Instant sync for upload progression & ranges)
   const unsubMeta = onSnapshot(
     doc(db, APP_DATA_COLLECTION, METADATA_DOC),
-    async (snap) => {
+    (snap) => {
       if (snap.exists()) {
         const data = snap.data();
         if (data.invoiceProgression) {
           currentProgression = data.invoiceProgression as InvoiceProgression;
         }
-        if (typeof data.totalChunks === "number") {
-          expectedChunks = data.totalChunks;
-        }
-
-        const newUpdatedAt = String(data.updatedAt || "");
-        const isFirstLoad = lastMetaUpdatedAt === null;
-        const isRemoteUpload = Boolean(
-          !isFirstLoad &&
-          newUpdatedAt &&
-          newUpdatedAt !== lastMetaUpdatedAt &&
-          newUpdatedAt !== localLastUploadTimestamp
-        );
-        lastMetaUpdatedAt = newUpdatedAt;
-
-        if (isFirstLoad || isRemoteUpload) {
-          // Instantly fetch all chunks & print state atomically from server so all colleagues on different devices see the latest state!
-          try {
-            const [chunksSnap, printSnap] = await Promise.all([
-              getDocsFromServer(collection(db, CHUNKS_COLLECTION)),
-              getDocFromServer(doc(db, APP_DATA_COLLECTION, PRINT_STATE_DOC)).catch(() => getDoc(doc(db, APP_DATA_COLLECTION, PRINT_STATE_DOC))),
-            ]);
-            if (printSnap.exists()) {
-              currentPrintState = printSnap.data() as PrintState;
-            }
-            const newMap = new Map<string, FirestoreFakturDoc[]>();
-            chunksSnap.forEach((d) => {
-              const dData = d.data();
-              if (Array.isArray(dData.items)) {
-                newMap.set(d.id, dData.items as FirestoreFakturDoc[]);
-              } else if (typeof dData.itemsJson === "string") {
-                try {
-                  const parsed = JSON.parse(dData.itemsJson);
-                  if (Array.isArray(parsed)) newMap.set(d.id, parsed as FirestoreFakturDoc[]);
-                } catch {}
-              }
-            });
-            currentChunksMap = newMap;
-            emitData("chunks");
-            return;
-          } catch (err) {
-            console.warn("Auto-sync chunks on metadata change error:", err);
-          }
-        }
-
       }
       if (hasEmittedInitialChunks) {
         onData([], currentProgression, currentPrintState, "meta");
-      } else {
-        debouncedEmit("meta");
       }
     },
     (err) => console.warn("Metadata sync warning:", err)
   );
 
-  // Wake-up check: When user switches back to tab or unlocks phone (visibilitychange/focus)
+  // Wake-up check: When user switches back to tab or unlocks laptop (visibilitychange/focus)
   const checkRemoteUpdate = async () => {
     try {
-      const metaSnap = await getDocFromServer(doc(db, APP_DATA_COLLECTION, METADATA_DOC));
-      if (metaSnap.exists()) {
+      const [chunksSnap, printSnap, metaSnap] = await Promise.all([
+        getDocsFromServer(collection(db, CHUNKS_COLLECTION)).catch(() => null),
+        getDocFromServer(doc(db, APP_DATA_COLLECTION, PRINT_STATE_DOC)).catch(() => null),
+        getDocFromServer(doc(db, APP_DATA_COLLECTION, METADATA_DOC)).catch(() => null),
+      ]);
+
+      if (metaSnap && metaSnap.exists()) {
         const data = metaSnap.data();
-        const incomingTime = String(data.updatedAt || "");
-        if (
-          incomingTime &&
-          incomingTime !== lastMetaUpdatedAt &&
-          incomingTime !== localLastUploadTimestamp
-        ) {
-          lastMetaUpdatedAt = incomingTime;
-          if (data.invoiceProgression) {
-            currentProgression = data.invoiceProgression as InvoiceProgression;
-          }
-          const chunksSnap = await getDocsFromServer(collection(db, CHUNKS_COLLECTION));
-          const newMap = new Map<string, FirestoreFakturDoc[]>();
-          chunksSnap.forEach((d) => {
-            const dData = d.data();
-            if (Array.isArray(dData.items)) {
-              newMap.set(d.id, dData.items as FirestoreFakturDoc[]);
-            } else if (typeof dData.itemsJson === "string") {
-              try {
-                const parsed = JSON.parse(dData.itemsJson);
-                if (Array.isArray(parsed)) newMap.set(d.id, parsed as FirestoreFakturDoc[]);
-              } catch {}
-            }
-          });
-          currentChunksMap = newMap;
-          emitData("chunks");
+        if (data.invoiceProgression) {
+          currentProgression = data.invoiceProgression as InvoiceProgression;
         }
       }
+
+      if (printSnap && printSnap.exists()) {
+        currentPrintState = printSnap.data() as PrintState;
+      }
+
+      if (chunksSnap && !chunksSnap.empty) {
+        const newMap = new Map<string, FirestoreFakturDoc[]>();
+        chunksSnap.forEach((d) => {
+          const dData = d.data();
+          if (Array.isArray(dData.items)) {
+            newMap.set(d.id, dData.items as FirestoreFakturDoc[]);
+          } else if (typeof dData.itemsJson === "string") {
+            try {
+              const parsed = JSON.parse(dData.itemsJson);
+              if (Array.isArray(parsed)) newMap.set(d.id, parsed as FirestoreFakturDoc[]);
+            } catch {}
+          }
+        });
+        currentChunksMap = newMap;
+      }
+      emitData("chunks");
     } catch {}
   };
 
@@ -226,29 +211,12 @@ export function subscribeToFakturs(
     window.addEventListener("focus", checkRemoteUpdate);
   }
 
-  // 2. Subscribe to Print State (Ultra fast toggle & mark all - decoupled from chunk merging!)
-  const unsubPrint = onSnapshot(
-    doc(db, APP_DATA_COLLECTION, PRINT_STATE_DOC),
-    (snap) => {
-      if (snap.exists()) {
-        currentPrintState = snap.data() as PrintState;
-      }
-      // If chunks are already loaded in memory, emit print update IMMEDIATELY (<1ms) without re-merging chunks!
-      if (hasEmittedInitialChunks) {
-        onData([], currentProgression, currentPrintState, "print");
-      } else {
-        debouncedEmit("print");
-      }
-    },
-    (err) => console.warn("PrintState sync warning:", err)
-  );
-
   return () => {
-    if (emitTimer) clearTimeout(emitTimer);
     if (typeof window !== "undefined") {
       window.removeEventListener("visibilitychange", onVisibilityChange);
       window.removeEventListener("focus", checkRemoteUpdate);
     }
+    unsubChunks();
     unsubMeta();
     unsubPrint();
   };

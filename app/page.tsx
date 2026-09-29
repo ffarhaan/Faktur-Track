@@ -2612,6 +2612,13 @@ export default function Home() {
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-lg font-bold text-gray-900">Faktur Tracker</h1>
+                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200" title="Data tersinkronisasi otomatis secara realtime antar semua perangkat tanpa jeda">
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                  </span>
+                  <span>Realtime Live</span>
+                </span>
                 {IS_SYSTEM_UPDATING && (
                   <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-800 border border-amber-300 flex items-center gap-1 animate-pulse">
                     <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
@@ -2619,7 +2626,7 @@ export default function Home() {
                   </span>
                 )}
               </div>
-              <p className="text-xs text-gray-500">Tracking faktur dari Oracle export</p>
+              <p className="text-xs text-gray-500">Tracking faktur dari Oracle export · Sinkronisasi instan multi-perangkat</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
