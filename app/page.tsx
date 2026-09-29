@@ -1749,20 +1749,21 @@ export default function Home() {
           newUnprintedKeyList
         );
 
-        // 3. GOOGLE SHEETS BACKUP — kirim faktur baru & faktur yang diperbarui (ORA + XXCUST)
-        if (uploadedBatchKeys.size > 0) {
-          const batchFaktursForGSheet = (payload as FirestoreFakturDoc[]).filter(
-            (f) => uploadedBatchKeys.has(f.id || f.no_faktur)
+        // 3. GOOGLE SHEETS BACKUP — kirim HANYA faktur yang benar-benar baru ke Google Sheets
+        // (mencegah penumpukan duplikat puluhan ribu baris setiap kali upload file export kumulatif)
+        if (newGSheetKeys.size > 0) {
+          const newFaktursForGSheet = (payload as FirestoreFakturDoc[]).filter(
+            (f) => newGSheetKeys.has(f.id || f.no_faktur)
           );
           const gsheetPrintState = {
             printedKeys: Array.from(mergedPrintedSet),
             printedAtMap: mergedPrintedMap,
             updatedAt: new Date().toISOString(),
           };
-          appendNewToGSheet(batchFaktursForGSheet, gsheetPrintState)
+          appendNewToGSheet(newFaktursForGSheet, gsheetPrintState)
             .then((result) => {
               if (result.success) {
-                console.log(`✅ GSheet backup: ${result.count} faktur disinkronkan (baru/diperbarui).`);
+                console.log(`✅ GSheet backup: ${result.count} faktur baru ditambahkan ke Google Sheet.`);
               } else {
                 console.warn("⚠️ GSheet backup gagal:", result.error);
               }
