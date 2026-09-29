@@ -1231,11 +1231,18 @@ export default function Home() {
 
           if (prevInfo !== undefined) {
             // Already in database: STRICTLY preserve existing user/system print status!
-            // If user or previous file had it as unprinted, it STAYS unprinted!
-            // If it was printed, it STAYS printed!
-            isPrinted = Boolean(prevInfo.status_cetak);
+            // IMPORTANT: status_cetak in the chunk doc may be stale (false) because the
+            // authoritative print state lives in the separate print_state document.
+            // Always cross-check with loadedPrintState.printedKeys to avoid resetting
+            // Done Print status on re-upload!
+            const isPrintedInChunk = Boolean(prevInfo.status_cetak);
+            const isPrintedInState = Boolean(
+              loadedPrintState?.printedKeys?.includes(targetKey) ||
+              currentActivePrintedSet.has(targetKey)
+            );
+            isPrinted = isPrintedInChunk || isPrintedInState;
             printedAt = isPrinted
-              ? (currentActivePrintedAtMap[noFaktur] || prevInfo.printed_at || latestPrintStateRef.current?.printedAtMap?.[noFaktur] || null)
+              ? (currentActivePrintedAtMap[noFaktur] || loadedPrintState?.printedAtMap?.[targetKey] || prevInfo.printed_at || latestPrintStateRef.current?.printedAtMap?.[noFaktur] || null)
               : null;
             if (!isPrinted) {
               newUnprintedKeyList.push(targetKey);
