@@ -2,7 +2,15 @@
 
 import { useState, useMemo, useEffect, useCallback, useRef, Fragment, memo } from "react";
 import * as XLSX from "xlsx";
-import { parseExcelFile, categorize, isOraCustomer, getProductCategory, getPrekursorOOTClassification } from "@/lib/parser";
+import {
+  parseExcelFile,
+  categorize,
+  isOraCustomer,
+  getProductCategory,
+  getPrekursorOOTClassification,
+  setCustomApotekOverrides,
+  getCustomApotekOverrides,
+} from "@/lib/parser";
 import { FakturRecord } from "@/lib/types";
 import {
   subscribeToFakturs,
@@ -17,6 +25,10 @@ import {
   subscribeToTeamFeedbacks,
   deleteTeamFeedback,
   TeamFeedback,
+  ApotekOverrideEntry,
+  subscribeToMasterApotekOverrides,
+  saveMasterApotekOverride,
+  removeMasterApotekOverride,
 } from "@/lib/firestoreService";
 import { db } from "@/lib/firebase";
 import { collection, getDocs } from "firebase/firestore";
@@ -171,7 +183,10 @@ function dbRowsToFakturRecords(rows: Array<Record<string, unknown>>): {
     const isOra = isOraCustomer(cust);
     const invKey = isOra ? `${cleanInv}-1P` : cleanInv;
     const cleanJenis: "DOO" | "ORA" = isOra ? "ORA" : "DOO";
-    const kategori = (r.kategori as "1P" | "2P" | "3P") || categorize(cleanJenis, cust, cleanJenis);
+    const customOverrides = getCustomApotekOverrides();
+    const normCust = cust.toLowerCase().replace(/apotik/g, "apotek").replace(/[^a-z0-9]/g, "");
+    const customKat = customOverrides[normCust] || customOverrides[cust.toLowerCase().trim()];
+    const kategori = customKat || (r.kategori as "1P" | "2P" | "3P") || categorize(cleanJenis, cust, cleanJenis);
     const pAt = (r.printed_at as string) || (extra.printed_at as string) || null;
 
     if (r.status_cetak) {
@@ -706,6 +721,7 @@ export default function Home() {
   const [copyToast, setCopyToast] = useState<string | null>(null);
   const [showHelpModal, setShowHelpModal] = useState(false);
   const [showApotekModal, setShowApotekModal] = useState(false);
+  const [apotekOverrides, setApotekOverrides] = useState<Record<string, ApotekOverrideEntry>>({});
   const [showProductModal, setShowProductModal] = useState(false);
   const [showUpdateModal, setShowUpdateModal] = useState(false);
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
@@ -732,8 +748,43 @@ export default function Home() {
       (items) => setFeedbacks(items),
       (err) => console.warn("Feedback listener err:", err)
     );
-    return () => unsubFeedbacks();
+
+    // Subscribe to Master Apotek custom overrides from database
+    const unsubOverrides = subscribeToMasterApotekOverrides(
+      (overrides) => {
+        setApotekOverrides(overrides);
+        setCustomApotekOverrides(overrides);
+
+        // Instant re-categorization of currently loaded records in memory
+        if (latestDBDocsRef.current.length > 0) {
+          const { records: recs } = dbRowsToFakturRecords(
+            latestDBDocsRef.current as unknown as Array<Record<string, unknown>>
+          );
+          setRecords(recs);
+        }
+      },
+      (err) => console.warn("Master Apotek overrides listener err:", err)
+    );
+
+    return () => {
+      unsubFeedbacks();
+      unsubOverrides();
+    };
   }, []);
+
+  const handleSaveApotekOverride = useCallback(
+    async (entry: Omit<ApotekOverrideEntry, "updatedAt">) => {
+      await saveMasterApotekOverride(entry);
+    },
+    []
+  );
+
+  const handleRemoveApotekOverride = useCallback(
+    async (namaApotek: string) => {
+      await removeMasterApotekOverride(namaApotek);
+    },
+    []
+  );
 
   useEffect(() => {
     recordsRef.current = records;
@@ -3374,8 +3425,14 @@ export default function Home() {
       {/* Keyboard Shortcuts Modal */}
       <HelpModal isOpen={showHelpModal} onClose={() => setShowHelpModal(false)} />
 
-      {/* Master Apotek Modal */}
-      <MasterApotekModal isOpen={showApotekModal} onClose={() => setShowApotekModal(false)} />
+      {/* Master Apotek Modal with Edit Capability */}
+      <MasterApotekModal
+        isOpen={showApotekModal}
+        onClose={() => setShowApotekModal(false)}
+        overrides={apotekOverrides}
+        onSaveOverride={handleSaveApotekOverride}
+        onRemoveOverride={handleRemoveApotekOverride}
+      />
 
       {/* Master Product Modal */}
       <MasterProductModal isOpen={showProductModal} onClose={() => setShowProductModal(false)} />
@@ -3492,22 +3549,106 @@ function HelpModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }
   );
 }
 
-function MasterApotekModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
+function MasterApotekModal({
+  isOpen,
+  onClose,
+  overrides = {},
+  onSaveOverride,
+  onRemoveOverride,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  overrides?: Record<string, ApotekOverrideEntry>;
+  onSaveOverride?: (entry: Omit<ApotekOverrideEntry, "updatedAt">) => Promise<void>;
+  onRemoveOverride?: (namaApotek: string) => Promise<void>;
+}) {
   const [search, setSearch] = useState("");
-  const [katFilter, setKatFilter] = useState<"all" | "1P" | "2P" | "3P">("all");
+  const [katFilter, setKatFilter] = useState<"all" | "1P" | "2P" | "3P" | "custom">("all");
   const [page, setPage] = useState(0);
+  const [editingKey, setEditingKey] = useState<string | null>(null);
+  const [savingKey, setSavingKey] = useState<string | null>(null);
+  const [toastMsg, setToastMsg] = useState<string | null>(null);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [newNama, setNewNama] = useState("");
+  const [newKode, setNewKode] = useState("");
+  const [newKat, setNewKat] = useState<"1P" | "2P" | "3P">("3P");
+  const [newKet, setNewKet] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const rowsPerPage = 30;
 
-  const filtered = useMemo(() => {
-    let list = masterApotekList as Array<{
+  const showToast = (msg: string) => {
+    setToastMsg(msg);
+    setTimeout(() => setToastMsg(null), 3500);
+  };
+
+  // Merge base master list with custom overrides
+  const { mergedList, customCount, count1P, count2P, count3P } = useMemo(() => {
+    const list = (masterApotekList as Array<{
       namaApotek: string;
       kodeCustomer: string;
       namaMerchant: string;
       kategori: string;
       keterangan: string;
-    }>;
+    }>).map((a) => {
+      const key = a.namaApotek.trim().toLowerCase();
+      const override = overrides[key];
+      const effectiveKat = (override?.kategori || a.kategori) as "1P" | "2P" | "3P";
+      const isCustom = Boolean(override);
+      return {
+        ...a,
+        kategori: effectiveKat,
+        isCustom,
+        originalKat: a.kategori,
+        updatedAt: override?.updatedAt,
+      };
+    });
 
-    if (katFilter !== "all") {
+    // Also include any custom added apoteks that aren't in the original json
+    const seenNames = new Set(list.map((a) => a.namaApotek.trim().toLowerCase()));
+    Object.values(overrides).forEach((ov) => {
+      const key = ov.namaApotek.trim().toLowerCase();
+      if (!seenNames.has(key)) {
+        seenNames.add(key);
+        list.push({
+          namaApotek: ov.namaApotek,
+          kodeCustomer: ov.kodeCustomer || "-",
+          namaMerchant: ov.namaMerchant || "-",
+          kategori: ov.kategori,
+          keterangan: ov.keterangan || "Apotek Kustom (Ditambahkan Manual)",
+          isCustom: true,
+          originalKat: "-",
+          updatedAt: ov.updatedAt,
+        });
+      }
+    });
+
+    let c1 = 0;
+    let c2 = 0;
+    let c3 = 0;
+    let cCustom = 0;
+
+    list.forEach((item) => {
+      if (item.kategori === "1P") c1++;
+      else if (item.kategori === "2P") c2++;
+      else if (item.kategori === "3P") c3++;
+      if (item.isCustom) cCustom++;
+    });
+
+    return {
+      mergedList: list,
+      customCount: cCustom,
+      count1P: c1,
+      count2P: c2,
+      count3P: c3,
+    };
+  }, [overrides]);
+
+  const filtered = useMemo(() => {
+    let list = mergedList;
+
+    if (katFilter === "custom") {
+      list = list.filter((a) => a.isCustom);
+    } else if (katFilter !== "all") {
       list = list.filter((a) => a.kategori === katFilter);
     }
 
@@ -3523,7 +3664,7 @@ function MasterApotekModal({ isOpen, onClose }: { isOpen: boolean; onClose: () =
     }
 
     return list;
-  }, [search, katFilter]);
+  }, [mergedList, search, katFilter]);
 
   const totalPages = Math.ceil(filtered.length / rowsPerPage);
   const pagedData = useMemo(() => {
@@ -3531,11 +3672,84 @@ function MasterApotekModal({ isOpen, onClose }: { isOpen: boolean; onClose: () =
     return filtered.slice(start, start + rowsPerPage);
   }, [filtered, page]);
 
+  const handleCategoryChange = async (
+    item: { namaApotek: string; kodeCustomer: string; namaMerchant: string; keterangan: string; originalKat: string },
+    newKat: "1P" | "2P" | "3P"
+  ) => {
+    const key = item.namaApotek.trim().toLowerCase();
+    setSavingKey(key);
+    try {
+      if (onSaveOverride) {
+        await onSaveOverride({
+          namaApotek: item.namaApotek,
+          kodeCustomer: item.kodeCustomer !== "-" ? item.kodeCustomer : undefined,
+          namaMerchant: item.namaMerchant !== "-" ? item.namaMerchant : undefined,
+          keterangan: item.keterangan,
+          kategori: newKat,
+        });
+        showToast(`✅ Kategori ${item.namaApotek} diubah ke ${newKat} & tersimpan di database.`);
+      }
+    } catch (err) {
+      showToast(`❌ Gagal menyimpan perubahan: ${err instanceof Error ? err.message : "Error"}`);
+    } finally {
+      setSavingKey(null);
+      setEditingKey(null);
+    }
+  };
+
+  const handleResetDefault = async (namaApotek: string) => {
+    const key = namaApotek.trim().toLowerCase();
+    setSavingKey(key);
+    try {
+      if (onRemoveOverride) {
+        await onRemoveOverride(namaApotek);
+        showToast(`↺ Kategori ${namaApotek} dikembalikan ke klasifikasi default.`);
+      }
+    } catch (err) {
+      showToast(`❌ Gagal reset kategori: ${err instanceof Error ? err.message : "Error"}`);
+    } finally {
+      setSavingKey(null);
+    }
+  };
+
+  const handleAddNewApotek = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newNama.trim()) return;
+    setIsSubmitting(true);
+    try {
+      if (onSaveOverride) {
+        await onSaveOverride({
+          namaApotek: newNama.trim(),
+          kodeCustomer: newKode.trim() || "-",
+          namaMerchant: "-",
+          keterangan: newKet.trim() || "Apotek Kustom",
+          kategori: newKat,
+        });
+        showToast(`✅ Apotek "${newNama.trim()}" (${newKat}) berhasil ditambahkan ke database.`);
+        setNewNama("");
+        setNewKode("");
+        setNewKet("");
+        setShowAddModal(false);
+      }
+    } catch (err) {
+      showToast(`❌ Gagal menambahkan apotek: ${err instanceof Error ? err.message : "Error"}`);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs animate-in fade-in duration-150">
-      <div className="bg-white rounded-2xl max-w-4xl w-full p-6 shadow-2xl border border-gray-100 relative flex flex-col max-h-[90vh]">
+      <div className="bg-white rounded-2xl max-w-5xl w-full p-6 shadow-2xl border border-gray-100 relative flex flex-col max-h-[92vh]">
+        {/* Toast Feedback */}
+        {toastMsg && (
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 bg-slate-900 text-white text-xs font-semibold px-4 py-2.5 rounded-xl shadow-xl flex items-center gap-2 animate-in fade-in slide-in-from-top-2 border border-slate-700">
+            <span>{toastMsg}</span>
+          </div>
+        )}
+
         {/* Header */}
         <div className="flex items-center justify-between pb-3 border-b border-gray-200 shrink-0">
           <div className="flex items-center gap-3">
@@ -3543,35 +3757,52 @@ function MasterApotekModal({ isOpen, onClose }: { isOpen: boolean; onClose: () =
               🏪
             </div>
             <div>
-              <h2 className="text-base font-bold text-gray-900">Database Master Apotek & Pelanggan</h2>
+              <div className="flex items-center gap-2">
+                <h2 className="text-base font-bold text-gray-900">Database Master Apotek & Pelanggan</h2>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                  Realtime Edit & Database Sync
+                </span>
+              </div>
               <p className="text-xs text-gray-500">
-                Total {masterApotekList.length.toLocaleString("id-ID")} apotek terdaftar (Acuan Klasifikasi 1P / 2P / 3P)
+                Total {mergedList.length.toLocaleString("id-ID")} apotek terdaftar · Ubah klasifikasi 1P / 2P / 3P langsung tersimpan ke database & berlaku untuk semua upload berikutnya.
               </p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-700 w-8 h-8 rounded-full flex items-center justify-center hover:bg-gray-100 transition-colors text-lg"
-            title="Tutup"
-          >
-            ✕
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowAddModal(true)}
+              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg shadow-xs transition-colors flex items-center gap-1.5"
+            >
+              <span>+</span>
+              <span>Tambah Apotek Baru</span>
+            </button>
+            <button
+              onClick={onClose}
+              className="text-gray-400 hover:text-gray-700 w-8 h-8 rounded-full flex items-center justify-center hover:bg-gray-100 transition-colors text-lg"
+              title="Tutup"
+            >
+              ✕
+            </button>
+          </div>
         </div>
 
         {/* Toolbar & Filters */}
         <div className="py-3 flex flex-wrap items-center justify-between gap-2 shrink-0 border-b border-gray-100">
           <div className="flex items-center gap-1.5 overflow-x-auto">
             <FBtn active={katFilter === "all"} onClick={() => { setKatFilter("all"); setPage(0); }}>
-              Semua ({masterApotekList.length})
+              Semua ({mergedList.length})
             </FBtn>
             <FBtn active={katFilter === "1P"} onClick={() => { setKatFilter("1P"); setPage(0); }} color="blue">
-              🏪 1P Prioritas 1 (45)
+              🏪 1P Prioritas 1 ({count1P})
             </FBtn>
             <FBtn active={katFilter === "2P"} onClick={() => { setKatFilter("2P"); setPage(0); }} color="green">
-              🏪 2P Mitra Merchant (252)
+              🏪 2P Mitra Merchant ({count2P})
             </FBtn>
             <FBtn active={katFilter === "3P"} onClick={() => { setKatFilter("3P"); setPage(0); }} color="purple">
-              🏢 3P Reguler (2.400)
+              🏢 3P Reguler ({count3P})
+            </FBtn>
+            <FBtn active={katFilter === "custom"} onClick={() => { setKatFilter("custom"); setPage(0); }} color="amber">
+              ⭐ Kustom / Diedit ({customCount})
             </FBtn>
           </div>
 
@@ -3581,10 +3812,10 @@ function MasterApotekModal({ isOpen, onClose }: { isOpen: boolean; onClose: () =
             </span>
             <input
               type="text"
-              placeholder="Cari apotek, kode, merchant, zona..."
+              placeholder="Cari apotek, kode customer, merchant..."
               value={search}
               onChange={(e) => { setSearch(e.target.value); setPage(0); }}
-              className="w-full pl-7 pr-7 py-1 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white shadow-2xs"
+              className="w-full pl-7 pr-7 py-1.5 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white shadow-2xs"
             />
             {search && (
               <button
@@ -3603,47 +3834,133 @@ function MasterApotekModal({ isOpen, onClose }: { isOpen: boolean; onClose: () =
             <thead className="bg-gray-50 border-b border-gray-200 sticky top-0 z-10 select-none">
               <tr>
                 <th className="px-2.5 py-2 text-center text-gray-500 w-10">#</th>
-                <th className="px-2.5 py-2 text-left text-gray-500 w-24">Kategori</th>
+                <th className="px-2.5 py-2 text-left text-gray-500 w-36">Kategori & Edit</th>
                 <th className="px-2.5 py-2 text-left text-gray-500 w-28">Kode Customer</th>
                 <th className="px-2.5 py-2 text-left text-gray-500">Nama Apotek</th>
-                <th className="px-2.5 py-2 text-left text-gray-500">Nama Merchant / Platform</th>
-                <th className="px-2.5 py-2 text-left text-gray-500">Zona / Keterangan</th>
+                <th className="px-2.5 py-2 text-left text-gray-500">Merchant / Platform</th>
+                <th className="px-2.5 py-2 text-left text-gray-500">Keterangan / Status</th>
+                <th className="px-2.5 py-2 text-center text-gray-500 w-20">Aksi</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {pagedData.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="text-center py-8 text-gray-400">
-                    Tidak ditemukan apotek yang sesuai pencarian.
+                  <td colSpan={7} className="text-center py-10 text-gray-400">
+                    Tidak ditemukan apotek yang sesuai kriteria pencarian.
                   </td>
                 </tr>
               ) : (
-                pagedData.map((a, idx) => (
-                  <tr key={idx} className="hover:bg-gray-50">
-                    <td className="px-2.5 py-1.5 text-center text-gray-400 font-mono">
-                      {page * rowsPerPage + idx + 1}
-                    </td>
-                    <td className="px-2.5 py-1.5 whitespace-nowrap">
-                      <span
-                        className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${
-                          a.kategori === "1P"
-                            ? "bg-blue-100 text-blue-800"
-                            : a.kategori === "2P"
-                            ? "bg-green-100 text-green-800"
-                            : "bg-purple-100 text-purple-800"
-                        }`}
-                      >
-                        {a.kategori}
-                      </span>
-                    </td>
-                    <td className="px-2.5 py-1.5 font-mono text-gray-700 whitespace-nowrap">
-                      {a.kodeCustomer !== "-" ? a.kodeCustomer : <span className="text-gray-400">-</span>}
-                    </td>
-                    <td className="px-2.5 py-1.5 font-medium text-gray-900">{a.namaApotek}</td>
-                    <td className="px-2.5 py-1.5 text-gray-600 font-mono text-[11px]">{a.namaMerchant}</td>
-                    <td className="px-2.5 py-1.5 text-gray-500">{a.keterangan}</td>
-                  </tr>
-                ))
+                pagedData.map((a, idx) => {
+                  const key = a.namaApotek.trim().toLowerCase();
+                  const isEditing = editingKey === key;
+                  const isSaving = savingKey === key;
+
+                  return (
+                    <tr key={key + idx} className={`hover:bg-gray-50 ${a.isCustom ? "bg-amber-50/40" : ""}`}>
+                      <td className="px-2.5 py-2 text-center text-gray-400 font-mono">
+                        {page * rowsPerPage + idx + 1}
+                      </td>
+
+                      {/* Kategori Column with Inline Quick Selector */}
+                      <td className="px-2.5 py-2 whitespace-nowrap">
+                        {isEditing ? (
+                          <div className="flex items-center gap-1">
+                            {(["1P", "2P", "3P"] as const).map((kOption) => (
+                              <button
+                                key={kOption}
+                                disabled={isSaving}
+                                onClick={() => handleCategoryChange(a, kOption)}
+                                className={`px-2 py-0.5 rounded text-[11px] font-bold border transition-all ${
+                                  a.kategori === kOption
+                                    ? kOption === "1P"
+                                      ? "bg-blue-600 text-white border-blue-600"
+                                      : kOption === "2P"
+                                      ? "bg-green-600 text-white border-green-600"
+                                      : "bg-purple-600 text-white border-purple-600"
+                                    : "bg-white text-gray-700 border-gray-300 hover:bg-gray-100"
+                                }`}
+                              >
+                                {kOption}
+                              </button>
+                            ))}
+                            <button
+                              onClick={() => setEditingKey(null)}
+                              className="px-1 text-gray-400 hover:text-gray-600 text-[10px]"
+                              title="Batal"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1.5">
+                            <span
+                              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold shadow-2xs ${
+                                a.kategori === "1P"
+                                  ? "bg-blue-100 text-blue-800 border border-blue-200"
+                                  : a.kategori === "2P"
+                                  ? "bg-green-100 text-green-800 border border-green-200"
+                                  : "bg-purple-100 text-purple-800 border border-purple-200"
+                              }`}
+                            >
+                              {a.kategori}
+                              {a.isCustom && <span className="text-[10px]" title="Kategori kustom dari database">⭐</span>}
+                            </span>
+                            <button
+                              onClick={() => setEditingKey(key)}
+                              disabled={isSaving}
+                              className="p-1 rounded text-gray-400 hover:text-emerald-700 hover:bg-emerald-50 transition-colors"
+                              title="Ubah Kategori (1P / 2P / 3P)"
+                            >
+                              ✏️
+                            </button>
+                          </div>
+                        )}
+                      </td>
+
+                      <td className="px-2.5 py-2 font-mono text-gray-700 whitespace-nowrap">
+                        {a.kodeCustomer !== "-" ? a.kodeCustomer : <span className="text-gray-400">-</span>}
+                      </td>
+
+                      <td className="px-2.5 py-2 font-semibold text-gray-900">
+                        <div className="flex items-center gap-1.5">
+                          <span>{a.namaApotek}</span>
+                          {a.isCustom && (
+                            <span className="px-1.5 py-0.2 rounded text-[9px] font-semibold bg-amber-100 text-amber-800 border border-amber-200">
+                              Diedit
+                            </span>
+                          )}
+                        </div>
+                      </td>
+
+                      <td className="px-2.5 py-2 text-gray-600 font-mono text-[11px]">
+                        {a.namaMerchant}
+                      </td>
+
+                      <td className="px-2.5 py-2 text-gray-500">
+                        {a.isCustom && a.originalKat !== "-" ? (
+                          <span className="text-amber-800 font-medium">
+                            Diubah dari default {a.originalKat} ➔ {a.kategori}
+                          </span>
+                        ) : (
+                          a.keterangan
+                        )}
+                      </td>
+
+                      <td className="px-2.5 py-2 text-center whitespace-nowrap">
+                        {a.isCustom && (
+                          <button
+                            onClick={() => handleResetDefault(a.namaApotek)}
+                            disabled={isSaving}
+                            className="px-2 py-0.5 rounded text-[10px] font-semibold text-gray-600 hover:text-red-700 hover:bg-red-50 border border-gray-200 transition-colors"
+                            title="Reset ke kategori bawaan"
+                          >
+                            ↺ Reset
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -3658,7 +3975,7 @@ function MasterApotekModal({ isOpen, onClose }: { isOpen: boolean; onClose: () =
             <button
               onClick={() => setPage((p) => Math.max(0, p - 1))}
               disabled={page === 0}
-              className="px-2.5 py-1 border border-gray-300 rounded bg-white hover:bg-gray-50 disabled:opacity-30 shadow-2xs"
+              className="px-2.5 py-1 border border-gray-300 rounded bg-white hover:bg-gray-50 disabled:opacity-30 shadow-2xs font-semibold"
             >
               ← Prev
             </button>
@@ -3668,12 +3985,114 @@ function MasterApotekModal({ isOpen, onClose }: { isOpen: boolean; onClose: () =
             <button
               onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
               disabled={page >= totalPages - 1}
-              className="px-2.5 py-1 border border-gray-300 rounded bg-white hover:bg-gray-50 disabled:opacity-30 shadow-2xs"
+              className="px-2.5 py-1 border border-gray-300 rounded bg-white hover:bg-gray-50 disabled:opacity-30 shadow-2xs font-semibold"
             >
               Next →
             </button>
           </div>
         </div>
+
+        {/* Sub-modal: Tambah Apotek Baru */}
+        {showAddModal && (
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-2xs rounded-2xl flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-xl max-w-md w-full p-5 shadow-2xl border border-gray-200 animate-in zoom-in-95 duration-100">
+              <div className="flex items-center justify-between pb-3 border-b border-gray-100">
+                <h3 className="text-sm font-bold text-gray-900">➕ Tambah Apotek Baru ke Database</h3>
+                <button
+                  onClick={() => setShowAddModal(false)}
+                  className="text-gray-400 hover:text-gray-700 text-base"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <form onSubmit={handleAddNewApotek} className="space-y-3 mt-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">
+                    Nama Apotek / Customer <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Contoh: Apotek Sehat Sentosa"
+                    value={newNama}
+                    onChange={(e) => setNewNama(e.target.value)}
+                    className="w-full px-3 py-1.5 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">
+                    Kode Customer / Ship-To (Opsional)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Contoh: CA-001234 atau 1234"
+                    value={newKode}
+                    onChange={(e) => setNewKode(e.target.value)}
+                    className="w-full px-3 py-1.5 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">
+                    Kategori Klasifikasi <span className="text-red-500">*</span>
+                  </label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {(["1P", "2P", "3P"] as const).map((k) => (
+                      <button
+                        key={k}
+                        type="button"
+                        onClick={() => setNewKat(k)}
+                        className={`py-1.5 text-xs font-bold rounded-lg border text-center transition-all ${
+                          newKat === k
+                            ? k === "1P"
+                              ? "bg-blue-600 text-white border-blue-600 shadow-xs"
+                              : k === "2P"
+                              ? "bg-green-600 text-white border-green-600 shadow-xs"
+                              : "bg-purple-600 text-white border-purple-600 shadow-xs"
+                            : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+                        }`}
+                      >
+                        {k === "1P" ? "1P (Prioritas 1)" : k === "2P" ? "2P (Merchant)" : "3P (Reguler)"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">
+                    Keterangan / Catatan
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Contoh: Apotek cabang baru / Rekomendasi operasional"
+                    value={newKet}
+                    onChange={(e) => setNewKet(e.target.value)}
+                    className="w-full px-3 py-1.5 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                  />
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100">
+                  <button
+                    type="button"
+                    onClick={() => setShowAddModal(false)}
+                    className="px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-100 rounded-lg font-semibold"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmitting || !newNama.trim()}
+                    className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-bold rounded-lg shadow-xs transition-colors"
+                  >
+                    {isSubmitting ? "Menyimpan..." : "Simpan ke Database"}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

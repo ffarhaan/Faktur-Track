@@ -639,3 +639,105 @@ export function subscribeToTeamFeedbacks(
 export async function deleteTeamFeedback(id: string): Promise<void> {
   await deleteDoc(doc(db, "app_feedback", id));
 }
+
+export interface ApotekOverrideEntry {
+  namaApotek: string;
+  kategori: "1P" | "2P" | "3P";
+  kodeCustomer?: string;
+  namaMerchant?: string;
+  keterangan?: string;
+  updatedAt: string;
+  updatedBy?: string;
+}
+
+const MASTER_APOTEK_OVERRIDES_DOC = "master_apotek_overrides";
+
+/**
+ * Realtime listener for Master Apotek Custom Overrides
+ */
+export function subscribeToMasterApotekOverrides(
+  onData: (overrides: Record<string, ApotekOverrideEntry>) => void,
+  onError?: (err: Error) => void
+): Unsubscribe {
+  return onSnapshot(
+    doc(db, APP_DATA_COLLECTION, MASTER_APOTEK_OVERRIDES_DOC),
+    (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.data();
+        const overrides = (data.overrides as Record<string, ApotekOverrideEntry>) || {};
+        onData(overrides);
+      } else {
+        onData({});
+      }
+    },
+    onError
+  );
+}
+
+/**
+ * Fetch all Master Apotek Overrides directly from server
+ */
+export async function getMasterApotekOverrides(): Promise<Record<string, ApotekOverrideEntry>> {
+  try {
+    const snap = await getDocFromServer(
+      doc(db, APP_DATA_COLLECTION, MASTER_APOTEK_OVERRIDES_DOC)
+    ).catch(() => getDoc(doc(db, APP_DATA_COLLECTION, MASTER_APOTEK_OVERRIDES_DOC)));
+
+    if (snap.exists()) {
+      const data = snap.data();
+      return (data.overrides as Record<string, ApotekOverrideEntry>) || {};
+    }
+  } catch (err) {
+    console.warn("Could not fetch master apotek overrides from server:", err);
+  }
+  return {};
+}
+
+/**
+ * Save or update a single Master Apotek custom override
+ */
+export async function saveMasterApotekOverride(
+  entry: Omit<ApotekOverrideEntry, "updatedAt">
+): Promise<void> {
+  const docRef = doc(db, APP_DATA_COLLECTION, MASTER_APOTEK_OVERRIDES_DOC);
+  const nowIso = new Date().toISOString();
+  const currentOverrides = await getMasterApotekOverrides();
+
+  const key = entry.namaApotek.trim().toLowerCase();
+  currentOverrides[key] = {
+    ...entry,
+    namaApotek: entry.namaApotek.trim(),
+    updatedAt: nowIso,
+  };
+
+  await setDoc(
+    docRef,
+    {
+      overrides: currentOverrides,
+      updatedAt: nowIso,
+    },
+    { merge: true }
+  );
+}
+
+/**
+ * Remove a custom override to restore default master classification
+ */
+export async function removeMasterApotekOverride(namaApotek: string): Promise<void> {
+  const docRef = doc(db, APP_DATA_COLLECTION, MASTER_APOTEK_OVERRIDES_DOC);
+  const nowIso = new Date().toISOString();
+  const currentOverrides = await getMasterApotekOverrides();
+
+  const key = namaApotek.trim().toLowerCase();
+  delete currentOverrides[key];
+
+  await setDoc(
+    docRef,
+    {
+      overrides: currentOverrides,
+      updatedAt: nowIso,
+    },
+    { merge: true }
+  );
+}
+

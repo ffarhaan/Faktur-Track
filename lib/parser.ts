@@ -206,11 +206,32 @@ export function isOraCustomer(customerName?: string): boolean {
   );
 }
 
+// In-memory dynamic custom overrides from database
+let customApotekOverrides: Record<string, "1P" | "2P" | "3P"> = {};
+
+export function setCustomApotekOverrides(overrides: Record<string, "1P" | "2P" | "3P"> | Record<string, { kategori: "1P" | "2P" | "3P" }>): void {
+  customApotekOverrides = {};
+  if (!overrides) return;
+  for (const [k, val] of Object.entries(overrides)) {
+    const v = typeof val === "string" ? val : val?.kategori;
+    if (v === "1P" || v === "2P" || v === "3P") {
+      customApotekOverrides[normalize(k)] = v;
+      customApotekOverrides[k.toLowerCase().trim()] = v;
+    }
+  }
+}
+
+export function getCustomApotekOverrides(): Record<string, "1P" | "2P" | "3P"> {
+  return customApotekOverrides;
+}
+
 /**
  * ATURAN BAKU KATEGORI PRIORITAS (LOCKED):
  * - 1P: PT Helios (ORA) + Apotek Prioritas 1 DOO (Medika Prima, SBS, Pasti Hemat, Halomedika, Medika Akses).
  * - 2P: Apotek Prioritas 2 (dicek via Kode Customer / Ship-to Site ID & Nama Apotek di master 2P).
  * - 3P: Apotek Reguler lainnya.
+ * 
+ * * Catatan: Kategori kustom / hasil edit di Database Master Apotek diprioritaskan terlebih dahulu!
  */
 export function categorize(
   jenisTransaksi: string,
@@ -224,13 +245,29 @@ export function categorize(
   const rawJenis = String(jenisTransaksi || "").toUpperCase();
   const rawSource = String(sourceFile || "").toUpperCase();
 
-  // 1P: Helios (ORA) atau Apotek DOO 1P (Halomedika, Medika Prima, SBS, Pasti Hemat, Medika Akses)
+  // 1P ORA: Helios (ORA) is strictly 1P
   if (
     rawSource.includes("ORA") ||
     rawJenis === "ORA" ||
     upper.includes("HELIOS") ||
     upper.startsWith("HAK") ||
-    upper === "1001" ||
+    upper === "1001"
+  ) {
+    return "1P";
+  }
+
+  // 0. CUSTOM OVERRIDES (Top priority from Master Apotek Database overrides)
+  const normCust = normalize(cust);
+  const lowerCust = cust.toLowerCase();
+  if (customApotekOverrides[normCust]) {
+    return customApotekOverrides[normCust];
+  }
+  if (customApotekOverrides[lowerCust]) {
+    return customApotekOverrides[lowerCust];
+  }
+
+  // 1P DOO (Halomedika, Medika Prima, SBS, Pasti Hemat, Medika Akses)
+  if (
     upper.includes("HALOMEDIKA") ||
     upper.includes("MEDIKA PRIMA") ||
     upper.includes("SBS") ||
@@ -257,7 +294,6 @@ export function categorize(
   }
 
   // 2P Lapis 3: Cek kecocokan nama apotek di daftar master 2P
-  const normCust = normalize(cust);
   if (master2PNameSet.has(normCust)) {
     return "2P";
   }
