@@ -1063,7 +1063,11 @@ export default function Home() {
             extra: (row.extra as Record<string, unknown>) || null,
           };
 
-          if (rawFaktur) existingStatusMap.set(rawFaktur, statusInfo);
+          if (rawFaktur) {
+            existingStatusMap.set(rawFaktur, statusInfo);
+            existingStatusMap.set(cleanFaktur, statusInfo);
+            existingStatusMap.set(`${cleanFaktur}-1P`, statusInfo);
+          }
           if (row.no_sales_order && row.no_sales_order !== "-") {
             String(row.no_sales_order).split(",").forEach((s) => {
               const soClean = s.trim();
@@ -1222,8 +1226,8 @@ export default function Home() {
 
           const targetKey = noFaktur;
           uploadedBatchKeys.add(targetKey);
-          // Check if this invoice is already in DB
-          const prevInfo = existingStatusMap.get(noFaktur) || (hasValidSO ? existingStatusMap.get(`SO-${r.orderNumber}`) : undefined);
+          // Check if this invoice is already in DB (check all key variants: targetKey, cleanInv, cleanInv-1P, SO-xxx)
+          const prevInfo = existingStatusMap.get(targetKey) || existingStatusMap.get(cleanInv) || existingStatusMap.get(`${cleanInv}-1P`) || (hasValidSO ? existingStatusMap.get(`SO-${r.orderNumber}`) : undefined);
 
           let isPrinted = false;
           let printedAt: string | null = null;
@@ -1231,18 +1235,20 @@ export default function Home() {
 
           if (prevInfo !== undefined) {
             // Already in database: STRICTLY preserve existing user/system print status!
-            // IMPORTANT: status_cetak in the chunk doc may be stale (false) because the
-            // authoritative print state lives in the separate print_state document.
-            // Always cross-check with loadedPrintState.printedKeys to avoid resetting
-            // Done Print status on re-upload!
             const isPrintedInChunk = Boolean(prevInfo.status_cetak);
             const isPrintedInState = Boolean(
               loadedPrintState?.printedKeys?.includes(targetKey) ||
-              currentActivePrintedSet.has(targetKey)
+              loadedPrintState?.printedKeys?.includes(cleanInv) ||
+              loadedPrintState?.printedKeys?.includes(`${cleanInv}-1P`) ||
+              currentActivePrintedSet.has(targetKey) ||
+              currentActivePrintedSet.has(cleanInv) ||
+              currentActivePrintedSet.has(`${cleanInv}-1P`)
             );
             isPrinted = isPrintedInChunk || isPrintedInState;
             printedAt = isPrinted
-              ? (currentActivePrintedAtMap[noFaktur] || loadedPrintState?.printedAtMap?.[targetKey] || prevInfo.printed_at || latestPrintStateRef.current?.printedAtMap?.[noFaktur] || null)
+              ? (currentActivePrintedAtMap[targetKey] || currentActivePrintedAtMap[cleanInv] || currentActivePrintedAtMap[`${cleanInv}-1P`] ||
+                 loadedPrintState?.printedAtMap?.[targetKey] || loadedPrintState?.printedAtMap?.[cleanInv] || loadedPrintState?.printedAtMap?.[`${cleanInv}-1P`] ||
+                 prevInfo.printed_at || latestPrintStateRef.current?.printedAtMap?.[targetKey] || new Date().toISOString())
               : null;
             if (!isPrinted) {
               newUnprintedKeyList.push(targetKey);
@@ -1708,16 +1714,15 @@ export default function Home() {
         const mergedPrintedSet = new Set([...currentActivePrintedSet, ...localPrintedSet]);
         const mergedPrintedMap = { ...currentActivePrintedAtMap, ...localPrintedAtMap };
 
-        // For all unprinted invoices, ensure they are NOT in the printed set
-        payload.forEach((doc) => {
-          if (!doc.status_cetak && doc.no_faktur && doc.no_faktur !== "__SYSTEM_METADATA__") {
-            mergedPrintedSet.delete(doc.no_faktur);
-            delete mergedPrintedMap[doc.no_faktur];
-          }
-        });
+        // Only genuinely new unprinted invoices from this upload batch are removed from the printed set
         newUnprintedKeyList.forEach((k) => {
+          const cleanK = k.replace(/-1P$/i, "");
           mergedPrintedSet.delete(k);
+          mergedPrintedSet.delete(cleanK);
+          mergedPrintedSet.delete(`${cleanK}-1P`);
           delete mergedPrintedMap[k];
+          delete mergedPrintedMap[cleanK];
+          delete mergedPrintedMap[`${cleanK}-1P`];
         });
 
         // Retain recent local toggles (< 10s old) to prevent any toggle from being dropped

@@ -248,6 +248,11 @@ export async function getExistingFakturs(): Promise<{
     const data = d.data();
     if (Array.isArray(data.items)) {
       docs.push(...(data.items as FirestoreFakturDoc[]));
+    } else if (typeof data.itemsJson === "string") {
+      try {
+        const parsed = JSON.parse(data.itemsJson);
+        if (Array.isArray(parsed)) docs.push(...(parsed as FirestoreFakturDoc[]));
+      } catch {}
     }
   });
 
@@ -267,9 +272,10 @@ export async function getExistingFakturs(): Promise<{
     for (const d of docs) {
       const key = d.id || d.no_faktur;
       if (!key) continue;
-      const isPrinted = printedSet.has(key);
+      const cleanKey = key.replace(/-1P$/i, "");
+      const isPrinted = printedSet.has(key) || printedSet.has(cleanKey) || printedSet.has(`${cleanKey}-1P`);
       d.status_cetak = isPrinted;
-      d.printed_at = pMap[key] || null;
+      d.printed_at = pMap[key] || pMap[cleanKey] || pMap[`${cleanKey}-1P`] || null;
     }
   }
 
@@ -365,22 +371,31 @@ export async function saveFaktursBatch(
   // CRITICAL MULTI-DEVICE PROTECTION:
   // Before building chunks, fetch any existing chunks from Firestore that might have been uploaded by colleagues on other devices,
   // and merge them so one device NEVER deletes or overwrites another device's invoices!
+  const liveChunkDocIds = new Set<string>();
   try {
     const liveChunksSnap = await getDocs(collection(db, CHUNKS_COLLECTION));
     const currentKeys = new Set(fakturs.map((f) => f.id || f.no_faktur));
     const missingDocs: FirestoreFakturDoc[] = [];
 
     liveChunksSnap.forEach((d) => {
+      liveChunkDocIds.add(d.id);
       const data = d.data();
+      let chunkItems: FirestoreFakturDoc[] = [];
       if (Array.isArray(data.items)) {
-        data.items.forEach((it: FirestoreFakturDoc) => {
-          const k = it.id || it.no_faktur;
-          if (k && !currentKeys.has(k)) {
-            currentKeys.add(k);
-            missingDocs.push(it);
-          }
-        });
+        chunkItems = data.items as FirestoreFakturDoc[];
+      } else if (typeof data.itemsJson === "string") {
+        try {
+          const parsed = JSON.parse(data.itemsJson);
+          if (Array.isArray(parsed)) chunkItems = parsed as FirestoreFakturDoc[];
+        } catch {}
       }
+      chunkItems.forEach((it: FirestoreFakturDoc) => {
+        const k = it.id || it.no_faktur;
+        if (k && !currentKeys.has(k)) {
+          currentKeys.add(k);
+          missingDocs.push(it);
+        }
+      });
     });
 
     if (missingDocs.length > 0) {
@@ -420,6 +435,15 @@ export async function saveFaktursBatch(
         }
         throw lastErr || new Error(`Gagal menyimpan ${chunkId}`);
       })
+    );
+  }
+
+  // Clean up any orphan chunks from older uploads where totalChunks was larger
+  const newChunkIdSet = new Set(chunkIds);
+  const orphanDocs = Array.from(liveChunkDocIds).filter((id) => !newChunkIdSet.has(id));
+  if (orphanDocs.length > 0) {
+    await Promise.all(
+      orphanDocs.map((id) => deleteDoc(doc(db, CHUNKS_COLLECTION, id)).catch(() => null))
     );
   }
 
