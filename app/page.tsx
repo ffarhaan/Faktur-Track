@@ -1760,15 +1760,16 @@ export default function Home() {
             printedAtMap: mergedPrintedMap,
             updatedAt: new Date().toISOString(),
           };
-          appendNewToGSheet(newFaktursForGSheet, gsheetPrintState)
-            .then((result) => {
-              if (result.success) {
-                console.log(`✅ GSheet backup: ${result.count} faktur baru ditambahkan ke Google Sheet.`);
-              } else {
-                console.warn("⚠️ GSheet backup gagal:", result.error);
-              }
-            })
-            .catch((err) => console.warn("⚠️ GSheet backup error:", err));
+          try {
+            const result = await appendNewToGSheet(newFaktursForGSheet, gsheetPrintState);
+            if (result.success) {
+              console.log(`✅ GSheet backup: ${result.count} faktur baru ditambahkan ke Google Sheet.`);
+            } else {
+              console.warn("⚠️ GSheet backup gagal:", result.error);
+            }
+          } catch (err) {
+            console.warn("⚠️ GSheet backup error:", err);
+          }
         }
 
         setUploadNotification({
