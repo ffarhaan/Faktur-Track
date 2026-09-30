@@ -31,15 +31,19 @@ async function uploadAllToGSheets() {
 
   sortedDocs.forEach(d => {
     const data = d.data();
+    let items = [];
     if (Array.isArray(data.items)) {
-      data.items.forEach(item => {
-        const key = item.id || item.no_faktur;
-        if (key && !seenKeys.has(key)) {
-          seenKeys.add(key);
-          allItems.push(item);
-        }
-      });
+      items = data.items;
+    } else if (data.itemsJson) {
+      try { items = JSON.parse(data.itemsJson); } catch(e){}
     }
+    items.forEach(item => {
+      const key = item.id || item.no_faktur;
+      if (key && !seenKeys.has(key)) {
+        seenKeys.add(key);
+        allItems.push(item);
+      }
+    });
   });
 
   console.log(`Berhasil mengambil ${allItems.length} faktur unik dari Firebase.`);
@@ -60,9 +64,10 @@ async function uploadAllToGSheets() {
 
   // Format data
   const formattedRows = allItems.map((item, index) => {
-    const key = item.id || item.no_faktur;
-    const isPrinted = printedSet.has(key);
-    const printedAt = printMap[key] || item.printed_at || '';
+    const key = item.id || item.no_faktur || '';
+    const cleanKey = key.replace(/-1P$/i, '');
+    const isPrinted = printedSet.has(key) || printedSet.has(cleanKey) || printedSet.has(cleanKey + '-1P');
+    const printedAt = printMap[key] || printMap[cleanKey] || printMap[cleanKey + '-1P'] || item.printed_at || '-';
     const extra = item.extra || {};
     const itemsList = Array.isArray(extra.items) ? extra.items : [];
     const totalHarga = typeof extra.total_harga === 'number'
