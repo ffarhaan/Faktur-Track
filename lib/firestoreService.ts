@@ -11,10 +11,10 @@ import {
   Unsubscribe,
 } from "firebase/firestore";
 import { db } from "./firebase";
-import { FirestoreFakturDoc, PrintState, InvoiceProgression } from "./types";
+import { FirestoreFakturDoc, PrintState, InvoiceProgression, UploadNotification } from "./types";
 import { normalize } from "./parser";
 
-export type { FirestoreFakturDoc, PrintState, InvoiceProgression };
+export type { FirestoreFakturDoc, PrintState, InvoiceProgression, UploadNotification };
 
 const APP_DATA_COLLECTION = "app_data";
 const METADATA_DOC = "metadata";
@@ -25,7 +25,7 @@ const CHUNKS_COLLECTION = "faktur_chunks";
 export type SubscribeChangeReason = "chunks" | "print" | "meta";
 
 /**
- * Realtime listener for Chunked Fakturs, Print State, and Category Overrides
+ * Realtime listener for Chunked Fakturs, Print State, Category Overrides, and Upload Broadcast
  */
 export function subscribeToFakturs(
   onData: (
@@ -33,6 +33,7 @@ export function subscribeToFakturs(
     progression: InvoiceProgression | null,
     printState?: PrintState | null,
     categoryOverrides?: Record<string, "1P" | "2P" | "3P"> | null,
+    uploadNotification?: UploadNotification | null,
     reason?: SubscribeChangeReason
   ) => void,
   onError?: (err: Error) => void
@@ -45,6 +46,7 @@ export function subscribeToFakturs(
     updatedAt: "",
   };
   let currentCategoryOverrides: Record<string, "1P" | "2P" | "3P"> = {};
+  let currentUploadNotification: UploadNotification | null = null;
   let hasEmittedInitialChunks = false;
 
   const emitData = (reason: SubscribeChangeReason = "chunks") => {
@@ -90,7 +92,7 @@ export function subscribeToFakturs(
     }
 
     hasEmittedInitialChunks = true;
-    onData(allDocs, currentProgression, currentPrintState, currentCategoryOverrides, reason);
+    onData(allDocs, currentProgression, currentPrintState, currentCategoryOverrides, currentUploadNotification, reason);
   };
 
   const unsubChunks = onSnapshot(
@@ -119,7 +121,7 @@ export function subscribeToFakturs(
         currentPrintState = snap.data() as PrintState;
       }
       if (hasEmittedInitialChunks) {
-        onData([], currentProgression, currentPrintState, currentCategoryOverrides, "print");
+        onData([], currentProgression, currentPrintState, currentCategoryOverrides, null, "print");
       }
     },
     (err) => console.warn("PrintState sync warning:", err)
@@ -141,14 +143,19 @@ export function subscribeToFakturs(
   const unsubMeta = onSnapshot(
     doc(db, APP_DATA_COLLECTION, METADATA_DOC),
     (snap) => {
+      let uploadNotif: UploadNotification | null = null;
       if (snap.exists()) {
         const data = snap.data();
         if (data.invoiceProgression) {
           currentProgression = data.invoiceProgression as InvoiceProgression;
         }
+        if (data.lastUploadNotification) {
+          uploadNotif = data.lastUploadNotification as UploadNotification;
+          currentUploadNotification = uploadNotif;
+        }
       }
       if (hasEmittedInitialChunks) {
-        onData([], currentProgression, currentPrintState, currentCategoryOverrides, "meta");
+        onData([], currentProgression, currentPrintState, currentCategoryOverrides, uploadNotif, "meta");
       }
     },
     (err) => console.warn("Metadata sync warning:", err)
@@ -266,7 +273,8 @@ export async function saveFaktursBatch(
   fakturs: FirestoreFakturDoc[],
   progression?: InvoiceProgression | null,
   existingPrintState?: PrintState | null,
-  newUnprintedKeys?: string[]
+  newUnprintedKeys?: string[],
+  uploadNotification?: UploadNotification | null
 ): Promise<void> {
   const newUnprintedSet = new Set(newUnprintedKeys || []);
 
@@ -348,7 +356,7 @@ export async function saveFaktursBatch(
     );
   }
 
-  // Save metadata
+  // Save metadata with lastUploadNotification broadcast
   const metaDocRef = doc(db, APP_DATA_COLLECTION, METADATA_DOC);
   await setDoc(
     metaDocRef,
@@ -358,6 +366,7 @@ export async function saveFaktursBatch(
       totalChunks: chunks.length,
       chunkIds,
       updatedAt: nowIso,
+      ...(uploadNotification ? { lastUploadNotification: uploadNotification } : {}),
     },
     { merge: true }
   );

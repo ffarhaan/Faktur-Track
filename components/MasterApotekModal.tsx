@@ -18,10 +18,12 @@ export default function MasterApotekModal({
   isOpen,
   onClose,
   categoryOverrides,
+  isDarkMode,
 }: {
   isOpen: boolean;
   onClose: () => void;
   categoryOverrides?: Record<string, "1P" | "2P" | "3P">;
+  isDarkMode?: boolean;
 }) {
   const [search, setSearch] = useState("");
   const [katFilter, setKatFilter] = useState<"all" | "1P" | "2P" | "3P">("all");
@@ -71,36 +73,44 @@ export default function MasterApotekModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
-      <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-xs animate-in fade-in duration-150">
+      <div className={`border rounded-2xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden ${
+        isDarkMode ? "bg-slate-900 border-slate-800 text-slate-100" : "bg-white border-slate-200 text-slate-800"
+      }`}>
         {/* Modal Header */}
-        <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+        <div className={`px-5 py-4 border-b flex items-center justify-between ${
+          isDarkMode ? "bg-slate-900 border-slate-800" : "bg-slate-50 border-slate-200"
+        }`}>
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center font-bold text-base shadow-sm">
               🏢
             </div>
             <div>
-              <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+              <h2 className={`text-base font-bold flex items-center gap-2 ${isDarkMode ? "text-white" : "text-slate-900"}`}>
                 Master Apotek
                 <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 font-semibold">
                   {filtered.length.toLocaleString("id-ID")} Apotek
                 </span>
               </h2>
-              <p className="text-xs text-slate-500">
+              <p className={`text-xs ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>
                 Database Klasifikasi Prioritas Apotek (1P / 2P / 3P)
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 flex items-center justify-center text-lg font-bold transition-colors"
+            className={`w-8 h-8 rounded-lg flex items-center justify-center text-lg font-bold transition-colors ${
+              isDarkMode ? "text-slate-400 hover:text-white hover:bg-slate-800" : "text-slate-400 hover:text-slate-700 hover:bg-slate-200/60"
+            }`}
           >
             ✕
           </button>
         </div>
 
         {/* Modal Filter & Search Bar */}
-        <div className="p-4 border-b border-slate-100 bg-white grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className={`p-4 border-b grid grid-cols-1 sm:grid-cols-3 gap-3 ${
+          isDarkMode ? "bg-slate-900 border-slate-800" : "bg-white border-slate-100"
+        }`}>
           <div className="sm:col-span-2 relative">
             <span className="absolute left-3 top-2.5 text-xs text-slate-400">🔍</span>
             <input
@@ -111,11 +121,13 @@ export default function MasterApotekModal({
                 setSearch(e.target.value);
                 setPage(0);
               }}
-              className="w-full pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+              className={`w-full pl-8 pr-3 py-1.5 border rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 ${
+                isDarkMode ? "bg-slate-800 border-slate-700 text-white placeholder-slate-500" : "bg-slate-50 border-slate-200 text-slate-800"
+              }`}
             />
           </div>
 
-          <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
+          <div className={`flex items-center gap-1 p-1 rounded-xl ${isDarkMode ? "bg-slate-800" : "bg-slate-100"}`}>
             {(["all", "1P", "2P", "3P"] as const).map((k) => (
               <button
                 key={k}
@@ -125,8 +137,8 @@ export default function MasterApotekModal({
                 }}
                 className={`flex-1 py-1 rounded-lg text-xs font-bold transition-all ${
                   katFilter === k
-                    ? "bg-white text-slate-900 shadow-xs"
-                    : "text-slate-600 hover:text-slate-900"
+                    ? (isDarkMode ? "bg-slate-700 text-white shadow-xs" : "bg-white text-slate-900 shadow-xs")
+                    : (isDarkMode ? "text-slate-400 hover:text-white" : "text-slate-600 hover:text-slate-900")
                 }`}
               >
                 {k === "all" ? "Semua" : k}
@@ -139,7 +151,9 @@ export default function MasterApotekModal({
         <div className="flex-1 overflow-y-auto p-4">
           <table className="w-full text-left text-xs border-collapse">
             <thead>
-              <tr className="bg-slate-100 text-slate-600 font-semibold border-b border-slate-200 sticky top-0 z-10">
+              <tr className={`font-semibold border-b sticky top-0 z-10 ${
+                isDarkMode ? "bg-slate-800 text-slate-300 border-slate-700" : "bg-slate-100 text-slate-600 border-slate-200"
+              }`}>
                 <th className="py-2 px-3 w-12 text-center">#</th>
                 <th className="py-2 px-3">Kode Customer / Merchant</th>
                 <th className="py-2 px-3">Nama Apotek (MBI)</th>
@@ -147,7 +161,7 @@ export default function MasterApotekModal({
                 <th className="py-2 px-3">Keterangan</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className={`divide-y ${isDarkMode ? "divide-slate-800" : "divide-slate-100"}`}>
               {pageData.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="text-center py-8 text-slate-400">
@@ -156,17 +170,17 @@ export default function MasterApotekModal({
                 </tr>
               ) : (
                 pageData.map((item, idx) => (
-                  <tr key={idx} className="hover:bg-slate-50 transition-colors">
+                  <tr key={idx} className={`transition-colors ${isDarkMode ? "hover:bg-slate-800/60" : "hover:bg-slate-50"}`}>
                     <td className="py-2 px-3 text-center text-slate-400 font-mono">
                       {page * ITEMS_PER_PAGE + idx + 1}
                     </td>
-                    <td className="py-2 px-3 font-mono text-slate-600">
+                    <td className={`py-2 px-3 font-mono ${isDarkMode ? "text-slate-300" : "text-slate-600"}`}>
                       <div>{item.kodeCustomer || "-"}</div>
                       {item.namaMerchant && item.namaMerchant !== "-" && (
-                        <div className="text-[10px] text-slate-400">{item.namaMerchant}</div>
+                        <div className="text-[10px] text-slate-500">{item.namaMerchant}</div>
                       )}
                     </td>
-                    <td className="py-2 px-3 font-semibold text-slate-900">
+                    <td className={`py-2 px-3 font-semibold ${isDarkMode ? "text-slate-100" : "text-slate-900"}`}>
                       {item.namaApotek}
                     </td>
                     <td className="py-2 px-3 text-center">
@@ -182,7 +196,7 @@ export default function MasterApotekModal({
                         {item.kategori}
                       </span>
                     </td>
-                    <td className="py-2 px-3 text-slate-500 text-[11px]">
+                    <td className={`py-2 px-3 text-[11px] ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>
                       {item.keterangan || "-"}
                     </td>
                   </tr>
@@ -194,7 +208,9 @@ export default function MasterApotekModal({
 
         {/* Modal Pagination Footer */}
         {totalPages > 1 && (
-          <div className="px-5 py-3 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-xs text-slate-600">
+          <div className={`px-5 py-3 border-t flex items-center justify-between text-xs ${
+            isDarkMode ? "bg-slate-900 border-slate-800 text-slate-400" : "bg-slate-50 border-slate-200 text-slate-600"
+          }`}>
             <span>
               Halaman <strong>{page + 1}</strong> dari <strong>{totalPages}</strong>
             </span>
@@ -202,14 +218,18 @@ export default function MasterApotekModal({
               <button
                 onClick={() => setPage((p) => Math.max(0, p - 1))}
                 disabled={page === 0}
-                className="px-3 py-1 bg-white border border-slate-200 rounded-lg font-semibold disabled:opacity-40 hover:bg-slate-100"
+                className={`px-3 py-1 border rounded-lg font-semibold disabled:opacity-40 ${
+                  isDarkMode ? "bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-700" : "bg-white border-slate-200 hover:bg-slate-50"
+                }`}
               >
                 Sebelumnya
               </button>
               <button
                 onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
                 disabled={page >= totalPages - 1}
-                className="px-3 py-1 bg-white border border-slate-200 rounded-lg font-semibold disabled:opacity-40 hover:bg-slate-100"
+                className={`px-3 py-1 border rounded-lg font-semibold disabled:opacity-40 ${
+                  isDarkMode ? "bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-700" : "bg-white border-slate-200 hover:bg-slate-50"
+                }`}
               >
                 Berikutnya
               </button>

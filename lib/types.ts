@@ -102,3 +102,18 @@ export interface FakturGroup {
   allPrinted: boolean;
   printedAt: string | null;
 }
+
+export interface UploadNotification {
+  fileName: string;
+  prevOra?: string | null;
+  maxOra?: string;
+  rangeOra?: string | null;
+  prevDoo?: string | null;
+  maxDoo?: string;
+  rangeDoo?: string | null;
+  totalItems: number;
+  totalInvoices: number;
+  newUnprinted: number;
+  time: string;
+  uploaderId?: string;
+}
