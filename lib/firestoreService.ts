@@ -12,24 +12,27 @@ import {
 } from "firebase/firestore";
 import { db } from "./firebase";
 import { FirestoreFakturDoc, PrintState, InvoiceProgression } from "./types";
+import { normalize } from "./parser";
 
 export type { FirestoreFakturDoc, PrintState, InvoiceProgression };
 
 const APP_DATA_COLLECTION = "app_data";
 const METADATA_DOC = "metadata";
 const PRINT_STATE_DOC = "print_state";
+const CATEGORY_OVERRIDES_DOC = "category_overrides";
 const CHUNKS_COLLECTION = "faktur_chunks";
 
 export type SubscribeChangeReason = "chunks" | "print" | "meta";
 
 /**
- * Realtime listener for Chunked Fakturs and Print State
+ * Realtime listener for Chunked Fakturs, Print State, and Category Overrides
  */
 export function subscribeToFakturs(
   onData: (
     fakturs: FirestoreFakturDoc[],
     progression: InvoiceProgression | null,
     printState?: PrintState | null,
+    categoryOverrides?: Record<string, "1P" | "2P" | "3P"> | null,
     reason?: SubscribeChangeReason
   ) => void,
   onError?: (err: Error) => void
@@ -41,6 +44,7 @@ export function subscribeToFakturs(
     printedAtMap: {},
     updatedAt: "",
   };
+  let currentCategoryOverrides: Record<string, "1P" | "2P" | "3P"> = {};
   let hasEmittedInitialChunks = false;
 
   const emitData = (reason: SubscribeChangeReason = "chunks") => {
@@ -74,10 +78,19 @@ export function subscribeToFakturs(
       const isPrinted = printedSet.has(key) || printedSet.has(cleanKey) || printedSet.has(`${cleanKey}-1P`);
       d.status_cetak = isPrinted;
       d.printed_at = pMap[key] || pMap[cleanKey] || pMap[`${cleanKey}-1P`] || null;
+
+      // Apply customer/invoice category override if available
+      const cust = String(d.customer_name || d.extra?.nama_pelanggan || "").trim();
+      const normCust = cust ? normalize(cust) : "";
+      const overrideKat = currentCategoryOverrides[normCust] || currentCategoryOverrides[cust] || currentCategoryOverrides[cleanKey];
+      if (overrideKat && d.jenis_transaksi !== "ORA") {
+        d.kategori = overrideKat;
+        if (d.extra) d.extra.kategori = overrideKat;
+      }
     }
 
     hasEmittedInitialChunks = true;
-    onData(allDocs, currentProgression, currentPrintState, reason);
+    onData(allDocs, currentProgression, currentPrintState, currentCategoryOverrides, reason);
   };
 
   const unsubChunks = onSnapshot(
@@ -106,10 +119,23 @@ export function subscribeToFakturs(
         currentPrintState = snap.data() as PrintState;
       }
       if (hasEmittedInitialChunks) {
-        onData([], currentProgression, currentPrintState, "print");
+        onData([], currentProgression, currentPrintState, currentCategoryOverrides, "print");
       }
     },
     (err) => console.warn("PrintState sync warning:", err)
+  );
+
+  const unsubOverrides = onSnapshot(
+    doc(db, APP_DATA_COLLECTION, CATEGORY_OVERRIDES_DOC),
+    (snap) => {
+      if (snap.exists()) {
+        currentCategoryOverrides = (snap.data() || {}) as Record<string, "1P" | "2P" | "3P">;
+      }
+      if (hasEmittedInitialChunks) {
+        emitData("meta");
+      }
+    },
+    (err) => console.warn("Category overrides sync warning:", err)
   );
 
   const unsubMeta = onSnapshot(
@@ -122,7 +148,7 @@ export function subscribeToFakturs(
         }
       }
       if (hasEmittedInitialChunks) {
-        onData([], currentProgression, currentPrintState, "meta");
+        onData([], currentProgression, currentPrintState, currentCategoryOverrides, "meta");
       }
     },
     (err) => console.warn("Metadata sync warning:", err)
@@ -132,6 +158,7 @@ export function subscribeToFakturs(
     unsubChunks();
     unsubMeta();
     unsubPrint();
+    unsubOverrides();
   };
 }
 
@@ -142,11 +169,13 @@ export async function getExistingFakturs(): Promise<{
   docs: FirestoreFakturDoc[];
   progression: InvoiceProgression | null;
   printState: PrintState | null;
+  categoryOverrides: Record<string, "1P" | "2P" | "3P">;
 }> {
-  const [chunksSnap, metaSnap, printSnap] = await Promise.all([
+  const [chunksSnap, metaSnap, printSnap, overrideSnap] = await Promise.all([
     getDocsFromServer(collection(db, CHUNKS_COLLECTION)).catch(() => getDocs(collection(db, CHUNKS_COLLECTION))),
     getDocFromServer(doc(db, APP_DATA_COLLECTION, METADATA_DOC)).catch(() => getDoc(doc(db, APP_DATA_COLLECTION, METADATA_DOC))),
     getDocFromServer(doc(db, APP_DATA_COLLECTION, PRINT_STATE_DOC)).catch(() => getDoc(doc(db, APP_DATA_COLLECTION, PRINT_STATE_DOC))),
+    getDocFromServer(doc(db, APP_DATA_COLLECTION, CATEGORY_OVERRIDES_DOC)).catch(() => getDoc(doc(db, APP_DATA_COLLECTION, CATEGORY_OVERRIDES_DOC))),
   ]);
 
   const sortedDocs = chunksSnap.docs.sort((a, b) => {
@@ -154,6 +183,10 @@ export async function getExistingFakturs(): Promise<{
     const nb = parseInt(b.id.replace(/\D/g, ""), 10) || 0;
     return na - nb;
   });
+
+  const categoryOverrides = (overrideSnap && overrideSnap.exists()
+    ? (overrideSnap.data() as Record<string, "1P" | "2P" | "3P">)
+    : {}) || {};
 
   const docs: FirestoreFakturDoc[] = [];
   sortedDocs.forEach((d) => {
@@ -183,10 +216,19 @@ export async function getExistingFakturs(): Promise<{
       const isPrinted = printedSet.has(key) || printedSet.has(cleanKey) || printedSet.has(`${cleanKey}-1P`);
       d.status_cetak = isPrinted;
       d.printed_at = pMap[key] || pMap[cleanKey] || pMap[`${cleanKey}-1P`] || null;
+
+      // Apply customer/invoice category override if available
+      const cust = String(d.customer_name || d.extra?.nama_pelanggan || "").trim();
+      const normCust = cust ? normalize(cust) : "";
+      const overrideKat = categoryOverrides[normCust] || categoryOverrides[cust] || categoryOverrides[cleanKey];
+      if (overrideKat && d.jenis_transaksi !== "ORA") {
+        d.kategori = overrideKat;
+        if (d.extra) d.extra.kategori = overrideKat;
+      }
     }
   }
 
-  return { docs, progression, printState };
+  return { docs, progression, printState, categoryOverrides };
 }
 
 /**
@@ -412,8 +454,30 @@ export async function updateFaktursPrintStatusBatch(
  */
 export async function updateFakturCategory(
   invoiceKey: string,
-  newKategori: "1P" | "2P" | "3P"
+  newKategori: "1P" | "2P" | "3P",
+  customerName?: string
 ): Promise<void> {
+  const cleanInv = invoiceKey.replace(/-1P$/i, "");
+  const cleanCust = customerName ? customerName.trim() : "";
+  const normCust = cleanCust ? normalize(cleanCust) : "";
+
+  // 1. Save customer & invoice override directly to Firestore
+  const overrideDocRef = doc(db, APP_DATA_COLLECTION, CATEGORY_OVERRIDES_DOC);
+  const overrideSnap = await getDoc(overrideDocRef).catch(() => null);
+  const existingOverrides = (overrideSnap && overrideSnap.exists()) ? overrideSnap.data() : {};
+
+  const updates: Record<string, string> = {};
+  if (normCust) updates[normCust] = newKategori;
+  if (cleanCust) updates[cleanCust] = newKategori;
+  if (cleanInv) updates[cleanInv] = newKategori;
+
+  await setDoc(
+    overrideDocRef,
+    { ...existingOverrides, ...updates, updatedAt: new Date().toISOString() },
+    { merge: true }
+  );
+
+  // 2. Update matching items across chunks in Firestore
   const metaSnap = await getDoc(doc(db, APP_DATA_COLLECTION, METADATA_DOC));
   const chunkIds = (metaSnap.exists() ? (metaSnap.data().chunkIds as string[]) : []) || [];
 
@@ -425,8 +489,18 @@ export async function updateFakturCategory(
       let updated = false;
       const items = (data.items as FirestoreFakturDoc[]) || [];
       for (const item of items) {
-        const k = item.id || item.no_faktur;
-        if (k === invoiceKey || k.replace(/-1P$/i, "") === invoiceKey.replace(/-1P$/i, "")) {
+        const k = item.id || item.no_faktur || "";
+        const itemCleanK = k.replace(/-1P$/i, "");
+        const itemCust = String(item.customer_name || item.extra?.nama_pelanggan || "").trim();
+        const itemNormCust = itemCust ? normalize(itemCust) : "";
+
+        const isMatch =
+          k === invoiceKey ||
+          itemCleanK === cleanInv ||
+          (normCust && itemNormCust === normCust) ||
+          (cleanCust && itemCust === cleanCust);
+
+        if (isMatch && item.jenis_transaksi !== "ORA") {
           item.kategori = newKategori;
           if (item.extra) item.extra.kategori = newKategori;
           updated = true;
@@ -434,7 +508,6 @@ export async function updateFakturCategory(
       }
       if (updated) {
         await setDoc(chunkRef, { ...data, items, updatedAt: new Date().toISOString() });
-        return;
       }
     }
   }

@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from "react";
 import masterApotekList from "@/lib/masterApotekList.json";
+import { normalize } from "@/lib/parser";
 
 interface ApotekItem {
   namaApotek: string;
@@ -16,15 +17,33 @@ const ITEMS_PER_PAGE = 50;
 export default function MasterApotekModal({
   isOpen,
   onClose,
+  categoryOverrides,
 }: {
   isOpen: boolean;
   onClose: () => void;
+  categoryOverrides?: Record<string, "1P" | "2P" | "3P">;
 }) {
   const [search, setSearch] = useState("");
   const [katFilter, setKatFilter] = useState<"all" | "1P" | "2P" | "3P">("all");
   const [page, setPage] = useState(0);
 
-  const apotekData = masterApotekList as ApotekItem[];
+  const apotekData = useMemo(() => {
+    const raw = masterApotekList as ApotekItem[];
+    if (!categoryOverrides || Object.keys(categoryOverrides).length === 0) return raw;
+
+    return raw.map((item) => {
+      const norm = normalize(item.namaApotek);
+      const customKat = categoryOverrides[norm] || categoryOverrides[item.namaApotek];
+      if (customKat) {
+        return {
+          ...item,
+          kategori: customKat,
+          keterangan: item.keterangan ? `${item.keterangan} (Kustom User)` : "Kustom User",
+        };
+      }
+      return item;
+    });
+  }, [categoryOverrides]);
 
   const filtered = useMemo(() => {
     let list = apotekData;

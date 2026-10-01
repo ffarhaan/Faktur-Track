@@ -6,7 +6,7 @@ import masterProduct from "./masterProduct.json";
 
 const apotekMap = masterApotek as Record<string, string>;
 
-function normalize(s: string): string {
+export function normalize(s: string): string {
   return String(s || "")
     .toLowerCase()
     .replace(/apotik/g, "apotek")

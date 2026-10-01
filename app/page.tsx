@@ -8,6 +8,7 @@ import {
   isOraCustomer,
   getProductCategory,
   getPrekursorOOTClassification,
+  normalize,
 } from "@/lib/parser";
 import { FakturRecord, FirestoreFakturDoc, InvoiceProgression, FakturGroup } from "@/lib/types";
 import {
@@ -206,8 +207,14 @@ export default function Home() {
 
   const [selectedRowIndex, setSelectedRowIndex] = useState(0);
   const [selectedColIdx, setSelectedColIdx] = useState(3); // Default to No Invoice column
+  const [categoryOverrides, setCategoryOverrides] = useState<Record<string, "1P" | "2P" | "3P">>({});
+  const categoryOverridesRef = useRef<Record<string, "1P" | "2P" | "3P">>({});
   const searchInputRef = useRef<HTMLInputElement>(null);
   const isUploadingRef = useRef(false);
+
+  useEffect(() => {
+    categoryOverridesRef.current = categoryOverrides;
+  }, [categoryOverrides]);
 
   const showToast = (msg: string) => {
     setToastMsg(msg);
@@ -215,18 +222,44 @@ export default function Home() {
   };
 
   const handleUpdateCategory = useCallback(
-    async (invoiceKey: string, newKat: "1P" | "2P" | "3P") => {
+    async (invoiceKey: string, newKat: "1P" | "2P" | "3P", customerName?: string) => {
       const cleanInv = invoiceKey.replace(/-1P$/i, "");
+      const cleanCust = (customerName || "").trim();
+      const normCust = cleanCust ? normalize(cleanCust) : "";
+
+      // 1. Optimistic instant local update for all records of this apotek/customer
       setRecords((prev) =>
-        prev.map((r) =>
-          r.invoiceKey === invoiceKey || r.invoiceNumber === cleanInv
+        prev.map((r) => {
+          const rCleanCust = (r.customerName || "").trim();
+          const rNormCust = rCleanCust ? normalize(rCleanCust) : "";
+          const isMatch =
+            r.invoiceKey === invoiceKey ||
+            r.invoiceNumber === cleanInv ||
+            (normCust && rNormCust === normCust) ||
+            (cleanCust && rCleanCust === cleanCust);
+
+          return isMatch && r.jenisTransaksi !== "ORA"
             ? { ...r, kategori: newKat }
-            : r
-        )
+            : r;
+        })
       );
-      showToast(`✓ Kategori faktur ${cleanInv} diubah ke ${newKat}`);
+
+      // 2. Persist in memory ref and state
+      if (normCust) categoryOverridesRef.current[normCust] = newKat;
+      if (cleanCust) categoryOverridesRef.current[cleanCust] = newKat;
+      if (cleanInv) categoryOverridesRef.current[cleanInv] = newKat;
+      setCategoryOverrides((prev) => ({
+        ...prev,
+        ...(normCust ? { [normCust]: newKat } : {}),
+        ...(cleanCust ? { [cleanCust]: newKat } : {}),
+        ...(cleanInv ? { [cleanInv]: newKat } : {}),
+      }));
+
+      showToast(`✓ Kategori ${cleanCust ? `Apotek "${cleanCust}"` : `faktur ${cleanInv}`} disimpan ke ${newKat}`);
+
+      // 3. Persist to Firestore chunk & category_overrides doc
       try {
-        await updateFakturCategory(invoiceKey, newKat);
+        await updateFakturCategory(invoiceKey, newKat, cleanCust);
       } catch (err) {
         console.warn("Update category error:", err);
       }
@@ -238,10 +271,15 @@ export default function Home() {
   useEffect(() => {
     setLoading(true);
     const unsubscribe = subscribeToFakturs(
-      (docs, prog, printState, reason) => {
+      (docs, prog, printState, overrides, reason) => {
         if (isUploadingRef.current) return;
 
         if (prog) setInvoiceProgression(prog);
+
+        if (overrides) {
+          setCategoryOverrides(overrides);
+          categoryOverridesRef.current = overrides;
+        }
 
         if (printState) {
           const pSet = new Set(printState.printedKeys || []);
@@ -280,8 +318,12 @@ export default function Home() {
   const handleManualRefresh = useCallback(async () => {
     setLoading(true);
     try {
-      const { docs, progression: prog, printState } = await getExistingFakturs();
+      const { docs, progression: prog, printState, categoryOverrides: overrides } = await getExistingFakturs();
       if (prog) setInvoiceProgression(prog);
+      if (overrides) {
+        setCategoryOverrides(overrides);
+        categoryOverridesRef.current = overrides;
+      }
       if (printState) {
         setPrintedInvoices(new Set(printState.printedKeys || []));
         setPrintedAtMap(printState.printedAtMap || {});
@@ -835,8 +877,18 @@ export default function Home() {
             }
           }
 
+          const rawCust = String(r.customerName || "-").trim();
+          const normCust = rawCust ? normalize(rawCust) : "";
+          const overriddenKat =
+            categoryOverridesRef.current[normCust] ||
+            categoryOverridesRef.current[rawCust] ||
+            categoryOverridesRef.current[cleanInv] ||
+            (prevInfo && (prevInfo.extra?.kategori as ("1P" | "2P" | "3P") | undefined));
+
           if (!invMap.has(targetKey)) {
-            const kategori = isOra ? "1P" : (r.kategori || categorize("DOO", r.customerName));
+            const kategori = isOra
+              ? "1P"
+              : (overriddenKat || r.kategori || categorize("DOO", r.customerName));
             invMap.set(targetKey, {
               id: targetKey,
               no_faktur: targetKey,
@@ -864,6 +916,11 @@ export default function Home() {
           const entry = invMap.get(targetKey)!;
           entry.status_cetak = isPrinted;
           entry.printed_at = printedAt;
+
+          if (overriddenKat && !isOra) {
+            entry.kategori = overriddenKat;
+            if (entry.extra) entry.extra.kategori = overriddenKat;
+          }
 
           if (isOra && r.orderNumber && r.orderNumber !== "-") {
             entry.no_sales_order = r.orderNumber;
@@ -1744,7 +1801,7 @@ export default function Home() {
                             <select
                               value={g.kategori}
                               onChange={(e) => {
-                                handleUpdateCategory(g.invoiceKey, e.target.value as "1P" | "2P" | "3P");
+                                handleUpdateCategory(g.invoiceKey, e.target.value as "1P" | "2P" | "3P", g.customerName);
                               }}
                               className={`cursor-pointer px-2 py-0.5 rounded text-[11px] font-bold border border-transparent hover:border-slate-300 focus:border-blue-500 focus:outline-none transition-colors ${
                                 g.kategori === "1P"
@@ -1893,6 +1950,7 @@ export default function Home() {
       <MasterApotekModal
         isOpen={showApotekModal}
         onClose={() => setShowApotekModal(false)}
+        categoryOverrides={categoryOverrides}
       />
       <MasterProductModal
         isOpen={showProductModal}
