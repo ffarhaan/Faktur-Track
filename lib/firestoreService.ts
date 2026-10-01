@@ -107,6 +107,14 @@ export function subscribeToFakturs(
     onData(allDocs, currentProgression, currentPrintState, reason);
   };
 
+  let emitTimer: NodeJS.Timeout | null = null;
+  const debouncedEmit = (reason: SubscribeChangeReason = "chunks", delayMs: number = 200) => {
+    if (emitTimer) clearTimeout(emitTimer);
+    emitTimer = setTimeout(() => {
+      emitData(reason);
+    }, delayMs);
+  };
+
   // 1. Pure Real-time stream for CHUNKS (Instant sync across all laptops whenever a file is uploaded or cleared)
   const unsubChunks = onSnapshot(
     collection(db, CHUNKS_COLLECTION),
@@ -124,7 +132,7 @@ export function subscribeToFakturs(
         }
       });
       currentChunksMap = newMap;
-      emitData("chunks");
+      debouncedEmit("chunks", 250);
     },
     (err) => {
       console.warn("Chunks realtime stream error:", err);
@@ -140,7 +148,7 @@ export function subscribeToFakturs(
         currentPrintState = snap.data() as PrintState;
       }
       if (hasEmittedInitialChunks) {
-        onData([], currentProgression, currentPrintState, "print");
+        debouncedEmit("print", 50);
       }
     },
     (err) => console.warn("PrintState sync warning:", err)
@@ -157,7 +165,7 @@ export function subscribeToFakturs(
         }
       }
       if (hasEmittedInitialChunks) {
-        onData([], currentProgression, currentPrintState, "meta");
+        debouncedEmit("meta", 50);
       }
     },
     (err) => console.warn("Metadata sync warning:", err)
