@@ -18,6 +18,8 @@ import {
   updateFaktursPrintStatusBatch,
   clearAllFakturs,
 } from "@/lib/firestoreService";
+import MasterApotekModal from "@/components/MasterApotekModal";
+import MasterProductModal from "@/components/MasterProductModal";
 
 type Filter = "belum" | "sudah" | "all" | "double";
 type KatFilter = "all" | "1P" | "2P" | "3P";
@@ -185,6 +187,8 @@ export default function Home() {
   const [expandedInvoices, setExpandedInvoices] = useState<Set<string>>(new Set());
   const [dragOver, setDragOver] = useState(false);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
+  const [showApotekModal, setShowApotekModal] = useState(false);
+  const [showProductModal, setShowProductModal] = useState(false);
   const [uploadNotification, setUploadNotification] = useState<{
     fileName: string;
     prevOra: string | null;
@@ -1103,6 +1107,26 @@ export default function Home() {
               <span className="hidden sm:inline">Refresh</span>
             </button>
 
+            {/* Master Apotek Button */}
+            <button
+              onClick={() => setShowApotekModal(true)}
+              className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5"
+              title="Lihat Database Master Apotek (1P / 2P / 3P)"
+            >
+              <span>🏢</span>
+              <span className="hidden sm:inline">Master Apotek</span>
+            </button>
+
+            {/* Master Produk Button */}
+            <button
+              onClick={() => setShowProductModal(true)}
+              className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5"
+              title="Lihat Database Master Produk (Farma / Alkes / Prekursor / OOT / CCP)"
+            >
+              <span>💊</span>
+              <span className="hidden sm:inline">Master Produk</span>
+            </button>
+
             {/* Export Excel Button */}
             <button
               onClick={handleExportExcel}
@@ -1658,6 +1682,16 @@ export default function Home() {
           )}
         </div>
       </main>
+
+      {/* Master Modals */}
+      <MasterApotekModal
+        isOpen={showApotekModal}
+        onClose={() => setShowApotekModal(false)}
+      />
+      <MasterProductModal
+        isOpen={showProductModal}
+        onClose={() => setShowProductModal(false)}
+      />
     </div>
   );
 }
