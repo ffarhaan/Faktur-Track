@@ -646,13 +646,52 @@ export default function Home() {
         return;
       }
 
-      // Copy Invoice / SO on 'c'
-      if ((e.key === "c" || e.key === "C") && !e.ctrlKey && !e.metaKey) {
+      // Copy on 'c' OR 'Ctrl+C' / 'Cmd+C'
+      if (e.key === "c" || e.key === "C") {
+        // If user highlighted text with mouse, let default browser copy work for Ctrl+C
+        const textSelected = typeof window !== "undefined" && window.getSelection()?.toString();
+        if (textSelected && (e.ctrlKey || e.metaKey)) {
+          return;
+        }
+
         if (currentRow) {
-          const textToCopy = selectedColIdx === 2 ? currentRow.so : currentRow.invoiceNumber;
-          navigator.clipboard.writeText(textToCopy).then(() => {
-            showToast(`📋 Disalin ke clipboard: ${textToCopy}`);
-          });
+          if (e.ctrlKey || e.metaKey) {
+            e.preventDefault();
+          }
+
+          let textToCopy = currentRow.invoiceNumber;
+          let label = "No Invoice";
+
+          if (selectedColIdx === 2) {
+            textToCopy = currentRow.so;
+            label = "No SO";
+          } else if (selectedColIdx === 3) {
+            textToCopy = currentRow.invoiceNumber;
+            label = "No Invoice";
+          } else if (selectedColIdx === 6) {
+            textToCopy = currentRow.customerName;
+            label = "Pelanggan";
+          } else if (selectedColIdx === 10) {
+            textToCopy = String(currentRow.totalHarga);
+            label = "Total Harga";
+          } else {
+            textToCopy = currentRow.invoiceNumber;
+            label = "No Invoice";
+          }
+
+          if (textToCopy && textToCopy !== "-") {
+            navigator.clipboard.writeText(textToCopy).then(() => {
+              showToast(`📋 ${label} disalin: ${textToCopy}`);
+            }).catch(() => {
+              const ta = document.createElement("textarea");
+              ta.value = textToCopy;
+              document.body.appendChild(ta);
+              ta.select();
+              document.execCommand("copy");
+              document.body.removeChild(ta);
+              showToast(`📋 ${label} disalin: ${textToCopy}`);
+            });
+          }
         }
       }
     };

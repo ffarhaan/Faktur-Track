@@ -51,7 +51,7 @@ Dokumen ini adalah acuan baku dan permanen untuk seluruh pengembangan, pemelihar
 
 #### F. Navigasi & Shortcut Keyboard
 - Navigasi tabel penuh: `↓`/`j`, `↑`/`k` (baris), `→`/`l`, `←`/`h` (kolom/sel).
-- Aksi instan: `Space` (toggle print), `Enter` (buka detail obat), `c` (salin No Invoice/SO), `/` atau `f` (fokus search).
+- Aksi instan: `Space` (toggle print), `Enter` (buka detail obat), `Ctrl+C` / `Cmd+C` / `c` (salin No Invoice / No SO / Pelanggan / Total pada sel aktif ke clipboard), `/` atau `f` (fokus search).
 
 ---
 
