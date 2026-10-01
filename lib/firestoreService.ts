@@ -494,7 +494,68 @@ export async function updatePrintState(
 }
 
 /**
- * Toggle Print Status for a single invoice with atomic Firestore transaction
+ * Helper: Find and update status_cetak directly in the corresponding chunk document
+ */
+async function syncPrintStatusToChunkDocs(
+  keysToUpdate: string[],
+  status: boolean,
+  printedAt: string | null
+): Promise<void> {
+  try {
+    const keySet = new Set(keysToUpdate);
+    const chunksSnap = await getDocs(collection(db, CHUNKS_COLLECTION));
+    const chunksToSave: Array<{ id: string; items: FirestoreFakturDoc[]; count: number }> = [];
+
+    chunksSnap.forEach((chunkDoc) => {
+      const data = chunkDoc.data();
+      let items: FirestoreFakturDoc[] = [];
+      if (Array.isArray(data.items)) {
+        items = data.items as FirestoreFakturDoc[];
+      } else if (typeof data.itemsJson === "string") {
+        try {
+          items = JSON.parse(data.itemsJson);
+        } catch {}
+      }
+
+      let modified = false;
+      for (const it of items) {
+        const k = it.id || it.no_faktur;
+        if (!k) continue;
+        const cleanK = k.replace(/-1P$/i, "");
+        if (keySet.has(k) || keySet.has(cleanK) || keySet.has(`${cleanK}-1P`)) {
+          it.status_cetak = status;
+          it.printed_at = status ? (printedAt || new Date().toISOString()) : null;
+          modified = true;
+        }
+      }
+
+      if (modified) {
+        chunksToSave.push({ id: chunkDoc.id, items, count: items.length });
+      }
+    });
+
+    if (chunksToSave.length > 0) {
+      await Promise.all(
+        chunksToSave.map((c) =>
+          setDoc(
+            doc(db, CHUNKS_COLLECTION, c.id),
+            {
+              items: c.items,
+              count: c.count,
+              updatedAt: new Date().toISOString(),
+            },
+            { merge: true }
+          ).catch((e) => console.warn(`Could not sync print status to chunk ${c.id}:`, e))
+        )
+      );
+    }
+  } catch (err) {
+    console.warn("syncPrintStatusToChunkDocs error:", err);
+  }
+}
+
+/**
+ * Toggle Print Status for a single invoice with dual-write atomic persistence
  */
 export async function updateFakturPrintStatus(
   invoiceKey: string,
@@ -552,8 +613,14 @@ export async function updateFakturPrintStatus(
     });
   } catch (err) {
     console.warn("Transaction failed, falling back to setDoc:", err);
-    const fallbackKeys = new Set(currentPrintedKeys || []);
-    const fallbackMap = { ...(currentPrintedAtMap || {}) };
+    const snap = await getDoc(printDocRef).catch(() => null);
+    let fallbackKeys = new Set<string>(currentPrintedKeys || []);
+    let fallbackMap: Record<string, string> = { ...(currentPrintedAtMap || {}) };
+    if (snap && snap.exists()) {
+      const data = snap.data() as PrintState;
+      (data.printedKeys || []).forEach((k) => fallbackKeys.add(k));
+      fallbackMap = { ...(data.printedAtMap || {}), ...fallbackMap };
+    }
     if (status) {
       keysToUpdate.forEach((k) => {
         fallbackKeys.add(k);
@@ -567,11 +634,14 @@ export async function updateFakturPrintStatus(
     }
     await updatePrintState(Array.from(fallbackKeys), fallbackMap);
   }
+
+  // Dual-write into chunk document in background
+  syncPrintStatusToChunkDocs(keysToUpdate, status, nowIso).catch(() => null);
 }
 
 /**
  * Batch update print status for multiple keys (e.g. mark all / filter printed)
- * Uses atomic Firestore transaction!
+ * Uses atomic Firestore transaction with chunk dual-write!
  */
 export async function updateFaktursPrintStatusBatch(
   keys: string[],
@@ -654,6 +724,9 @@ export async function updateFaktursPrintStatusBatch(
     }
     await updatePrintState(Array.from(currentKeys), currentMap);
   }
+
+  // Dual-write into chunk documents in background
+  syncPrintStatusToChunkDocs(keys, status, nowIso).catch(() => null);
 }
 
 /**

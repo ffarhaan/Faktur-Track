@@ -782,7 +782,8 @@ export default function Home() {
         // Instant re-categorization of currently loaded records in memory
         if (latestDBDocsRef.current.length > 0) {
           const { records: recs } = dbRowsToFakturRecords(
-            latestDBDocsRef.current as unknown as Array<Record<string, unknown>>
+            latestDBDocsRef.current as unknown as Array<Record<string, unknown>>,
+            latestPrintStateRef.current
           );
           setRecords(recs);
         }
@@ -1061,6 +1062,15 @@ export default function Home() {
       setSessionPrintedKeys(sNext);
       setPrintedAtMap(nextMap);
 
+      if (latestPrintStateRef.current) {
+        latestPrintStateRef.current = {
+          ...latestPrintStateRef.current,
+          printedKeys: Array.from(next),
+          printedAtMap: nextMap,
+          updatedAt: nowIso,
+        };
+      }
+
       try {
         await updateFakturPrintStatus(
           targetKey,
@@ -1069,15 +1079,16 @@ export default function Home() {
           next,
           nextMap
         );
-        // Sync ke Google Sheets secara realtime
-        await updateGSheetPrintStatus(
-          targetKey,
-          willBePrinted,
-          willBePrinted ? nowIso : null
-        );
       } catch (err) {
         console.error("Failed to update print status in Firestore:", err);
       }
+
+      // Sync ke Google Sheets secara realtime di background (non-blocking)
+      updateGSheetPrintStatus(
+        targetKey,
+        willBePrinted,
+        willBePrinted ? nowIso : null
+      ).catch((err) => console.warn("GSheet background sync warning:", err));
     },
     [printedInvoices, printedAtMap, sessionPrintedKeys]
   );
@@ -2353,7 +2364,6 @@ export default function Home() {
     try {
       setLoading(true);
       await updateFaktursPrintStatusBatch(targetKeys, true, nowIso);
-      await updateGSheetPrintStatusBatch(targetKeys, true, nowIso);
       setCopyToast(`✓ Berhasil menandai ${targetKeys.length} faktur selesai diprint!`);
       setTimeout(() => setCopyToast(null), 3500);
     } catch (err) {
@@ -2362,6 +2372,11 @@ export default function Home() {
     } finally {
       setLoading(false);
     }
+
+    // Background sync to GSheet
+    updateGSheetPrintStatusBatch(targetKeys, true, nowIso).catch((err) =>
+      console.warn("GSheet batch sync error:", err)
+    );
   }, [filtered]);
 
   useEffect(() => {
