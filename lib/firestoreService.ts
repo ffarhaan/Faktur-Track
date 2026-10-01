@@ -92,13 +92,14 @@ export function subscribeToFakturs(
     const printedSet = new Set(currentPrintState.printedKeys || []);
     const pMap = currentPrintState.printedAtMap || {};
 
-    // Apply printed status with exact key matching
+    // Apply printed status with flexible key matching (exact, clean, and -1P)
     for (const d of allDocs) {
       const key = d.id || d.no_faktur;
       if (!key) continue;
-      const isPrinted = printedSet.has(key);
+      const cleanKey = key.replace(/-1P$/i, "");
+      const isPrinted = printedSet.has(key) || printedSet.has(cleanKey) || printedSet.has(`${cleanKey}-1P`);
       d.status_cetak = isPrinted;
-      d.printed_at = pMap[key] || null;
+      d.printed_at = pMap[key] || pMap[cleanKey] || pMap[`${cleanKey}-1P`] || null;
     }
 
     hasEmittedInitialChunks = true;
@@ -332,18 +333,15 @@ export async function saveFaktursBatch(
     const printSnap = await getDoc(doc(db, APP_DATA_COLLECTION, PRINT_STATE_DOC));
     if (printSnap.exists()) {
       const liveData = printSnap.data() as PrintState;
-      // Genuinely new invoices being uploaded MUST be excluded from live printed keys
-      livePrintedKeys = (liveData.printedKeys || []).filter((k) => !newUnprintedSet.has(k));
+      livePrintedKeys = liveData.printedKeys || [];
       livePrintedAtMap = { ...(liveData.printedAtMap || {}) };
-      newUnprintedSet.forEach((k) => delete livePrintedAtMap[k]);
     }
   } catch (err) {
     console.warn("Could not read live print state during batch upload:", err);
   }
 
-  // UNION MERGE: Print status of existing invoices is preserved.
-  // New unprinted invoices are strictly excluded.
-  const localPrintedKeys = (existingPrintState?.printedKeys || []).filter((k) => !newUnprintedSet.has(k));
+  // UNION MERGE: Print status of existing invoices is strictly preserved!
+  const localPrintedKeys = existingPrintState?.printedKeys || [];
   const unifiedPrintedSet = new Set<string>([
     ...livePrintedKeys,
     ...localPrintedKeys,
@@ -352,18 +350,19 @@ export async function saveFaktursBatch(
     ...livePrintedAtMap,
     ...(existingPrintState?.printedAtMap || {}),
   };
-  newUnprintedSet.forEach((k) => delete unifiedPrintedAtMap[k]);
 
   // Sync the unified print status into the chunk items
   for (const item of fakturs) {
     const key = item.id || item.no_faktur;
     if (key) {
-      if (newUnprintedSet.has(key)) {
+      const cleanKey = key.replace(/-1P$/i, "");
+      const isPrinted = unifiedPrintedSet.has(key) || unifiedPrintedSet.has(cleanKey) || unifiedPrintedSet.has(`${cleanKey}-1P`);
+      if (isPrinted) {
+        item.status_cetak = true;
+        item.printed_at = unifiedPrintedAtMap[key] || unifiedPrintedAtMap[cleanKey] || unifiedPrintedAtMap[`${cleanKey}-1P`] || item.printed_at || new Date().toISOString();
+      } else {
         item.status_cetak = false;
         item.printed_at = null;
-      } else if (unifiedPrintedSet.has(key)) {
-        item.status_cetak = true;
-        item.printed_at = unifiedPrintedAtMap[key] || item.printed_at || new Date().toISOString();
       }
     }
   }
@@ -515,14 +514,19 @@ export async function updateFakturPrintStatus(
     if (currentPrintedAtMap) liveMap = { ...currentPrintedAtMap };
   }
 
+  const cleanKey = invoiceKey.replace(/-1P$/i, "");
+  const keysToUpdate = Array.from(new Set([invoiceKey, cleanKey, `${cleanKey}-1P`].filter(Boolean)));
+
   if (status) {
-    liveKeys.add(invoiceKey);
-    if (printedAt) {
-      liveMap[invoiceKey] = printedAt;
-    }
+    keysToUpdate.forEach((k) => {
+      liveKeys.add(k);
+      if (printedAt) liveMap[k] = printedAt;
+    });
   } else {
-    liveKeys.delete(invoiceKey);
-    delete liveMap[invoiceKey];
+    keysToUpdate.forEach((k) => {
+      liveKeys.delete(k);
+      delete liveMap[k];
+    });
   }
 
   await updatePrintState(Array.from(liveKeys), liveMap);
@@ -550,13 +554,25 @@ export async function updateFaktursPrintStatusBatch(
 
   if (status) {
     keys.forEach((k) => {
+      const cleanKey = k.replace(/-1P$/i, "");
       currentKeys.add(k);
-      if (printedAt) currentMap[k] = printedAt;
+      currentKeys.add(cleanKey);
+      currentKeys.add(`${cleanKey}-1P`);
+      if (printedAt) {
+        currentMap[k] = printedAt;
+        currentMap[cleanKey] = printedAt;
+        currentMap[`${cleanKey}-1P`] = printedAt;
+      }
     });
   } else {
     keys.forEach((k) => {
+      const cleanKey = k.replace(/-1P$/i, "");
       currentKeys.delete(k);
+      currentKeys.delete(cleanKey);
+      currentKeys.delete(`${cleanKey}-1P`);
       delete currentMap[k];
+      delete currentMap[cleanKey];
+      delete currentMap[`${cleanKey}-1P`];
     });
   }
 

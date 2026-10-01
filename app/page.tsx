@@ -21,6 +21,7 @@ import {
   updatePrintState,
   clearAllFakturs,
   FirestoreFakturDoc,
+  PrintState,
   submitTeamFeedback,
   subscribeToTeamFeedbacks,
   deleteTeamFeedback,
@@ -154,15 +155,18 @@ export type InvoiceProgression = {
   updatedAt?: string;
 };
 
-function dbRowsToFakturRecords(rows: Array<Record<string, unknown>>): {
+function dbRowsToFakturRecords(
+  rows: Array<Record<string, unknown>>,
+  externalPrintState?: PrintState | null
+): {
   records: FakturRecord[];
   printedSet: Set<string>;
   printedAtMap: Record<string, string>;
   progression: InvoiceProgression | null;
 } {
   const records: FakturRecord[] = [];
-  const printedSet = new Set<string>();
-  const printedAtMap: Record<string, string> = {};
+  const printedSet = new Set<string>(externalPrintState?.printedKeys || []);
+  const printedAtMap: Record<string, string> = { ...(externalPrintState?.printedAtMap || {}) };
   let progression: InvoiceProgression | null = null;
 
   for (const r of rows) {
@@ -187,12 +191,32 @@ function dbRowsToFakturRecords(rows: Array<Record<string, unknown>>): {
     const normCust = cust.toLowerCase().replace(/apotik/g, "apotek").replace(/[^a-z0-9]/g, "");
     const customKat = customOverrides[normCust] || customOverrides[cust.toLowerCase().trim()];
     const kategori = customKat || (r.kategori as "1P" | "2P" | "3P") || categorize(cleanJenis, cust, cleanJenis);
-    const pAt = (r.printed_at as string) || (extra.printed_at as string) || null;
+    const pAt =
+      (r.printed_at as string) ||
+      (extra.printed_at as string) ||
+      printedAtMap[invKey] ||
+      printedAtMap[cleanInv] ||
+      printedAtMap[`${cleanInv}-1P`] ||
+      null;
 
-    if (r.status_cetak) {
+    const isPrinted = Boolean(
+      r.status_cetak ||
+      printedSet.has(invKey) ||
+      printedSet.has(cleanInv) ||
+      printedSet.has(`${cleanInv}-1P`) ||
+      printedSet.has(rawInv)
+    );
+
+    if (isPrinted) {
       if (invKey) {
         printedSet.add(invKey);
-        if (pAt) printedAtMap[invKey] = pAt;
+        printedSet.add(cleanInv);
+        if (isOra) printedSet.add(`${cleanInv}-1P`);
+        if (pAt) {
+          printedAtMap[invKey] = pAt;
+          printedAtMap[cleanInv] = pAt;
+          if (isOra) printedAtMap[`${cleanInv}-1P`] = pAt;
+        }
       }
     }
 
@@ -845,7 +869,8 @@ export default function Home() {
         latestDBDocsRef.current = docs;
         if (docs.length > 0) {
           const { records: recs } = dbRowsToFakturRecords(
-            docs as unknown as Array<Record<string, unknown>>
+            docs as unknown as Array<Record<string, unknown>>,
+            printState || latestPrintStateRef.current
           );
           setRecords(recs);
         } else {
@@ -919,12 +944,22 @@ export default function Home() {
           latestPrintStateRef.current = printState;
         }
         latestDBDocsRef.current = docs;
+        const activePrintState = printState || latestPrintStateRef.current;
         const { records: recs, printedSet, printedAtMap: pMap } = dbRowsToFakturRecords(
-          docs as unknown as Array<Record<string, unknown>>
+          docs as unknown as Array<Record<string, unknown>>,
+          activePrintState
         );
+        const finalPrintedSet = new Set([
+          ...printedSet,
+          ...(activePrintState?.printedKeys || []),
+        ]);
+        const finalPrintedAtMap = {
+          ...(activePrintState?.printedAtMap || {}),
+          ...pMap,
+        };
         setRecords(recs);
-        setPrintedInvoices(printedSet);
-        setPrintedAtMap(pMap);
+        setPrintedInvoices(finalPrintedSet);
+        setPrintedAtMap(finalPrintedAtMap);
         setLoading(false);
       })
       .catch((err) => {
@@ -937,7 +972,10 @@ export default function Home() {
   const togglePrint = useCallback(
     async (group: FakturGroup) => {
       const willBePrinted = !group.allPrinted;
-      const targetKey = group.invoiceKey || (group.jenisTransaksi === "ORA" ? `${group.invoiceNumber}-1P` : group.invoiceNumber);
+      const cleanNum = group.invoiceNumber ? group.invoiceNumber.replace(/-1P$/i, "") : "";
+      const isOra = group.jenisTransaksi === "ORA" || isOraCustomer(group.customerName);
+      const targetKey = group.invoiceKey || (isOra ? `${cleanNum}-1P` : cleanNum);
+      const allKeys = Array.from(new Set([targetKey, cleanNum, `${cleanNum}-1P`, group.invoiceNumber].filter(Boolean)));
 
       // Debounce rapid toggles on the same invoice (< 300ms)
       if (inFlightToggleRef.current.has(targetKey)) return;
@@ -947,33 +985,30 @@ export default function Home() {
       }, 300);
 
       const nowIso = new Date().toISOString();
-      recentTogglesRef.current.set(targetKey, { printed: willBePrinted, time: Date.now() });
-      const next = new Set(printedInvoices);
-
-      if (willBePrinted) {
-        next.add(targetKey);
-      } else {
-        next.delete(targetKey);
-      }
-      setPrintedInvoices(next);
-
-      // Optimistic session state
-      setSessionPrintedKeys((prev) => {
-        const sNext = new Set(prev);
-        if (willBePrinted) {
-          sNext.add(targetKey);
-        } else {
-          sNext.delete(targetKey);
-        }
-        return sNext;
+      allKeys.forEach((k) => {
+        recentTogglesRef.current.set(k, { printed: willBePrinted, time: Date.now() });
       });
 
+      const next = new Set(printedInvoices);
+      const sNext = new Set(sessionPrintedKeys);
       const nextMap = { ...printedAtMap };
+
       if (willBePrinted) {
-        nextMap[targetKey] = nowIso;
+        allKeys.forEach((k) => {
+          next.add(k);
+          sNext.add(k);
+          nextMap[k] = nowIso;
+        });
       } else {
-        delete nextMap[targetKey];
+        allKeys.forEach((k) => {
+          next.delete(k);
+          sNext.delete(k);
+          delete nextMap[k];
+        });
       }
+
+      setPrintedInvoices(next);
+      setSessionPrintedKeys(sNext);
       setPrintedAtMap(nextMap);
 
       try {
@@ -994,7 +1029,7 @@ export default function Home() {
         console.error("Failed to update print status in Firestore:", err);
       }
     },
-    [printedInvoices, printedAtMap]
+    [printedInvoices, printedAtMap, sessionPrintedKeys]
   );
 
   // Upload: Parse & Save directly to Supabase cloud DB so all devices see it
@@ -1284,37 +1319,42 @@ export default function Home() {
           // Check if this invoice is already in DB (check all key variants: targetKey, cleanInv, cleanInv-1P, SO-xxx)
           const prevInfo = existingStatusMap.get(targetKey) || existingStatusMap.get(cleanInv) || existingStatusMap.get(`${cleanInv}-1P`) || (hasValidSO ? existingStatusMap.get(`SO-${r.orderNumber}`) : undefined);
 
-          let isPrinted = false;
-          let printedAt: string | null = null;
-          let isNewInvoice = false;
+          // Check if this invoice is already in DB or already printed in any state (print_state doc, in-memory active set, or chunks)
+          const isPrintedInChunk = Boolean(prevInfo?.status_cetak);
+          const isPrintedInState = Boolean(
+            loadedPrintState?.printedKeys?.includes(targetKey) ||
+            loadedPrintState?.printedKeys?.includes(cleanInv) ||
+            loadedPrintState?.printedKeys?.includes(`${cleanInv}-1P`) ||
+            currentActivePrintedSet.has(targetKey) ||
+            currentActivePrintedSet.has(cleanInv) ||
+            currentActivePrintedSet.has(`${cleanInv}-1P`) ||
+            latestPrintStateRef.current?.printedKeys?.includes(targetKey) ||
+            latestPrintStateRef.current?.printedKeys?.includes(cleanInv) ||
+            latestPrintStateRef.current?.printedKeys?.includes(`${cleanInv}-1P`)
+          );
 
-          if (prevInfo !== undefined) {
-            // Already in database: STRICTLY preserve existing user/system print status!
-            const isPrintedInChunk = Boolean(prevInfo.status_cetak);
-            const isPrintedInState = Boolean(
-              loadedPrintState?.printedKeys?.includes(targetKey) ||
-              loadedPrintState?.printedKeys?.includes(cleanInv) ||
-              loadedPrintState?.printedKeys?.includes(`${cleanInv}-1P`) ||
-              currentActivePrintedSet.has(targetKey) ||
-              currentActivePrintedSet.has(cleanInv) ||
-              currentActivePrintedSet.has(`${cleanInv}-1P`)
-            );
-            isPrinted = isPrintedInChunk || isPrintedInState;
-            printedAt = isPrinted
-              ? (currentActivePrintedAtMap[targetKey] || currentActivePrintedAtMap[cleanInv] || currentActivePrintedAtMap[`${cleanInv}-1P`] ||
-                 loadedPrintState?.printedAtMap?.[targetKey] || loadedPrintState?.printedAtMap?.[cleanInv] || loadedPrintState?.printedAtMap?.[`${cleanInv}-1P`] ||
-                 prevInfo.printed_at || latestPrintStateRef.current?.printedAtMap?.[targetKey] || new Date().toISOString())
-              : null;
-            if (!isPrinted) {
-              newUnprintedKeyList.push(targetKey);
-            }
+          let isPrinted = isPrintedInChunk || isPrintedInState;
+          let printedAt: string | null = null;
+          const isNewInvoice = prevInfo === undefined;
+
+          if (isPrinted) {
+            printedAt =
+              currentActivePrintedAtMap[targetKey] ||
+              currentActivePrintedAtMap[cleanInv] ||
+              currentActivePrintedAtMap[`${cleanInv}-1P`] ||
+              loadedPrintState?.printedAtMap?.[targetKey] ||
+              loadedPrintState?.printedAtMap?.[cleanInv] ||
+              loadedPrintState?.printedAtMap?.[`${cleanInv}-1P`] ||
+              latestPrintStateRef.current?.printedAtMap?.[targetKey] ||
+              latestPrintStateRef.current?.printedAtMap?.[cleanInv] ||
+              latestPrintStateRef.current?.printedAtMap?.[`${cleanInv}-1P`] ||
+              prevInfo?.printed_at ||
+              new Date().toISOString();
           } else {
-            // Brand new invoice to database: ALWAYS treat as Belum Terprint until explicitly marked done by operator!
-            isNewInvoice = true;
-            isPrinted = false;
-            printedAt = null;
             newUnprintedKeyList.push(targetKey);
-            newGSheetKeys.add(targetKey); // tandai untuk dikirim ke GSheet
+            if (isNewInvoice) {
+              newGSheetKeys.add(targetKey); // tandai untuk dikirim ke GSheet
+            }
           }
           const prevExtra = (prevInfo?.extra as Record<string, unknown>) || null;
           const prevItems = (prevExtra?.items as Array<Record<string, unknown>>) || [];
@@ -1751,12 +1791,21 @@ export default function Home() {
 
         // 1. INSTANT LOCAL STATE UPDATE
         const { records: localRecs, printedSet: localPrintedSet, printedAtMap: localPrintedAtMap } = dbRowsToFakturRecords(
-          payload as unknown as Array<Record<string, unknown>>
+          payload as unknown as Array<Record<string, unknown>>,
+          loadedPrintState
         );
 
         setRecords(localRecs);
-        const mergedPrintedSet = new Set([...currentActivePrintedSet, ...localPrintedSet]);
-        const mergedPrintedMap = { ...currentActivePrintedAtMap, ...localPrintedAtMap };
+        const mergedPrintedSet = new Set([
+          ...currentActivePrintedSet,
+          ...(loadedPrintState?.printedKeys || []),
+          ...localPrintedSet,
+        ]);
+        const mergedPrintedMap = {
+          ...(loadedPrintState?.printedAtMap || {}),
+          ...currentActivePrintedAtMap,
+          ...localPrintedAtMap,
+        };
 
         // Only genuinely new unprinted invoices from this upload batch are removed from the printed set
         newUnprintedKeyList.forEach((k) => {
@@ -2048,8 +2097,16 @@ export default function Home() {
   // 2. Ultra-lightweight print status mapping (< 1ms, reuses objects when unchanged)
   const grouped = useMemo<FakturGroup[]>(() => {
     return baseGrouped.map((g) => {
-      const isPrinted = printedInvoices.has(g.invoiceKey);
-      const pAt = printedAtMap[g.invoiceKey] || null;
+      const cleanNum = g.invoiceNumber ? g.invoiceNumber.replace(/-1P$/i, "") : "";
+      const isPrinted =
+        printedInvoices.has(g.invoiceKey) ||
+        (cleanNum ? printedInvoices.has(cleanNum) : false) ||
+        (cleanNum ? printedInvoices.has(`${cleanNum}-1P`) : false);
+      const pAt =
+        printedAtMap[g.invoiceKey] ||
+        (cleanNum ? printedAtMap[cleanNum] : null) ||
+        (cleanNum ? printedAtMap[`${cleanNum}-1P`] : null) ||
+        null;
       if (g.allPrinted === isPrinted && g.printedAt === pAt) {
         return g;
       }
@@ -2150,9 +2207,14 @@ export default function Home() {
 
     // Filter Status (Belum / Sudah / Double)
     if (filter === "belum") {
-      result = result.filter(
-        (g) => !g.allPrinted || sessionPrintedKeys.has(g.invoiceKey)
-      );
+      result = result.filter((g) => {
+        const cleanNum = g.invoiceNumber ? g.invoiceNumber.replace(/-1P$/i, "") : "";
+        const isSessionPrinted =
+          sessionPrintedKeys.has(g.invoiceKey) ||
+          (cleanNum ? sessionPrintedKeys.has(cleanNum) : false) ||
+          (cleanNum ? sessionPrintedKeys.has(`${cleanNum}-1P`) : false);
+        return !g.allPrinted || isSessionPrinted;
+      });
     } else if (filter === "sudah") {
       result = result.filter((g) => g.allPrinted);
     } else if (filter === "double") {
