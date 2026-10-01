@@ -890,11 +890,32 @@ export default function Home() {
         // Only recreate records when chunk data actually changes (file upload or clear)
         latestDBDocsRef.current = docs;
         if (docs.length > 0) {
-          const { records: recs } = dbRowsToFakturRecords(
+          const effectivePrintState = printState || latestPrintStateRef.current;
+          const { records: recs, printedSet, printedAtMap: pMap } = dbRowsToFakturRecords(
             docs as unknown as Array<Record<string, unknown>>,
-            printState || latestPrintStateRef.current
+            effectivePrintState
           );
           setRecords(recs);
+          setPrintedInvoices((prev) => {
+            const rawUnion = new Set<string>([
+              ...prev,
+              ...printedSet,
+              ...(effectivePrintState?.printedKeys || []),
+            ]);
+            const expanded = new Set<string>();
+            rawUnion.forEach((k) => {
+              const cleanK = k.replace(/-1P$/i, "");
+              expanded.add(k);
+              expanded.add(cleanK);
+              expanded.add(`${cleanK}-1P`);
+            });
+            return expanded;
+          });
+          setPrintedAtMap((prev) => ({
+            ...pMap,
+            ...(effectivePrintState?.printedAtMap || {}),
+            ...prev,
+          }));
         } else {
           setRecords([]);
           setPrintedInvoices(new Set());
@@ -971,10 +992,17 @@ export default function Home() {
           docs as unknown as Array<Record<string, unknown>>,
           activePrintState
         );
-        const finalPrintedSet = new Set([
+        const rawUnion = new Set<string>([
           ...printedSet,
           ...(activePrintState?.printedKeys || []),
         ]);
+        const finalPrintedSet = new Set<string>();
+        rawUnion.forEach((k) => {
+          const cleanK = k.replace(/-1P$/i, "");
+          finalPrintedSet.add(k);
+          finalPrintedSet.add(cleanK);
+          finalPrintedSet.add(`${cleanK}-1P`);
+        });
         const finalPrintedAtMap = {
           ...(activePrintState?.printedAtMap || {}),
           ...pMap,
