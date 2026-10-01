@@ -1943,6 +1943,12 @@ export default function Home() {
           })),
         ]);
         setPage(0);
+        setDateFilter("all");
+        setKatFilter("all");
+        setJenisFilter("all");
+        setKlasFilter("all");
+        setSearch("");
+        setFilter("belum");
       } catch (e) {
         console.error("Upload error:", e);
         setError(e instanceof Error ? e.message : "Gagal membaca file.");
