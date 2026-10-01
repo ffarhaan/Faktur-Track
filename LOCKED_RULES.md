@@ -1,7 +1,7 @@
 # 🔒 DOKUMEN ATURAN BAKU & ARSITEKTUR TERKUNCI (LOCKED RULES)
-## Faktur Tracker v2.0 — Final Stable Architecture
+## Faktur Tracker v2.0 — Final Stable & Realtime Architecture
 
-Dokumen ini adalah acuan baku dan permanen untuk seluruh pengembangan, pemeliharaan, dan sesi interaksi pada proyek **Faktur Tracker**. Seluruh aturan di bawah ini telah diverifikasi, disetujui, dan **DI-LOCK (TIDAK BOLEH DIUBAH TANPA PERSETUJUAN EKSPLISIT)**.
+Dokumen ini adalah acuan baku dan permanen untuk seluruh pengembangan, pemeliharaan, dan sesi interaksi pada proyek **Faktur Tracker**. Seluruh aturan di bawah ini telah diverifikasi, disetujui, dan **DI-LOCK TOTAL (TIDAK BOLEH DIUBAH TANPA PERSETUJUAN EKSPLISIT)**.
 
 ---
 
@@ -24,10 +24,13 @@ Dokumen ini adalah acuan baku dan permanen untuk seluruh pengembangan, pemelihar
 - Setiap kali file diupload, faktur baru yang memiliki nomor lebih besar dari nomor maksimum sebelumnya (`num > prevMaxNum`) atau belum pernah terdaftar di database **WAJIB berstatus Belum Dicetak (`status_cetak: false`, `printed_at: null`)**.
 - Faktur lama yang sudah pernah ditandai selesai dicetak di database Firestore tetap mempertahankan status cetaknya (`status_cetak: true`) beserta jam cetaknya (`printed_at`).
 
-#### C. Logika Done Print & Refresh
-- Saat faktur ditandai selesai cetak (*Done Print*), status langsung tersimpan ke dokumen `app_data/print_state` di Firestore secara instan (<50ms).
-- Pada tab **"Belum Terprint"**, saat halaman direfresh atau difilter ulang, faktur yang sudah selesai dicetak **otomatis disaring keluar / tidak ditampilkan lagi** di daftar belum terprint.
-- Faktur tersebut tetap dapat dilihat di tab **"Sudah Terprint"**, tab **"Semua"**, atau melalui kotak pencarian global.
+#### C. Logika Done Print & Realtime Multi-Device Sync
+- **Kecepatan & Keandalan**:
+  - Saat faktur ditandai selesai cetak (*Done Print*), status langsung tersimpan ke dokumen `app_data/print_state` di Firestore secara instan (<50ms).
+  - Melalui listener `subscribeToFakturs`, seluruh device lain yang sedang membuka aplikasi akan menerima status terbaru secara *real-time* tanpa perlu reload halaman.
+- **Filter Otomatis**:
+  - Pada tab **"Belum Terprint"**, saat halaman direfresh atau difilter ulang, faktur yang sudah selesai dicetak **otomatis disaring keluar / tidak ditampilkan lagi** di daftar belum terprint.
+  - Faktur tersebut tetap dapat dilihat di tab **"Sudah Terprint"**, tab **"Semua"**, atau melalui kotak pencarian global.
 
 #### D. Jaminan Anti-Muncul Kembali (Anti-Reappearance & Permanent Print Retention)
 - **Faktur yang Sudah Selesai Dicetak DILARANG KERAS Muncul Kembali di Daftar Belum Terprint**:
@@ -35,11 +38,20 @@ Dokumen ini adalah acuan baku dan permanen untuk seluruh pengembangan, pemelihar
   - Mengupload ulang file export yang sama, file kumulatif, ataupun file format lain **TIDAK BOLEH mereset atau mengembalikan faktur yang sudah dicetak ke status Belum Terprint**.
   - Faktur hanya bisa kembali ke status Belum Terprint jika user secara manual mengklik tombol **"Unprint / Batalkan Print"** pada faktur tersebut.
 
-#### E. Kategorisasi Prioritas (1P, 2P, 3P) & Kategori Produk
-1. **1P**: PT Helios (ORA) + Apotek Prioritas 1 DOO (`HALOMEDIKA`, `MEDIKA PRIMA`, `SBS`, `PASTI HEMAT`, `MEDIKA AKSES`).
-2. **2P**: Apotek Prioritas 2 (dicek via master `master2P.json` berdasarkan Ship-to Site ID / Nama Apotek).
-3. **3P**: Seluruh apotek reguler lainnya.
-4. **Kategori Produk**: `FARMA`, `ALKES`, `CCP`, `PREKURSOR`, `OOT` berdasarkan lookup `masterProduct.json` dan regex kata kunci obat khusus.
+#### E. Kategorisasi Prioritas & Penyimpanan Kustom Apotek (Category Overrides Retention)
+1. **Default Kategori**:
+   - **1P**: PT Helios (ORA) + Apotek Prioritas 1 DOO (`HALOMEDIKA`, `MEDIKA PRIMA`, `SBS`, `PASTI HEMAT`, `MEDIKA AKSES`).
+   - **2P**: Apotek Prioritas 2 (dicek via master `master2P.json` berdasarkan Ship-to Site ID / Nama Apotek).
+   - **3P**: Seluruh apotek reguler lainnya.
+2. **Penyimpanan Kustom User (`category_overrides`)**:
+   - Jika pengguna mengubah kategori suatu apotek/faktur (misal Apotek A diubah dari 3P ke 2P), perubahan tersebut disimpan permanen ke dokumen `app_data/category_overrides`.
+   - **Saat upload file excel baru di masa depan**, sistem wajib memprioritaskan preferensi yang tersimpan sehingga Apotek A **tetap 2P dan tidak akan kembali ke 3P**.
+3. **Kategori Produk**:
+   - `FARMA`, `ALKES`, `CCP`, `PREKURSOR`, `OOT` berdasarkan lookup `masterProduct.json` dan regex kata kunci obat khusus.
+
+#### F. Navigasi & Shortcut Keyboard
+- Navigasi tabel penuh: `↓`/`j`, `↑`/`k` (baris), `→`/`l`, `←`/`h` (kolom/sel).
+- Aksi instan: `Space` (toggle print), `Enter` (buka detail obat), `c` (salin No Invoice/SO), `/` atau `f` (fokus search).
 
 ---
 
@@ -49,15 +61,14 @@ Dokumen ini adalah acuan baku dan permanen untuk seluruh pengembangan, pemelihar
 - **Skema Koleksi Firestore**:
   1. `app_data/metadata`: Menyimpan `invoiceProgression`, `totalInvoices`, `totalChunks`, `chunkIds`, `updatedAt`.
   2. `app_data/print_state`: Menyimpan `printedKeys: string[]` dan `printedAtMap: Record<string, string>`. Toggle cetak hanya menulis dokumen tunggal ini.
-  3. `faktur_chunks/chunk_{idx}`: Menyimpan data faktur yang dipecah per ~120 item (<500 KB per chunk).
+  3. `app_data/category_overrides`: Menyimpan pemetaan nama apotek / invoice ke kategori kustom (`1P`, `2P`, `3P`).
+  4. `faktur_chunks/chunk_{idx}`: Menyimpan data faktur yang dipecah per chunk (<500 KB per chunk).
 - **Fitur Reset Data**:
   - Menghapus seluruh dokumen di `faktur_chunks` dan mereset `metadata` serta `print_state` kembali ke kondisi kosong awal.
 
 ---
 
-### 3. STRUKTUR FILE KODE UTAMA
+### 3. KLAUSUL INTEGRITAS MUTLAK (INVIOLABILITY CLAUSE)
 
-- `lib/types.ts`: Definisi antarmuka TypeScript baku (`FakturRecord`, `FirestoreFakturDoc`, `PrintState`, `InvoiceProgression`, `FakturGroup`).
-- `lib/parser.ts`: Parser multi-file (.xls HTML & .xlsx biner), klasifikasi ORA vs DOO, 1P/2P/3P, produk, dan deteksi double invoice.
-- `lib/firestoreService.ts`: Service Firestore chunking, real-time subscription, batch saving, instant print toggle, dan reset data.
-- `app/page.tsx`: UI Dashboard terpusat, modular, responsif, bebas error, dan berkinerja tinggi.
+> **DILARANG MERUBAH LOGIKA DASAR PADA PERMINTAAN FITUR BARU APAPUN:**
+> Setiap penambahan fitur, perubahan tampilan, atau optimasi di masa mendatang **WAJIB** tunduk pada dokumen `LOCKED_RULES.md` ini dan **TIDAK BOLEH** merusak atau mengubah logika isolasi DOO vs ORA, anti-reappearance faktur tercetak, real-time sync Firestore, penyimpanan kustom kategori apotek, dan arsitektur non-localStorage.
