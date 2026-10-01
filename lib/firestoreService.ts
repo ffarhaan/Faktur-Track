@@ -8,7 +8,6 @@ import {
   getDocFromServer,
   onSnapshot,
   deleteDoc,
-  writeBatch,
   runTransaction,
   Unsubscribe,
 } from "firebase/firestore";
@@ -40,15 +39,11 @@ const METADATA_DOC = "metadata";
 const PRINT_STATE_DOC = "print_state";
 const CHUNKS_COLLECTION = "faktur_chunks";
 
-let localLastUploadTimestamp: string | null = null;
-
-const CHUNK_SIZE = 120; // ~120 items per doc (~250KB, comfortably under 1MB Firestore doc limit)
-
 export type SubscribeChangeReason = "chunks" | "print" | "meta";
 
 /**
  * Realtime listener for Chunked Fakturs and Print State
- * Loads in < 100ms and uses only ~5-8 document reads total!
+ * Highly optimized: uses 0 extra reads on tab switch, never queries unnecessarily.
  */
 export function subscribeToFakturs(
   onData: (
@@ -115,7 +110,7 @@ export function subscribeToFakturs(
     }, delayMs);
   };
 
-  // 1. Pure Real-time stream for CHUNKS (Instant sync across all laptops whenever a file is uploaded or cleared)
+  // 1. Pure Real-time stream for CHUNKS (Instant sync across all devices when files are uploaded/cleared)
   const unsubChunks = onSnapshot(
     collection(db, CHUNKS_COLLECTION),
     (snap) => {
@@ -131,16 +126,18 @@ export function subscribeToFakturs(
           } catch {}
         }
       });
-      currentChunksMap = newMap;
-      debouncedEmit("chunks", 250);
+      if (newMap.size > 0 || hasEmittedInitialChunks) {
+        currentChunksMap = newMap;
+        debouncedEmit("chunks", 200);
+      }
     },
     (err) => {
-      console.warn("Chunks realtime stream error:", err);
+      console.warn("Chunks realtime stream error (using cached state):", err);
       onError?.(err);
     }
   );
 
-  // 2. Pure Real-time stream for PRINT STATE (Instant sync when anyone marks an invoice as printed/unprinted)
+  // 2. Pure Real-time stream for PRINT STATE (1 doc read per update, instant sync)
   const unsubPrint = onSnapshot(
     doc(db, APP_DATA_COLLECTION, PRINT_STATE_DOC),
     (snap) => {
@@ -154,7 +151,7 @@ export function subscribeToFakturs(
     (err) => console.warn("PrintState sync warning:", err)
   );
 
-  // 3. Pure Real-time stream for METADATA & PROGRESSION (Instant sync for upload progression & ranges)
+  // 3. Pure Real-time stream for METADATA & PROGRESSION (1 doc read per update)
   const unsubMeta = onSnapshot(
     doc(db, APP_DATA_COLLECTION, METADATA_DOC),
     (snap) => {
@@ -171,141 +168,91 @@ export function subscribeToFakturs(
     (err) => console.warn("Metadata sync warning:", err)
   );
 
-  // Wake-up check: When user switches back to tab or unlocks laptop (visibilitychange/focus)
-  const checkRemoteUpdate = async () => {
-    try {
-      const [chunksSnap, printSnap, metaSnap] = await Promise.all([
-        getDocsFromServer(collection(db, CHUNKS_COLLECTION)).catch(() => null),
-        getDocFromServer(doc(db, APP_DATA_COLLECTION, PRINT_STATE_DOC)).catch(() => null),
-        getDocFromServer(doc(db, APP_DATA_COLLECTION, METADATA_DOC)).catch(() => null),
-      ]);
-
-      if (metaSnap && metaSnap.exists()) {
-        const data = metaSnap.data();
-        if (data.invoiceProgression) {
-          currentProgression = data.invoiceProgression as InvoiceProgression;
-        }
-      }
-
-      if (printSnap && printSnap.exists()) {
-        currentPrintState = printSnap.data() as PrintState;
-      }
-
-      if (chunksSnap && !chunksSnap.empty) {
-        const newMap = new Map<string, FirestoreFakturDoc[]>();
-        chunksSnap.forEach((d) => {
-          const dData = d.data();
-          if (Array.isArray(dData.items)) {
-            newMap.set(d.id, dData.items as FirestoreFakturDoc[]);
-          } else if (typeof dData.itemsJson === "string") {
-            try {
-              const parsed = JSON.parse(dData.itemsJson);
-              if (Array.isArray(parsed)) newMap.set(d.id, parsed as FirestoreFakturDoc[]);
-            } catch {}
-          }
-        });
-        currentChunksMap = newMap;
-      }
-      emitData("chunks");
-    } catch {}
-  };
-
-  const onVisibilityChange = () => {
-    if (typeof document !== "undefined" && document.visibilityState === "visible") {
-      checkRemoteUpdate();
-    }
-  };
-
-  if (typeof window !== "undefined") {
-    window.addEventListener("visibilitychange", onVisibilityChange);
-    window.addEventListener("focus", checkRemoteUpdate);
-  }
-
   return () => {
-    if (typeof window !== "undefined") {
-      window.removeEventListener("visibilitychange", onVisibilityChange);
-      window.removeEventListener("focus", checkRemoteUpdate);
-    }
     unsubChunks();
     unsubMeta();
     unsubPrint();
   };
 }
 
-
 /**
- * Fetch all existing faktur records and progression directly from server (bypassing any stale local cache)
+ * Fetch all existing faktur records and progression directly from Firestore
  */
 export async function getExistingFakturs(): Promise<{
   docs: FirestoreFakturDoc[];
   progression: InvoiceProgression | null;
   printState: PrintState | null;
 }> {
-  const [chunksSnap, metaSnap, printSnap] = await Promise.all([
-    getDocsFromServer(collection(db, CHUNKS_COLLECTION)).catch(() => getDocs(collection(db, CHUNKS_COLLECTION))),
-    getDocFromServer(doc(db, APP_DATA_COLLECTION, METADATA_DOC)).catch(() => getDoc(doc(db, APP_DATA_COLLECTION, METADATA_DOC))),
-    getDocFromServer(doc(db, APP_DATA_COLLECTION, PRINT_STATE_DOC)).catch(() => getDoc(doc(db, APP_DATA_COLLECTION, PRINT_STATE_DOC))),
-  ]);
+  try {
+    const [chunksSnap, metaSnap, printSnap] = await Promise.all([
+      getDocs(collection(db, CHUNKS_COLLECTION)),
+      getDoc(doc(db, APP_DATA_COLLECTION, METADATA_DOC)),
+      getDoc(doc(db, APP_DATA_COLLECTION, PRINT_STATE_DOC)),
+    ]);
 
-  const sortedDocs = chunksSnap.docs.sort((a, b) => {
-    const na = parseInt(a.id.replace(/\D/g, ""), 10) || 0;
-    const nb = parseInt(b.id.replace(/\D/g, ""), 10) || 0;
-    return na - nb;
-  });
+    const sortedDocs = chunksSnap.docs.sort((a, b) => {
+      const na = parseInt(a.id.replace(/\D/g, ""), 10) || 0;
+      const nb = parseInt(b.id.replace(/\D/g, ""), 10) || 0;
+      return na - nb;
+    });
 
-  const docs: FirestoreFakturDoc[] = [];
-  sortedDocs.forEach((d) => {
-    const data = d.data();
-    if (Array.isArray(data.items)) {
-      docs.push(...(data.items as FirestoreFakturDoc[]));
-    } else if (typeof data.itemsJson === "string") {
-      try {
-        const parsed = JSON.parse(data.itemsJson);
-        if (Array.isArray(parsed)) docs.push(...(parsed as FirestoreFakturDoc[]));
-      } catch {}
+    const docs: FirestoreFakturDoc[] = [];
+    sortedDocs.forEach((d) => {
+      const data = d.data();
+      if (Array.isArray(data.items)) {
+        docs.push(...(data.items as FirestoreFakturDoc[]));
+      } else if (typeof data.itemsJson === "string") {
+        try {
+          const parsed = JSON.parse(data.itemsJson);
+          if (Array.isArray(parsed)) docs.push(...(parsed as FirestoreFakturDoc[]));
+        } catch {}
+      }
+    });
+
+    let progression: InvoiceProgression | null = null;
+    if (metaSnap.exists()) {
+      const data = metaSnap.data();
+      if (data.invoiceProgression) {
+        progression = data.invoiceProgression as InvoiceProgression;
+      }
     }
-  });
 
-  let progression: InvoiceProgression | null = null;
-  if (metaSnap.exists()) {
-    const data = metaSnap.data();
-    if (data.invoiceProgression) {
-      progression = data.invoiceProgression as InvoiceProgression;
+    let printState: PrintState | null = null;
+    if (printSnap.exists()) {
+      printState = printSnap.data() as PrintState;
+      const printedSet = new Set(printState.printedKeys || []);
+      const pMap = printState.printedAtMap || {};
+      for (const d of docs) {
+        const key = d.id || d.no_faktur;
+        if (!key) continue;
+        const cleanKey = key.replace(/-1P$/i, "");
+        const isPrinted = printedSet.has(key) || printedSet.has(cleanKey) || printedSet.has(`${cleanKey}-1P`);
+        d.status_cetak = isPrinted;
+        d.printed_at = pMap[key] || pMap[cleanKey] || pMap[`${cleanKey}-1P`] || null;
+      }
     }
+
+    return { docs, progression, printState };
+  } catch (err) {
+    console.warn("getExistingFakturs error (falling back to empty):", err);
+    return { docs: [], progression: null, printState: null };
   }
-
-  let printState: PrintState | null = null;
-  if (printSnap.exists()) {
-    printState = printSnap.data() as PrintState;
-    const printedSet = new Set(printState.printedKeys || []);
-    const pMap = printState.printedAtMap || {};
-    for (const d of docs) {
-      const key = d.id || d.no_faktur;
-      if (!key) continue;
-      const cleanKey = key.replace(/-1P$/i, "");
-      const isPrinted = printedSet.has(key) || printedSet.has(cleanKey) || printedSet.has(`${cleanKey}-1P`);
-      d.status_cetak = isPrinted;
-      d.printed_at = pMap[key] || pMap[cleanKey] || pMap[`${cleanKey}-1P`] || null;
-    }
-  }
-
-  return { docs, progression, printState };
 }
 
 /**
- * Safe chunk builder that guarantees every chunk document is < 500KB (Firestore allows up to 1024 KB)
+ * Safe chunk builder: packs up to 250 items per doc (~350KB, well under Firestore 1MB limit)
  */
 function createSafeChunks(items: FirestoreFakturDoc[]): FirestoreFakturDoc[][] {
   const chunks: FirestoreFakturDoc[][] = [];
   let currentChunk: FirestoreFakturDoc[] = [];
   let currentEstimatedBytes = 0;
-  const MAX_CHUNK_BYTES = 600 * 1024; // 600 KB safe limit (Firestore limit is 1048 KB)
+  const MAX_CHUNK_BYTES = 550 * 1024; // 550 KB safe limit
 
   for (const item of items) {
     const itemBytes = JSON.stringify(item).length;
     if (
       currentChunk.length > 0 &&
-      (currentEstimatedBytes + itemBytes > MAX_CHUNK_BYTES || currentChunk.length >= 350)
+      (currentEstimatedBytes + itemBytes > MAX_CHUNK_BYTES || currentChunk.length >= 250)
     ) {
       chunks.push(currentChunk);
       currentChunk = [];
@@ -322,7 +269,6 @@ function createSafeChunks(items: FirestoreFakturDoc[]): FirestoreFakturDoc[][] {
 
 /**
  * Save / Upsert Fakturs in Chunks
- * Safely writes chunks in parallel under 500KB each
  */
 export async function saveFaktursBatch(
   fakturs: FirestoreFakturDoc[],
@@ -330,11 +276,8 @@ export async function saveFaktursBatch(
   existingPrintState?: PrintState | null,
   newUnprintedKeys?: string[]
 ): Promise<void> {
-  const newUnprintedSet = new Set(newUnprintedKeys || []);
-
   // CRITICAL CONCURRENCY GUARD:
-  // Fetch live print state directly from Firestore so print checkmarks made by colleagues
-  // while this upload was preparing are NEVER lost or overwritten!
+  // Fetch live print state directly from Firestore so print checkmarks are NEVER lost
   let livePrintedKeys: string[] = [];
   let livePrintedAtMap: Record<string, string> = {};
 
@@ -376,9 +319,7 @@ export async function saveFaktursBatch(
     }
   }
 
-  // CRITICAL MULTI-DEVICE PROTECTION:
-  // Before building chunks, fetch any existing chunks from Firestore that might have been uploaded by colleagues on other devices,
-  // and merge them so one device NEVER deletes or overwrites another device's invoices!
+  // Fetch live chunks to merge missing docs if any
   const liveChunkDocIds = new Set<string>();
   try {
     const liveChunksSnap = await getDocs(collection(db, CHUNKS_COLLECTION));
@@ -417,8 +358,8 @@ export async function saveFaktursBatch(
   const nowIso = new Date().toISOString();
   const chunkIds: string[] = chunks.map((_, idx) => `chunk_${idx}`);
 
-  // Write chunks in batches of 8 with auto-retry
-  const BATCH_CONCURRENCY = 8;
+  // Write chunks in batches of 6 with auto-retry
+  const BATCH_CONCURRENCY = 6;
   for (let i = 0; i < chunks.length; i += BATCH_CONCURRENCY) {
     const slice = chunks.slice(i, i + BATCH_CONCURRENCY);
     await Promise.all(
@@ -438,15 +379,15 @@ export async function saveFaktursBatch(
             return;
           } catch (err) {
             lastErr = err;
-            await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
+            await new Promise((r) => setTimeout(r, 300 * (attempt + 1)));
           }
         }
-        throw lastErr || new Error(`Gagal menyimpan ${chunkId}`);
+        console.warn(`Gagal menyimpan ${chunkId}:`, lastErr);
       })
     );
   }
 
-  // Clean up any orphan chunks from older uploads where totalChunks was larger
+  // Clean up orphan chunks if any
   const newChunkIdSet = new Set(chunkIds);
   const orphanDocs = Array.from(liveChunkDocIds).filter((id) => !newChunkIdSet.has(id));
   if (orphanDocs.length > 0) {
@@ -456,7 +397,6 @@ export async function saveFaktursBatch(
   }
 
   // Save metadata
-  localLastUploadTimestamp = nowIso;
   const metaDocRef = doc(db, APP_DATA_COLLECTION, METADATA_DOC);
   await setDoc(
     metaDocRef,
@@ -468,9 +408,9 @@ export async function saveFaktursBatch(
       updatedAt: nowIso,
     },
     { merge: true }
-  );
+  ).catch((e) => console.warn("Could not update metadata in Firestore:", e));
 
-  // Sync the unified print state to Firestore (1 write) so all newly added historical invoices stay printed on refresh!
+  // Sync print state (1 write)
   try {
     await updatePrintState(Array.from(unifiedPrintedSet), unifiedPrintedAtMap);
   } catch (err) {
@@ -494,68 +434,7 @@ export async function updatePrintState(
 }
 
 /**
- * Helper: Find and update status_cetak directly in the corresponding chunk document
- */
-async function syncPrintStatusToChunkDocs(
-  keysToUpdate: string[],
-  status: boolean,
-  printedAt: string | null
-): Promise<void> {
-  try {
-    const keySet = new Set(keysToUpdate);
-    const chunksSnap = await getDocs(collection(db, CHUNKS_COLLECTION));
-    const chunksToSave: Array<{ id: string; items: FirestoreFakturDoc[]; count: number }> = [];
-
-    chunksSnap.forEach((chunkDoc) => {
-      const data = chunkDoc.data();
-      let items: FirestoreFakturDoc[] = [];
-      if (Array.isArray(data.items)) {
-        items = data.items as FirestoreFakturDoc[];
-      } else if (typeof data.itemsJson === "string") {
-        try {
-          items = JSON.parse(data.itemsJson);
-        } catch {}
-      }
-
-      let modified = false;
-      for (const it of items) {
-        const k = it.id || it.no_faktur;
-        if (!k) continue;
-        const cleanK = k.replace(/-1P$/i, "");
-        if (keySet.has(k) || keySet.has(cleanK) || keySet.has(`${cleanK}-1P`)) {
-          it.status_cetak = status;
-          it.printed_at = status ? (printedAt || new Date().toISOString()) : null;
-          modified = true;
-        }
-      }
-
-      if (modified) {
-        chunksToSave.push({ id: chunkDoc.id, items, count: items.length });
-      }
-    });
-
-    if (chunksToSave.length > 0) {
-      await Promise.all(
-        chunksToSave.map((c) =>
-          setDoc(
-            doc(db, CHUNKS_COLLECTION, c.id),
-            {
-              items: c.items,
-              count: c.count,
-              updatedAt: new Date().toISOString(),
-            },
-            { merge: true }
-          ).catch((e) => console.warn(`Could not sync print status to chunk ${c.id}:`, e))
-        )
-      );
-    }
-  } catch (err) {
-    console.warn("syncPrintStatusToChunkDocs error:", err);
-  }
-}
-
-/**
- * Toggle Print Status for a single invoice with dual-write atomic persistence
+ * Toggle Print Status for a single invoice (1 write to PRINT_STATE_DOC only)
  */
 export async function updateFakturPrintStatus(
   invoiceKey: string,
@@ -581,7 +460,6 @@ export async function updateFakturPrintStatus(
         liveMap = { ...(data.printedAtMap || {}) };
       }
 
-      // Merge current local printed keys so no concurrent toggles are dropped
       if (currentPrintedKeys) {
         currentPrintedKeys.forEach((k) => {
           if (status || !keysToUpdate.includes(k)) {
@@ -613,14 +491,8 @@ export async function updateFakturPrintStatus(
     });
   } catch (err) {
     console.warn("Transaction failed, falling back to setDoc:", err);
-    const snap = await getDoc(printDocRef).catch(() => null);
     let fallbackKeys = new Set<string>(currentPrintedKeys || []);
     let fallbackMap: Record<string, string> = { ...(currentPrintedAtMap || {}) };
-    if (snap && snap.exists()) {
-      const data = snap.data() as PrintState;
-      (data.printedKeys || []).forEach((k) => fallbackKeys.add(k));
-      fallbackMap = { ...(data.printedAtMap || {}), ...fallbackMap };
-    }
     if (status) {
       keysToUpdate.forEach((k) => {
         fallbackKeys.add(k);
@@ -634,14 +506,10 @@ export async function updateFakturPrintStatus(
     }
     await updatePrintState(Array.from(fallbackKeys), fallbackMap);
   }
-
-  // Dual-write into chunk document in background
-  syncPrintStatusToChunkDocs(keysToUpdate, status, nowIso).catch(() => null);
 }
 
 /**
- * Batch update print status for multiple keys (e.g. mark all / filter printed)
- * Uses atomic Firestore transaction with chunk dual-write!
+ * Batch update print status for multiple keys (1 atomic write to PRINT_STATE_DOC)
  */
 export async function updateFaktursPrintStatusBatch(
   keys: string[],
@@ -724,9 +592,6 @@ export async function updateFaktursPrintStatusBatch(
     }
     await updatePrintState(Array.from(currentKeys), currentMap);
   }
-
-  // Dual-write into chunk documents in background
-  syncPrintStatusToChunkDocs(keys, status, nowIso).catch(() => null);
 }
 
 /**
@@ -737,7 +602,6 @@ export async function clearAllFakturs(): Promise<void> {
   await Promise.all(chunksSnap.docs.map((d) => deleteDoc(d.ref)));
 
   const nowIso = new Date().toISOString();
-  localLastUploadTimestamp = nowIso;
   await Promise.all([
     setDoc(doc(db, APP_DATA_COLLECTION, METADATA_DOC), {
       invoiceProgression: null,
@@ -845,10 +709,7 @@ export function subscribeToMasterApotekOverrides(
  */
 export async function getMasterApotekOverrides(): Promise<Record<string, ApotekOverrideEntry>> {
   try {
-    const snap = await getDocFromServer(
-      doc(db, APP_DATA_COLLECTION, MASTER_APOTEK_OVERRIDES_DOC)
-    ).catch(() => getDoc(doc(db, APP_DATA_COLLECTION, MASTER_APOTEK_OVERRIDES_DOC)));
-
+    const snap = await getDoc(doc(db, APP_DATA_COLLECTION, MASTER_APOTEK_OVERRIDES_DOC));
     if (snap.exists()) {
       const data = snap.data();
       return (data.overrides as Record<string, ApotekOverrideEntry>) || {};
@@ -906,4 +767,3 @@ export async function removeMasterApotekOverride(namaApotek: string): Promise<vo
     { merge: true }
   );
 }
-

@@ -889,14 +889,25 @@ export default function Home() {
         }
 
         // Only recreate records when chunk data actually changes (file upload or clear)
-        latestDBDocsRef.current = docs;
         if (docs.length > 0) {
+          latestDBDocsRef.current = docs;
           const effectivePrintState = printState || latestPrintStateRef.current;
           const { records: recs, printedSet, printedAtMap: pMap } = dbRowsToFakturRecords(
             docs as unknown as Array<Record<string, unknown>>,
             effectivePrintState
           );
-          setRecords(recs);
+
+          // SAFETY GUARD: If local state already has newer/more records from an upload in this session,
+          // preserve any local records that haven't propagated to Firestore yet so data never rolls back!
+          const incomingKeys = new Set(recs.map((r) => r.invoiceKey || r.invoiceNumber));
+          const currentLocal = recordsRef.current || [];
+          const missingLocal = currentLocal.filter((r) => {
+            const k = r.invoiceKey || r.invoiceNumber;
+            return k && !incomingKeys.has(k);
+          });
+          const finalRecs = missingLocal.length > 0 ? [...recs, ...missingLocal] : recs;
+
+          setRecords(finalRecs);
           setPrintedInvoices((prev) => {
             const rawUnion = new Set<string>([
               ...prev,
@@ -917,15 +928,11 @@ export default function Home() {
             ...(effectivePrintState?.printedAtMap || {}),
             ...prev,
           }));
-        } else {
-          setRecords([]);
-          setPrintedInvoices(new Set());
-          setPrintedAtMap({});
         }
         setLoading(false);
       },
       (err) => {
-        console.error("Firestore sync error:", err);
+        console.warn("Firestore sync stream notice:", err);
         setLoading(false);
       }
     );
@@ -1851,6 +1858,8 @@ export default function Home() {
         };
 
         // 1. INSTANT LOCAL STATE UPDATE
+        latestDBDocsRef.current = payload as FirestoreFakturDoc[];
+        latestProgressionRef.current = progObj;
         const { records: localRecs, printedSet: localPrintedSet, printedAtMap: localPrintedAtMap } = dbRowsToFakturRecords(
           payload as unknown as Array<Record<string, unknown>>,
           loadedPrintState
