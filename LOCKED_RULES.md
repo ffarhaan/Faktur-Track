@@ -29,7 +29,13 @@ Dokumen ini adalah acuan baku dan permanen untuk seluruh pengembangan, pemelihar
 - Pada tab **"Belum Terprint"**, saat halaman direfresh atau difilter ulang, faktur yang sudah selesai dicetak **otomatis disaring keluar / tidak ditampilkan lagi** di daftar belum terprint.
 - Faktur tersebut tetap dapat dilihat di tab **"Sudah Terprint"**, tab **"Semua"**, atau melalui kotak pencarian global.
 
-#### D. Kategorisasi Prioritas (1P, 2P, 3P) & Kategori Produk
+#### D. Jaminan Anti-Muncul Kembali (Anti-Reappearance & Permanent Print Retention)
+- **Faktur yang Sudah Selesai Dicetak DILARANG KERAS Muncul Kembali di Daftar Belum Terprint**:
+  - Sekali suatu faktur ditandai `Done Print` (`✓`), status tersebut bersifat permanen di database `app_data/print_state`.
+  - Mengupload ulang file export yang sama, file kumulatif, ataupun file format lain **TIDAK BOLEH mereset atau mengembalikan faktur yang sudah dicetak ke status Belum Terprint**.
+  - Faktur hanya bisa kembali ke status Belum Terprint jika user secara manual mengklik tombol **"Unprint / Batalkan Print"** pada faktur tersebut.
+
+#### E. Kategorisasi Prioritas (1P, 2P, 3P) & Kategori Produk
 1. **1P**: PT Helios (ORA) + Apotek Prioritas 1 DOO (`HALOMEDIKA`, `MEDIKA PRIMA`, `SBS`, `PASTI HEMAT`, `MEDIKA AKSES`).
 2. **2P**: Apotek Prioritas 2 (dicek via master `master2P.json` berdasarkan Ship-to Site ID / Nama Apotek).
 3. **3P**: Seluruh apotek reguler lainnya.
