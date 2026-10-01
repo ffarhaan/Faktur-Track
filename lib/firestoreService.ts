@@ -9,6 +9,7 @@ import {
   onSnapshot,
   deleteDoc,
   writeBatch,
+  runTransaction,
   Unsubscribe,
 } from "firebase/firestore";
 import { db } from "./firebase";
@@ -485,7 +486,7 @@ export async function updatePrintState(
 }
 
 /**
- * Toggle Print Status for a single invoice
+ * Toggle Print Status for a single invoice with atomic Firestore transaction
  */
 export async function updateFakturPrintStatus(
   invoiceKey: string,
@@ -495,46 +496,74 @@ export async function updateFakturPrintStatus(
   currentPrintedAtMap?: Record<string, string>
 ): Promise<void> {
   const printDocRef = doc(db, APP_DATA_COLLECTION, PRINT_STATE_DOC);
-  let liveKeys = new Set<string>();
-  let liveMap: Record<string, string> = {};
-
-  try {
-    const snap = await getDoc(printDocRef);
-    if (snap.exists()) {
-      const data = snap.data() as PrintState;
-      liveKeys = new Set(data.printedKeys || []);
-      liveMap = { ...(data.printedAtMap || {}) };
-    } else if (currentPrintedKeys) {
-      liveKeys = new Set(currentPrintedKeys);
-      liveMap = { ...(currentPrintedAtMap || {}) };
-    }
-  } catch (err) {
-    console.warn("Could not fetch live print state, falling back to local:", err);
-    if (currentPrintedKeys) liveKeys = new Set(currentPrintedKeys);
-    if (currentPrintedAtMap) liveMap = { ...currentPrintedAtMap };
-  }
-
   const cleanKey = invoiceKey.replace(/-1P$/i, "");
   const keysToUpdate = Array.from(new Set([invoiceKey, cleanKey, `${cleanKey}-1P`].filter(Boolean)));
+  const nowIso = printedAt || new Date().toISOString();
 
-  if (status) {
-    keysToUpdate.forEach((k) => {
-      liveKeys.add(k);
-      if (printedAt) liveMap[k] = printedAt;
+  try {
+    await runTransaction(db, async (transaction) => {
+      const snap = await transaction.get(printDocRef);
+      let liveKeys = new Set<string>();
+      let liveMap: Record<string, string> = {};
+
+      if (snap.exists()) {
+        const data = snap.data() as PrintState;
+        liveKeys = new Set(data.printedKeys || []);
+        liveMap = { ...(data.printedAtMap || {}) };
+      }
+
+      // Merge current local printed keys so no concurrent toggles are dropped
+      if (currentPrintedKeys) {
+        currentPrintedKeys.forEach((k) => {
+          if (status || !keysToUpdate.includes(k)) {
+            liveKeys.add(k);
+          }
+        });
+        if (currentPrintedAtMap) {
+          liveMap = { ...currentPrintedAtMap, ...liveMap };
+        }
+      }
+
+      if (status) {
+        keysToUpdate.forEach((k) => {
+          liveKeys.add(k);
+          liveMap[k] = nowIso;
+        });
+      } else {
+        keysToUpdate.forEach((k) => {
+          liveKeys.delete(k);
+          delete liveMap[k];
+        });
+      }
+
+      transaction.set(printDocRef, {
+        printedKeys: Array.from(liveKeys),
+        printedAtMap: liveMap,
+        updatedAt: new Date().toISOString(),
+      });
     });
-  } else {
-    keysToUpdate.forEach((k) => {
-      liveKeys.delete(k);
-      delete liveMap[k];
-    });
+  } catch (err) {
+    console.warn("Transaction failed, falling back to setDoc:", err);
+    const fallbackKeys = new Set(currentPrintedKeys || []);
+    const fallbackMap = { ...(currentPrintedAtMap || {}) };
+    if (status) {
+      keysToUpdate.forEach((k) => {
+        fallbackKeys.add(k);
+        fallbackMap[k] = nowIso;
+      });
+    } else {
+      keysToUpdate.forEach((k) => {
+        fallbackKeys.delete(k);
+        delete fallbackMap[k];
+      });
+    }
+    await updatePrintState(Array.from(fallbackKeys), fallbackMap);
   }
-
-  await updatePrintState(Array.from(liveKeys), liveMap);
 }
 
 /**
  * Batch update print status for multiple keys (e.g. mark all / filter printed)
- * Uses only 1 document write!
+ * Uses atomic Firestore transaction!
  */
 export async function updateFaktursPrintStatusBatch(
   keys: string[],
@@ -542,41 +571,81 @@ export async function updateFaktursPrintStatusBatch(
   printedAt: string | null
 ): Promise<void> {
   const printDocRef = doc(db, APP_DATA_COLLECTION, PRINT_STATE_DOC);
-  const snap = await getDoc(printDocRef);
-  let currentKeys = new Set<string>();
-  let currentMap: Record<string, string> = {};
+  const nowIso = printedAt || new Date().toISOString();
 
-  if (snap.exists()) {
-    const data = snap.data() as PrintState;
-    currentKeys = new Set(data.printedKeys || []);
-    currentMap = { ...(data.printedAtMap || {}) };
-  }
+  try {
+    await runTransaction(db, async (transaction) => {
+      const snap = await transaction.get(printDocRef);
+      let currentKeys = new Set<string>();
+      let currentMap: Record<string, string> = {};
 
-  if (status) {
-    keys.forEach((k) => {
-      const cleanKey = k.replace(/-1P$/i, "");
-      currentKeys.add(k);
-      currentKeys.add(cleanKey);
-      currentKeys.add(`${cleanKey}-1P`);
-      if (printedAt) {
-        currentMap[k] = printedAt;
-        currentMap[cleanKey] = printedAt;
-        currentMap[`${cleanKey}-1P`] = printedAt;
+      if (snap.exists()) {
+        const data = snap.data() as PrintState;
+        currentKeys = new Set(data.printedKeys || []);
+        currentMap = { ...(data.printedAtMap || {}) };
       }
-    });
-  } else {
-    keys.forEach((k) => {
-      const cleanKey = k.replace(/-1P$/i, "");
-      currentKeys.delete(k);
-      currentKeys.delete(cleanKey);
-      currentKeys.delete(`${cleanKey}-1P`);
-      delete currentMap[k];
-      delete currentMap[cleanKey];
-      delete currentMap[`${cleanKey}-1P`];
-    });
-  }
 
-  await updatePrintState(Array.from(currentKeys), currentMap);
+      if (status) {
+        keys.forEach((k) => {
+          const cleanKey = k.replace(/-1P$/i, "");
+          currentKeys.add(k);
+          currentKeys.add(cleanKey);
+          currentKeys.add(`${cleanKey}-1P`);
+          currentMap[k] = nowIso;
+          currentMap[cleanKey] = nowIso;
+          currentMap[`${cleanKey}-1P`] = nowIso;
+        });
+      } else {
+        keys.forEach((k) => {
+          const cleanKey = k.replace(/-1P$/i, "");
+          currentKeys.delete(k);
+          currentKeys.delete(cleanKey);
+          currentKeys.delete(`${cleanKey}-1P`);
+          delete currentMap[k];
+          delete currentMap[cleanKey];
+          delete currentMap[`${cleanKey}-1P`];
+        });
+      }
+
+      transaction.set(printDocRef, {
+        printedKeys: Array.from(currentKeys),
+        printedAtMap: currentMap,
+        updatedAt: new Date().toISOString(),
+      });
+    });
+  } catch (err) {
+    console.warn("Batch transaction failed, falling back to direct setDoc:", err);
+    const snap = await getDoc(printDocRef).catch(() => null);
+    let currentKeys = new Set<string>();
+    let currentMap: Record<string, string> = {};
+    if (snap && snap.exists()) {
+      const data = snap.data() as PrintState;
+      currentKeys = new Set(data.printedKeys || []);
+      currentMap = { ...(data.printedAtMap || {}) };
+    }
+    if (status) {
+      keys.forEach((k) => {
+        const cleanKey = k.replace(/-1P$/i, "");
+        currentKeys.add(k);
+        currentKeys.add(cleanKey);
+        currentKeys.add(`${cleanKey}-1P`);
+        currentMap[k] = nowIso;
+        currentMap[cleanKey] = nowIso;
+        currentMap[`${cleanKey}-1P`] = nowIso;
+      });
+    } else {
+      keys.forEach((k) => {
+        const cleanKey = k.replace(/-1P$/i, "");
+        currentKeys.delete(k);
+        currentKeys.delete(cleanKey);
+        currentKeys.delete(`${cleanKey}-1P`);
+        delete currentMap[k];
+        delete currentMap[cleanKey];
+        delete currentMap[`${cleanKey}-1P`];
+      });
+    }
+    await updatePrintState(Array.from(currentKeys), currentMap);
+  }
 }
 
 /**

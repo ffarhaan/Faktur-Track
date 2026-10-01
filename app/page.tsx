@@ -836,19 +836,41 @@ export default function Home() {
         if (printState) {
           latestPrintStateRef.current = printState;
 
-          // Reconcile incoming print state with optimistic local toggles (< 4000ms old) to prevent checkmark flicker
+          // Reconcile incoming print state with optimistic local toggles (< 8000ms old) and all key variants to prevent checkmark flicker
           const now = Date.now();
-          const incomingPrintedSet = new Set(printState.printedKeys || []);
-          const incomingPrintedMap = { ...(printState.printedAtMap || {}) };
+          const incomingPrintedSet = new Set<string>();
+          const incomingPrintedMap: Record<string, string> = {};
+
+          (printState.printedKeys || []).forEach((k) => {
+            const cleanK = k.replace(/-1P$/i, "");
+            incomingPrintedSet.add(k);
+            incomingPrintedSet.add(cleanK);
+            incomingPrintedSet.add(`${cleanK}-1P`);
+            const pTime =
+              printState.printedAtMap?.[k] ||
+              printState.printedAtMap?.[cleanK] ||
+              printState.printedAtMap?.[`${cleanK}-1P`];
+            if (pTime) {
+              incomingPrintedMap[k] = pTime;
+              incomingPrintedMap[cleanK] = pTime;
+              incomingPrintedMap[`${cleanK}-1P`] = pTime;
+            }
+          });
 
           recentTogglesRef.current.forEach((val, key) => {
-            if (now - val.time < 4000) {
+            const cleanK = key.replace(/-1P$/i, "");
+            const keysToSync = [key, cleanK, `${cleanK}-1P`];
+            if (now - val.time < 8000) {
               if (val.printed) {
-                incomingPrintedSet.add(key);
-                if (!incomingPrintedMap[key]) incomingPrintedMap[key] = new Date(val.time).toISOString();
+                keysToSync.forEach((k) => {
+                  incomingPrintedSet.add(k);
+                  if (!incomingPrintedMap[k]) incomingPrintedMap[k] = new Date(val.time).toISOString();
+                });
               } else {
-                incomingPrintedSet.delete(key);
-                delete incomingPrintedMap[key];
+                keysToSync.forEach((k) => {
+                  incomingPrintedSet.delete(k);
+                  delete incomingPrintedMap[k];
+                });
               }
             } else {
               recentTogglesRef.current.delete(key);
