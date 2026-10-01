@@ -910,11 +910,15 @@ export default function Home() {
     setSessionPrintedKeys(new Set());
     setLoading(true);
     getExistingFakturs()
-      .then(({ docs, progression: prog }) => {
+      .then(({ docs, progression: prog, printState }) => {
         if (prog) {
           latestProgressionRef.current = prog;
           setInvoiceProgression(prog);
         }
+        if (printState) {
+          latestPrintStateRef.current = printState;
+        }
+        latestDBDocsRef.current = docs;
         const { records: recs, printedSet, printedAtMap: pMap } = dbRowsToFakturRecords(
           docs as unknown as Array<Record<string, unknown>>
         );
@@ -1305,23 +1309,12 @@ export default function Home() {
               newUnprintedKeyList.push(targetKey);
             }
           } else {
-            // Brand new to database: determine whether it is a genuinely new invoice or historical
-            const isHistoricalPrinted = num > 0 && (
-              (isOra && prevOraNum > 0 && num <= prevOraNum) ||
-              (!isOra && prevDooNum > 0 && num <= prevDooNum)
-            );
-
-            if (isHistoricalPrinted) {
-              isPrinted = true;
-              printedAt = null;
-            } else {
-              // Genuinely new invoice or waiting invoice -> Belum Terprint
-              isNewInvoice = true;
-              isPrinted = false;
-              printedAt = null;
-              newUnprintedKeyList.push(targetKey);
-              newGSheetKeys.add(targetKey); // tandai untuk dikirim ke GSheet
-            }
+            // Brand new invoice to database: ALWAYS treat as Belum Terprint until explicitly marked done by operator!
+            isNewInvoice = true;
+            isPrinted = false;
+            printedAt = null;
+            newUnprintedKeyList.push(targetKey);
+            newGSheetKeys.add(targetKey); // tandai untuk dikirim ke GSheet
           }
           const prevExtra = (prevInfo?.extra as Record<string, unknown>) || null;
           const prevItems = (prevExtra?.items as Array<Record<string, unknown>>) || [];
