@@ -1,54 +1,40 @@
 "use client";
 
-import { useState, useMemo, useEffect, useCallback, useRef, Fragment, memo } from "react";
+import { useState, useMemo, useEffect, useCallback, useRef, Fragment } from "react";
 import * as XLSX from "xlsx";
-import { parseExcelFile, categorize, isOraCustomer, getProductCategory, getPrekursorOOTClassification } from "@/lib/parser";
-import { FakturRecord } from "@/lib/types";
+import {
+  parseExcelFile,
+  categorize,
+  isOraCustomer,
+  getProductCategory,
+  getPrekursorOOTClassification,
+} from "@/lib/parser";
+import { FakturRecord, FirestoreFakturDoc, InvoiceProgression, FakturGroup } from "@/lib/types";
 import {
   subscribeToFakturs,
   getExistingFakturs,
   saveFaktursBatch,
   updateFakturPrintStatus,
   updateFaktursPrintStatusBatch,
-  updatePrintState,
   clearAllFakturs,
-  FirestoreFakturDoc,
-  submitTeamFeedback,
-  subscribeToTeamFeedbacks,
-  deleteTeamFeedback,
-  TeamFeedback,
 } from "@/lib/firestoreService";
-import { db } from "@/lib/firebase";
-import { collection, getDocs } from "firebase/firestore";
-import masterApotekList from "@/lib/masterApotekList.json";
-import masterProductList from "@/lib/masterProduct.json";
-import {
-  appendNewToGSheet,
-  updateGSheetPrintStatus,
-  updateGSheetPrintStatusBatch,
-} from "@/lib/gsheetService";
 
-
-type Filter = "all" | "belum" | "sudah" | "double";
+type Filter = "belum" | "sudah" | "all" | "double";
 type KatFilter = "all" | "1P" | "2P" | "3P";
 type JenisFilter = "all" | "ORA" | "DOO";
 type KlasFilter = "all" | "prekursor" | "oot" | "ccp" | "alkes" | "farma";
 
 const ROWS_PER_PAGE = 50;
 
-function parseInvNum(invs: string[] | string): number {
+function parseInvNum(invs: string | string[]): number {
   if (!invs) return 0;
-  if (Array.isArray(invs)) {
-    if (invs.length === 0) return 0;
-    const n = parseInt(invs[0].replace(/\D/g, ""), 10);
-    return isNaN(n) ? 0 : n;
-  }
-  const n = parseInt(String(invs).replace(/\D/g, ""), 10);
+  const s = Array.isArray(invs) ? invs[0] : String(invs);
+  const n = parseInt(s.replace(/\D/g, ""), 10);
   return isNaN(n) ? 0 : n;
 }
 
 function parseDateMs(dStr: string): number {
-  if (!dStr) return 0;
+  if (!dStr || dStr === "-") return 0;
   if (/^\d{2}\/\d{2}\/\d{4}$/.test(dStr)) {
     const [d, m, y] = dStr.split("/").map(Number);
     return new Date(y, m - 1, d).getTime();
@@ -63,12 +49,6 @@ function formatRupiah(n: number): string {
     minimumFractionDigits: 0,
     maximumFractionDigits: 2,
   }).format(n);
-}
-
-function chunk<T>(arr: T[], size: number): T[][] {
-  const out: T[][] = [];
-  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
-  return out;
 }
 
 function formatPrintTime(dStr?: string | null): string {
@@ -89,96 +69,31 @@ function formatPrintTime(dStr?: string | null): string {
   }
 }
 
-type FakturGroup = {
-  key: string;
-  invoiceNumber: string;
-  invoiceKey: string;
-  so: string;
-  items: FakturRecord[];
-  orderDate: string;
-  jenisTransaksi: string;
-  customerName: string;
-  kategori: "1P" | "2P" | "3P";
-  kategoriProduk: string;
-  kategoriProdukCounts?: Record<string, number>;
-  hasPrekursor: boolean;
-  hasOOT: boolean;
-  hasCCP: boolean;
-  hasAlkes: boolean;
-  hasFarma: boolean;
-  isDoubleInv: boolean;
-  totalHarga: number;
-  totalItems: number;
-  allPrinted: boolean;
-  anyPrinted: boolean;
-  printedAt: string | null;
-};
-
-type UploadedFile = {
-  name: string;
-  count: number;
-  time: string;
-};
-
-export type InvoiceProgression = {
-  prev1P?: string | null;
-  new1P?: string | null;
-  range1P?: string | null;
-  prev1PDoo?: string | null;
-  new1PDoo?: string | null;
-  range1PDoo?: string | null;
-  prev2P?: string | null;
-  new2P?: string | null;
-  range2P?: string | null;
-  prev3P?: string | null;
-  new3P?: string | null;
-  range3P?: string | null;
-  prevDoo?: string | null;
-  newDoo?: string | null;
-  rangeDoo?: string | null;
-  prevOra?: string | null;
-  newOra?: string | null;
-  rangeOra?: string | null;
-  updatedAt?: string;
-};
-
 function dbRowsToFakturRecords(rows: Array<Record<string, unknown>>): {
   records: FakturRecord[];
   printedSet: Set<string>;
   printedAtMap: Record<string, string>;
-  progression: InvoiceProgression | null;
 } {
   const records: FakturRecord[] = [];
   const printedSet = new Set<string>();
   const printedAtMap: Record<string, string> = {};
-  let progression: InvoiceProgression | null = null;
 
   for (const r of rows) {
     const rawInv = String(r.no_faktur || "");
-    if (rawInv === "__SYSTEM_METADATA__") {
-      const extra = (r.extra as Record<string, unknown>) || {};
-      if (extra.invoiceProgression) {
-        progression = extra.invoiceProgression as InvoiceProgression;
-      }
-      continue;
-    }
-
     const cleanInv = rawInv.replace(/-1P$/i, "");
     const extra = (r.extra as Record<string, unknown>) || {};
     const items = (extra.items as Array<Record<string, unknown>>) || [];
     const cust = String(extra.nama_pelanggan || r.customer_name || "");
-    const date = String(extra.accounting_date || extra.order_date || r.order_date || r.imported_at || "");
+    const date = String(extra.accounting_date || extra.order_date || r.order_date || "");
     const isOra = isOraCustomer(cust);
     const invKey = isOra ? `${cleanInv}-1P` : cleanInv;
     const cleanJenis: "DOO" | "ORA" = isOra ? "ORA" : "DOO";
     const kategori = (r.kategori as "1P" | "2P" | "3P") || categorize(cleanJenis, cust, cleanJenis);
-    const pAt = (r.printed_at as string) || (extra.printed_at as string) || null;
+    const pAt = (r.printed_at as string) || null;
 
     if (r.status_cetak) {
-      if (invKey) {
-        printedSet.add(invKey);
-        if (pAt) printedAtMap[invKey] = pAt;
-      }
+      printedSet.add(invKey);
+      if (pAt) printedAtMap[invKey] = pAt;
     }
 
     if (items.length > 0) {
@@ -187,30 +102,12 @@ function dbRowsToFakturRecords(rows: Array<Record<string, unknown>>): {
         const itemCode = String(it.item_code || "");
         const itemDesc = String(it.item_description || "");
         const katProd = getProductCategory(itemCode, itemDesc);
-        const klasObat = getPrekursorOOTClassification(itemDesc, itemCode) || (katProd === "PREKURSOR" ? "Prekursor" : katProd === "OOT" ? "OOT" : undefined);
-
-        const itemSO = String(it.order_number || "").trim();
-        const docSO = String(r.no_sales_order || "").trim();
-        const cleanDocSO = docSO.split(",").map((s) => s.trim()).filter((s) => s && s !== "-").join(", ");
-        const validItemSO = itemSO && itemSO !== "-" ? itemSO : "";
-        let validSO = "-";
-        if (cleanJenis === "ORA") {
-          const candidate = [validItemSO, cleanDocSO].filter((s) => s && s !== "-").join(", ");
-          const parts = candidate.split(",").map((s) => s.trim()).filter((s) => s && s !== "-");
-          const realParts = parts.filter((s) => s.length >= 5 || s.includes("-"));
-          validSO = realParts.length > 0 ? realParts[0] : parts[0] || "-";
-        } else {
-          // For DOO: The DOO SO from DOO file is strictly preserved
-          if (cleanDocSO && cleanDocSO !== "-") {
-            validSO = cleanDocSO.split(",")[0].trim();
-          } else {
-            validSO = validItemSO || "-";
-          }
-        }
+        const klasObat = getPrekursorOOTClassification(itemDesc, itemCode) || undefined;
+        const validSO = String(it.order_number || r.no_sales_order || "-").trim();
 
         records.push({
           orderDate: date,
-          orderNumber: validSO,
+          orderNumber: validSO || "-",
           invoiceNumber: cleanInv,
           invoiceKey: invKey,
           jenisTransaksi: cleanJenis,
@@ -218,8 +115,8 @@ function dbRowsToFakturRecords(rows: Array<Record<string, unknown>>): {
           itemCode,
           itemDescription: itemDesc,
           qty: (it.qty as number | string) || 0,
-          uom: String(it.uom || ""),
-          lotNumber: String(it.lot_number || ""),
+          uom: String(it.uom || "-"),
+          lotNumber: String(it.lot_number || "-"),
           totalHarga: typeof it.total_harga === "number" ? it.total_harga : parseFloat(String(it.total_harga || 0)) || 0,
           kategori,
           kategoriProduk: katProd,
@@ -229,23 +126,12 @@ function dbRowsToFakturRecords(rows: Array<Record<string, unknown>>): {
         });
       }
     } else {
-      const docSO = String(r.no_sales_order || "").trim();
-      const cleanDocSO = docSO.split(",").map((s) => s.trim()).filter((s) => s && s !== "-").join(", ");
-      let validSO = "-";
-      if (cleanDocSO && cleanDocSO !== "-") {
-        validSO = cleanJenis === "ORA"
-          ? (cleanDocSO.includes(",") ? cleanDocSO.split(",").map(s => s.trim()).filter(s => s.length > 5)[0] || cleanDocSO.split(",").pop()?.trim() || cleanDocSO : cleanDocSO)
-          : cleanDocSO.split(",")[0].trim();
-      }
-      const docAmount = typeof extra.total_harga === "number"
-        ? extra.total_harga
-        : typeof extra.entered_amount === "number"
-        ? extra.entered_amount
-        : parseFloat(String(extra.total_harga || extra.entered_amount || extra.amount || 0)) || 0;
+      const docSO = String(r.no_sales_order || "-").trim();
+      const docAmount = typeof extra.total_harga === "number" ? extra.total_harga : parseFloat(String(extra.total_harga || 0)) || 0;
 
       records.push({
         orderDate: date,
-        orderNumber: validSO,
+        orderNumber: docSO || "-",
         invoiceNumber: cleanInv,
         invoiceKey: invKey,
         jenisTransaksi: cleanJenis,
@@ -263,422 +149,42 @@ function dbRowsToFakturRecords(rows: Array<Record<string, unknown>>): {
     }
   }
 
-  // Accurately detect double invoices by splitting comma-separated SOs
+  // Detect double invoices
   const soInvMap: Record<string, Set<string>> = {};
   for (const rec of records) {
     if (rec.orderNumber && rec.orderNumber !== "-") {
-      rec.orderNumber.split(",").forEach((s) => {
-        const cleanSO = s.trim();
-        if (cleanSO && cleanSO !== "-") {
-          if (!soInvMap[cleanSO]) soInvMap[cleanSO] = new Set();
-          if (rec.invoiceNumber && rec.invoiceNumber !== "0" && rec.invoiceNumber !== "-") {
-            soInvMap[cleanSO].add(rec.invoiceNumber);
-          }
-        }
-      });
-    }
-  }
-  for (const rec of records) {
-    if (rec.orderNumber && rec.orderNumber !== "-") {
-      const sos = rec.orderNumber.split(",").map((s) => s.trim()).filter((s) => s && s !== "-");
-      if (sos.some((s) => (soInvMap[s]?.size || 0) > 1)) {
-        rec.isDoubleInv = true;
+      if (!soInvMap[rec.orderNumber]) soInvMap[rec.orderNumber] = new Set();
+      if (rec.invoiceNumber && rec.invoiceNumber !== "-") {
+        soInvMap[rec.orderNumber].add(rec.invoiceNumber);
       }
     }
   }
-
-  return { records, printedSet, printedAtMap, progression };
-}
-
-// System maintenance and update state flag (Alert banner & upload prevention)
-const IS_SYSTEM_UPDATING = false;
-
-const FakturTableRow = memo(function FakturTableRow({
-  g,
-  rowIdx,
-  isRowSelected,
-  selectedColIdx,
-  expanded,
-  onSelectRow,
-  onSelectCell,
-  onToggleExpand,
-  onTogglePrint,
-}: {
-  g: FakturGroup;
-  rowIdx: number;
-  isRowSelected: boolean;
-  selectedColIdx: number | null;
-  expanded: boolean;
-  onSelectRow: (idx: number) => void;
-  onSelectCell: (rowIdx: number, colIdx: number) => void;
-  onToggleExpand: (key: string) => void;
-  onTogglePrint: (group: FakturGroup) => void;
-}) {
-  const hasInvoice = !!g.invoiceNumber && g.invoiceNumber !== "0" && g.invoiceNumber !== "-";
-
-  const getCellCls = (colIdx: number) => {
-    if (isRowSelected && selectedColIdx === colIdx) {
-      return "ring-2 ring-blue-600 ring-inset bg-blue-100/90 font-semibold relative z-10";
+  for (const rec of records) {
+    if (rec.orderNumber && rec.orderNumber !== "-" && (soInvMap[rec.orderNumber]?.size || 0) > 1) {
+      rec.isDoubleInv = true;
     }
-    return "";
-  };
+  }
 
-  return (
-    <Fragment>
-      <tr
-        id={`faktur-row-${rowIdx}`}
-        onClick={() => onSelectRow(rowIdx)}
-        onDoubleClick={() => onToggleExpand(g.key)}
-        className={`cursor-pointer transition-colors ${
-          isRowSelected
-            ? "bg-blue-50/70 border-l-4 border-l-blue-600 shadow-sm"
-            : g.isDoubleInv
-            ? "bg-red-50 hover:bg-red-100/70"
-            : g.allPrinted
-            ? "bg-green-50/50 hover:bg-green-100/50"
-            : "hover:bg-gray-50"
-        }`}
-      >
-        {/* Col 0: Expand */}
-        <td
-          onClick={(e) => {
-            e.stopPropagation();
-            onSelectCell(rowIdx, 0);
-            onToggleExpand(g.key);
-          }}
-          className={`px-2 py-2 text-center text-gray-400 text-xs ${getCellCls(0)}`}
-          title="Klik atau tekan Enter untuk buka rincian"
-        >
-          {expanded ? "▼" : "▶"}
-        </td>
-
-        {/* Col 1: Print Status */}
-        <td
-          onClick={(e) => {
-            e.stopPropagation();
-            onSelectCell(rowIdx, 1);
-          }}
-          className={`px-2 py-2 ${getCellCls(1)}`}
-        >
-          <button
-            type="button"
-            tabIndex={-1}
-            onKeyDown={(e) => {
-              if (e.key === " " || e.code === "Space") {
-                e.preventDefault();
-                e.stopPropagation();
-              }
-            }}
-            onClick={(e) => {
-              e.stopPropagation();
-              onTogglePrint(g);
-            }}
-            disabled={!hasInvoice}
-            className={`w-6 h-6 rounded flex items-center justify-center text-xs font-bold transition-all shadow-sm ${
-              !hasInvoice
-                ? "bg-gray-100 text-gray-300 cursor-not-allowed"
-                : g.allPrinted
-                ? "bg-green-500 text-white hover:bg-orange-500 hover:rotate-180"
-                : "bg-gray-200 text-gray-600 hover:bg-green-500 hover:text-white"
-            }`}
-            title={
-              !hasInvoice
-                ? "Menunggu No Faktur (Belum bisa diprint)"
-                : g.allPrinted
-                ? "Sudah Terprint · Klik untuk UNPRINT (Batal Cetak)"
-                : "Belum terprint · Klik atau tekan Space untuk SUDAH PRINT"
-            }
-          >
-            {!hasInvoice ? "–" : g.allPrinted ? "✓" : "○"}
-          </button>
-        </td>
-
-        {/* Col 2: No SO */}
-        <td
-          onClick={(e) => {
-            e.stopPropagation();
-            onSelectCell(rowIdx, 2);
-          }}
-          className={`px-2 py-2 font-mono text-xs text-gray-900 whitespace-nowrap ${getCellCls(2)}`}
-        >
-          <div className="flex items-center gap-1">
-            <span>{g.so}</span>
-            {g.isDoubleInv && <span className="text-red-600 font-bold" title="SO ini memiliki lebih dari 1 faktur">⚠</span>}
-          </div>
-          {g.totalHarga < 0 && (
-            <div className="mt-0.5">
-              <span className="inline-block text-[9px] font-semibold text-rose-600 bg-rose-50 border border-rose-200 px-1 py-0.2 rounded leading-none">
-                Memo Retur
-              </span>
-            </div>
-          )}
-        </td>
-
-        {/* Col 3: No Invoice */}
-        <td
-          onClick={(e) => {
-            e.stopPropagation();
-            onSelectCell(rowIdx, 3);
-          }}
-          className={`px-2 py-2 font-mono text-xs text-gray-900 whitespace-nowrap font-medium ${getCellCls(3)}`}
-        >
-          {hasInvoice ? (
-            g.invoiceNumber
-          ) : (
-            <span className="text-gray-400 italic text-xs">Menunggu Faktur</span>
-          )}
-        </td>
-
-        {/* Col 4: Kat Produk (Dominant Category) */}
-        <td
-          onClick={(e) => {
-            e.stopPropagation();
-            onSelectCell(rowIdx, 4);
-          }}
-          className={`px-2 py-2 whitespace-nowrap ${getCellCls(4)}`}
-        >
-          <div className="flex flex-wrap gap-1 items-center">
-            <span
-              className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-bold tracking-wider border shadow-2xs ${
-                g.kategoriProduk === "ALKES"
-                  ? "bg-teal-100 text-teal-800 border-teal-300"
-                  : g.kategoriProduk === "CCP"
-                  ? "bg-sky-100 text-sky-900 border-sky-300"
-                  : g.kategoriProduk === "PREKURSOR"
-                  ? "bg-amber-100 text-amber-900 border-amber-300"
-                  : g.kategoriProduk === "OOT"
-                  ? "bg-purple-100 text-purple-900 border-purple-300"
-                  : "bg-indigo-50 text-indigo-700 border-indigo-200"
-              }`}
-            >
-              {g.kategoriProduk === "CCP" ? "❄️ CCP" : g.kategoriProduk}
-            </span>
-            {g.hasPrekursor && g.kategoriProduk !== "PREKURSOR" && (
-              <span className="inline-block px-1 py-0.2 rounded text-[9px] font-bold bg-amber-50 text-amber-800 border border-amber-300" title="Mengandung item Prekursor">
-                💊 Prekursor
-              </span>
-            )}
-            {g.hasOOT && g.kategoriProduk !== "OOT" && (
-              <span className="inline-block px-1 py-0.2 rounded text-[9px] font-bold bg-purple-50 text-purple-800 border border-purple-300" title="Mengandung item OOT">
-                🧪 OOT
-              </span>
-            )}
-            {g.hasCCP && g.kategoriProduk !== "CCP" && (
-              <span className="inline-block px-1 py-0.2 rounded text-[9px] font-bold bg-sky-50 text-sky-800 border border-sky-300" title="Mengandung item CCP (Cold Chain)">
-                ❄️ CCP
-              </span>
-            )}
-          </div>
-        </td>
-
-        {/* Col 5: Jenis Transaksi */}
-        <td
-          onClick={(e) => {
-            e.stopPropagation();
-            onSelectCell(rowIdx, 5);
-          }}
-          className={`px-2 py-2 whitespace-nowrap ${getCellCls(5)}`}
-        >
-          <span className={`inline-block px-2 py-0.5 rounded text-xs font-bold ${
-            g.jenisTransaksi === "ORA"
-              ? "bg-blue-100 text-blue-800"
-              : "bg-emerald-100 text-emerald-800"
-          }`}>
-            {g.jenisTransaksi}
-          </span>
-        </td>
-
-        {/* Col 6: Pelanggan */}
-        <td
-          onClick={(e) => {
-            e.stopPropagation();
-            onSelectCell(rowIdx, 6);
-          }}
-          className={`px-2 py-2 text-gray-700 whitespace-nowrap max-w-xs truncate ${getCellCls(6)}`}
-        >
-          {g.customerName}
-        </td>
-
-        {/* Col 7: Order Date */}
-        <td
-          onClick={(e) => {
-            e.stopPropagation();
-            onSelectCell(rowIdx, 7);
-          }}
-          className={`px-2 py-2 text-gray-600 whitespace-nowrap text-xs ${getCellCls(7)}`}
-        >
-          {g.orderDate}
-        </td>
-
-        {/* Col 8: Kategori */}
-        <td
-          onClick={(e) => {
-            e.stopPropagation();
-            onSelectCell(rowIdx, 8);
-          }}
-          className={`px-2 py-2 ${getCellCls(8)}`}
-        >
-          <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${
-            g.kategori === "1P" ? "bg-blue-100 text-blue-700"
-            : g.kategori === "2P" ? "bg-green-100 text-green-700"
-            : "bg-purple-100 text-purple-700"
-          }`}>
-            {g.kategori}
-          </span>
-        </td>
-
-        {/* Col 9: Done Print Time */}
-        <td
-          onClick={(e) => {
-            e.stopPropagation();
-            onSelectCell(rowIdx, 9);
-          }}
-          className={`px-2 py-2 whitespace-nowrap ${getCellCls(9)}`}
-        >
-          {g.allPrinted ? (
-            g.printedAt ? (
-              <span className="inline-flex items-center gap-1 text-[11px] font-mono font-medium text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200" title={`Selesai diprint pada: ${formatPrintTime(g.printedAt)}`}>
-                <span className="text-emerald-600 font-bold">⏱</span>
-                {formatPrintTime(g.printedAt)}
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                <span className="text-emerald-600 font-bold">✓</span>
-                Terprint
-              </span>
-            )
-          ) : (
-            <span className="text-xs text-gray-300">-</span>
-          )}
-        </td>
-
-        {/* Col 10: Total Harga */}
-        <td
-          onClick={(e) => {
-            e.stopPropagation();
-            onSelectCell(rowIdx, 10);
-          }}
-          className={`px-2 py-2 text-right text-gray-900 whitespace-nowrap font-medium text-xs ${getCellCls(10)}`}
-        >
-          {formatRupiah(g.totalHarga)}
-        </td>
-      </tr>
-
-      {expanded && (
-        <tr className="bg-gray-50">
-          <td colSpan={11} className="px-4 py-3">
-            <div className="flex flex-wrap items-center justify-between pb-2 mb-2 border-b border-gray-200 gap-2">
-              <div className="text-xs text-gray-600">
-                <span className="font-semibold text-gray-900">Invoice: <span className="font-mono text-blue-700 font-bold">{g.invoiceNumber}</span></span> · SO: <span className="font-semibold text-gray-900">{g.so}</span> {g.totalHarga < 0 && <span className="text-[10px] font-semibold text-rose-700 bg-rose-100 border border-rose-200 px-1.5 py-0.2 rounded">Memo Retur</span>} · Pelanggan: <span className="font-semibold text-gray-900">{g.customerName}</span>
-                <span className="ml-2 inline-flex items-center gap-1">
-                  <span className="font-medium text-gray-500">Kat Dominan:</span>
-                  <span
-                    className={`inline-block px-1.5 py-0.2 rounded text-[10px] font-bold border ${
-                      g.kategoriProduk === "ALKES"
-                        ? "bg-teal-100 text-teal-800 border-teal-300"
-                        : g.kategoriProduk === "PREKURSOR"
-                        ? "bg-amber-100 text-amber-900 border-amber-300"
-                        : g.kategoriProduk === "OOT"
-                        ? "bg-purple-100 text-purple-900 border-purple-300"
-                        : "bg-indigo-50 text-indigo-700 border-indigo-200"
-                    }`}
-                  >
-                    {g.kategoriProduk}
-                  </span>
-                </span>
-                {g.allPrinted && g.printedAt && (
-                  <span className="ml-2 inline-flex items-center gap-1 font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                    <span>⏱ Selesai Print:</span>
-                    <span className="font-mono font-bold text-emerald-900">{formatPrintTime(g.printedAt)}</span>
-                  </span>
-                )}
-              </div>
-              <div>
-                {g.allPrinted ? (
-                  <button
-                    onClick={(e) => { e.stopPropagation(); onTogglePrint(g); }}
-                    className="px-3 py-1 bg-orange-100 text-orange-800 border border-orange-300 rounded-lg text-xs font-bold hover:bg-orange-200 transition-colors flex items-center gap-1.5 shadow-sm"
-                  >
-                    <span>↩</span> Unprint Faktur Ini
-                  </button>
-                ) : (
-                  <button
-                    onClick={(e) => { e.stopPropagation(); onTogglePrint(g); }}
-                    className="px-3 py-1 bg-green-600 text-white rounded-lg text-xs font-bold hover:bg-green-700 transition-colors flex items-center gap-1.5 shadow-sm"
-                  >
-                    <span>✓</span> Tandai Sudah Terprint
-                  </button>
-                )}
-              </div>
-            </div>
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="border-b border-gray-200">
-                  <th className="px-2 py-1 text-left font-medium text-gray-500">No Invoice</th>
-                  <th className="px-2 py-1 text-left font-medium text-gray-500">Item Code</th>
-                  <th className="px-2 py-1 text-left font-medium text-gray-500">Kat Produk</th>
-                  <th className="px-2 py-1 text-left font-medium text-gray-500">Item Description</th>
-                  <th className="px-2 py-1 text-right font-medium text-gray-500">Qty</th>
-                  <th className="px-2 py-1 text-left font-medium text-gray-500">UOM</th>
-                  <th className="px-2 py-1 text-left font-medium text-gray-500">LOT Number</th>
-                  <th className="px-2 py-1 text-right font-medium text-gray-500">Total Harga</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {g.items.map((item, i) => (
-                  <tr key={i} className="hover:bg-gray-100">
-                    <td className="px-2 py-1 font-mono text-gray-900 whitespace-nowrap">{item.invoiceNumber}</td>
-                    <td className="px-2 py-1 font-mono text-gray-600 whitespace-nowrap">{item.itemCode}</td>
-                    <td className="px-2 py-1 whitespace-nowrap">
-                      {(() => {
-                        const itemCat = (item.kategoriProduk || getProductCategory(item.itemCode, item.itemDescription) || "FARMA").toUpperCase();
-                        return (
-                          <span
-                            className={`inline-block px-1.5 py-0.2 rounded text-[10px] font-bold border ${
-                              itemCat === "ALKES"
-                                ? "bg-teal-100 text-teal-800 border-teal-300"
-                                : itemCat === "CCP"
-                                ? "bg-sky-100 text-sky-900 border-sky-300"
-                                : itemCat === "PREKURSOR"
-                                ? "bg-amber-100 text-amber-900 border-amber-300"
-                                : itemCat === "OOT"
-                                ? "bg-purple-100 text-purple-900 border-purple-300"
-                                : "bg-indigo-50 text-indigo-700 border-indigo-200"
-                            }`}
-                          >
-                            {itemCat === "CCP" ? "❄️ CCP" : itemCat}
-                          </span>
-                        );
-                      })()}
-                    </td>
-                    <td className="px-2 py-1 text-gray-700">{item.itemDescription}</td>
-                    <td className="px-2 py-1 text-right text-gray-900">{item.qty}</td>
-                    <td className="px-2 py-1 text-gray-600">{item.uom}</td>
-                    <td className="px-2 py-1 font-mono text-gray-600 whitespace-nowrap">{item.lotNumber}</td>
-                    <td className="px-2 py-1 text-right text-gray-900 whitespace-nowrap">{formatRupiah(item.totalHarga)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </td>
-        </tr>
-      )}
-    </Fragment>
-  );
-});
+  return { records, printedSet, printedAtMap };
+}
 
 export default function Home() {
   const [records, setRecords] = useState<FakturRecord[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [filter, setFilter] = useState<Filter>("belum");
   const [katFilter, setKatFilter] = useState<KatFilter>("all");
   const [jenisFilter, setJenisFilter] = useState<JenisFilter>("all");
   const [klasFilter, setKlasFilter] = useState<KlasFilter>("all");
-  const [sortBy, setSortBy] = useState<"invoice" | "date" | "totalHarga">("invoice");
-  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [dateFilter, setDateFilter] = useState<string>("all");
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(0);
+  const [printedInvoices, setPrintedInvoices] = useState<Set<string>>(new Set());
+  const [printedAtMap, setPrintedAtMap] = useState<Record<string, string>>({});
+  const [invoiceProgression, setInvoiceProgression] = useState<InvoiceProgression | null>(null);
+  const [expandedInvoices, setExpandedInvoices] = useState<Set<string>>(new Set());
+  const [dragOver, setDragOver] = useState(false);
+  const [toastMsg, setToastMsg] = useState<string | null>(null);
   const [uploadNotification, setUploadNotification] = useState<{
     fileName: string;
     prevOra: string | null;
@@ -693,105 +199,34 @@ export default function Home() {
     time: string;
   } | null>(null);
 
-  const [invoiceProgression, setInvoiceProgression] = useState<InvoiceProgression | null>(null);
-  const [search, setSearch] = useState("");
-  const [page, setPage] = useState(0);
-  const [printedInvoices, setPrintedInvoices] = useState<Set<string>>(new Set());
-  const [sessionPrintedKeys, setSessionPrintedKeys] = useState<Set<string>>(new Set());
-  const [printedAtMap, setPrintedAtMap] = useState<Record<string, string>>({});
-  const [dragOver, setDragOver] = useState(false);
-  const [expandedInvoices, setExpandedInvoices] = useState<Set<string>>(new Set());
-  const [selectedRowIndex, setSelectedRowIndex] = useState(0);
-  const [selectedColIdx, setSelectedColIdx] = useState(3); // Default: No Invoice
-  const [copyToast, setCopyToast] = useState<string | null>(null);
-  const [showHelpModal, setShowHelpModal] = useState(false);
-  const [showApotekModal, setShowApotekModal] = useState(false);
-  const [showProductModal, setShowProductModal] = useState(false);
-  const [showUpdateModal, setShowUpdateModal] = useState(false);
-  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
-  const [feedbacks, setFeedbacks] = useState<TeamFeedback[]>([]);
-  const inFlightToggleRef = useRef<Set<string>>(new Set());
-  const recentTogglesRef = useRef<Map<string, { printed: boolean; time: number }>>(new Map());
-  const latestDBDocsRef = useRef<FirestoreFakturDoc[]>([]);
-  const latestProgressionRef = useRef<InvoiceProgression | null>(null);
-  const latestPrintStateRef = useRef<{ printedKeys: string[]; printedAtMap: Record<string, string>; updatedAt: string } | null>(null);
-  const recordsRef = useRef<FakturRecord[]>([]);
-  const printedInvoicesRef = useRef<Set<string>>(new Set());
-  const printedAtMapRef = useRef<Record<string, string>>({});
   const isUploadingRef = useRef(false);
 
-  useEffect(() => {
-    // Show update modal on first visit for this version (v2.2)
-    const hasSeen = localStorage.getItem("ft_seen_update_v2_2");
-    if (!hasSeen) {
-      setShowUpdateModal(true);
-    }
+  const showToast = (msg: string) => {
+    setToastMsg(msg);
+    setTimeout(() => setToastMsg(null), 3500);
+  };
 
-    // Subscribe to feedback/complaints from team
-    const unsubFeedbacks = subscribeToTeamFeedbacks(
-      (items) => setFeedbacks(items),
-      (err) => console.warn("Feedback listener err:", err)
-    );
-    return () => unsubFeedbacks();
-  }, []);
-
-  useEffect(() => {
-    recordsRef.current = records;
-  }, [records]);
-  useEffect(() => {
-    printedInvoicesRef.current = printedInvoices;
-  }, [printedInvoices]);
-  useEffect(() => {
-    printedAtMapRef.current = printedAtMap;
-  }, [printedAtMap]);
-
-  // Realtime subscription to Firebase Firestore
+  // Real-time Firestore Subscription
   useEffect(() => {
     setLoading(true);
     const unsubscribe = subscribeToFakturs(
       (docs, prog, printState, reason) => {
-        if (isUploadingRef.current) {
-          return;
-        }
-        if (prog) {
+        if (isUploadingRef.current) return;
 
-          latestProgressionRef.current = prog;
-          setInvoiceProgression(prog);
-        }
+        if (prog) setInvoiceProgression(prog);
+
         if (printState) {
-          latestPrintStateRef.current = printState;
-
-          // Reconcile incoming print state with optimistic local toggles (< 4000ms old) to prevent checkmark flicker
-          const now = Date.now();
-          const incomingPrintedSet = new Set(printState.printedKeys || []);
-          const incomingPrintedMap = { ...(printState.printedAtMap || {}) };
-
-          recentTogglesRef.current.forEach((val, key) => {
-            if (now - val.time < 4000) {
-              if (val.printed) {
-                incomingPrintedSet.add(key);
-                if (!incomingPrintedMap[key]) incomingPrintedMap[key] = new Date(val.time).toISOString();
-              } else {
-                incomingPrintedSet.delete(key);
-                delete incomingPrintedMap[key];
-              }
-            } else {
-              recentTogglesRef.current.delete(key);
-            }
-          });
-
-          setPrintedInvoices(incomingPrintedSet);
-          setPrintedAtMap(incomingPrintedMap);
+          const pSet = new Set(printState.printedKeys || []);
+          const pMap = printState.printedAtMap || {};
+          setPrintedInvoices(pSet);
+          setPrintedAtMap(pMap);
         }
 
-        // If this is ONLY a printState update or metadata update, DO NOT re-create or touch records!
         if (reason === "print" || reason === "meta") {
           setLoading(false);
           return;
         }
 
-        // Only recreate records when chunk data actually changes (file upload or clear)
-        latestDBDocsRef.current = docs;
         if (docs.length > 0) {
           const { records: recs } = dbRowsToFakturRecords(
             docs as unknown as Array<Record<string, unknown>>
@@ -806,143 +241,271 @@ export default function Home() {
       },
       (err) => {
         console.error("Firestore sync error:", err);
+        setError("Gagal sinkronisasi data dengan database.");
         setLoading(false);
       }
     );
 
-    return () => {
-      unsubscribe();
-    };
+    return () => unsubscribe();
   }, []);
 
-  // Auto-refresh on new deploy version
-  useEffect(() => {
-    let currentVersion: string | null = null;
-    const checkVersion = async () => {
-      try {
-        const res = await fetch("/api/version", { cache: "no-store" });
-        const data = await res.json();
-        if (currentVersion === null) {
-          currentVersion = data.version;
-        } else if (currentVersion !== data.version) {
-          if (!isUploadingRef.current) {
-            window.location.reload();
-          }
-        }
-
-      } catch {}
-    };
-    checkVersion();
-    const interval = setInterval(checkVersion, 30000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const toggleExpand = useCallback((key: string) => {
-    setExpandedInvoices((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-  }, []);
-
-  const onSelectRow = useCallback((idx: number) => {
-    setSelectedRowIndex(idx);
-  }, []);
-
-  const onSelectCell = useCallback((rowIdx: number, colIdx: number) => {
-    setSelectedRowIndex(rowIdx);
-    setSelectedColIdx(colIdx);
-  }, []);
-
-  const handleManualRefresh = useCallback(() => {
-    setSessionPrintedKeys(new Set());
+  const handleManualRefresh = useCallback(async () => {
     setLoading(true);
-    getExistingFakturs()
-      .then(({ docs, progression: prog }) => {
-        if (prog) {
-          latestProgressionRef.current = prog;
-          setInvoiceProgression(prog);
-        }
-        const { records: recs, printedSet, printedAtMap: pMap } = dbRowsToFakturRecords(
-          docs as unknown as Array<Record<string, unknown>>
-        );
-        setRecords(recs);
-        setPrintedInvoices(printedSet);
-        setPrintedAtMap(pMap);
-        setLoading(false);
-      })
-      .catch((err) => {
-        console.error("Manual refresh error:", err);
-        setLoading(false);
-      });
+    try {
+      const { docs, progression: prog, printState } = await getExistingFakturs();
+      if (prog) setInvoiceProgression(prog);
+      if (printState) {
+        setPrintedInvoices(new Set(printState.printedKeys || []));
+        setPrintedAtMap(printState.printedAtMap || {});
+      }
+      const { records: recs } = dbRowsToFakturRecords(
+        docs as unknown as Array<Record<string, unknown>>
+      );
+      setRecords(recs);
+      showToast("✓ Data berhasil diperbarui.");
+    } catch (err) {
+      console.error("Refresh error:", err);
+      setError("Gagal memperbarui data.");
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  // Print / Unprint: toggle local state AND sync to Firestore in realtime (1 write, < 50ms)
+  // Toggle Print Status (Immediate Firestore write & real-time sync)
   const togglePrint = useCallback(
     async (group: FakturGroup) => {
       const willBePrinted = !group.allPrinted;
-      const targetKey = group.invoiceKey || (group.jenisTransaksi === "ORA" ? `${group.invoiceNumber}-1P` : group.invoiceNumber);
-
-      // Debounce rapid toggles on the same invoice (< 300ms)
-      if (inFlightToggleRef.current.has(targetKey)) return;
-      inFlightToggleRef.current.add(targetKey);
-      setTimeout(() => {
-        inFlightToggleRef.current.delete(targetKey);
-      }, 300);
-
+      const targetKey = group.invoiceKey;
       const nowIso = new Date().toISOString();
-      recentTogglesRef.current.set(targetKey, { printed: willBePrinted, time: Date.now() });
-      const next = new Set(printedInvoices);
 
-      if (willBePrinted) {
-        next.add(targetKey);
-      } else {
-        next.delete(targetKey);
-      }
-      setPrintedInvoices(next);
-
-      // Optimistic session state
-      setSessionPrintedKeys((prev) => {
-        const sNext = new Set(prev);
-        if (willBePrinted) {
-          sNext.add(targetKey);
-        } else {
-          sNext.delete(targetKey);
-        }
-        return sNext;
+      // 1. Optimistic Local Update
+      setPrintedInvoices((prev) => {
+        const next = new Set(prev);
+        if (willBePrinted) next.add(targetKey);
+        else next.delete(targetKey);
+        return next;
       });
 
-      const nextMap = { ...printedAtMap };
-      if (willBePrinted) {
-        nextMap[targetKey] = nowIso;
-      } else {
-        delete nextMap[targetKey];
-      }
-      setPrintedAtMap(nextMap);
+      setPrintedAtMap((prev) => {
+        const next = { ...prev };
+        if (willBePrinted) next[targetKey] = nowIso;
+        else delete next[targetKey];
+        return next;
+      });
 
+      // 2. Firestore Sync
       try {
-        await updateFakturPrintStatus(
-          targetKey,
-          willBePrinted,
-          willBePrinted ? nowIso : null,
-          next,
-          nextMap
-        );
-        // Sync ke Google Sheets secara realtime
-        await updateGSheetPrintStatus(
-          targetKey,
-          willBePrinted,
-          willBePrinted ? nowIso : null
-        );
+        await updateFakturPrintStatus(targetKey, willBePrinted, willBePrinted ? nowIso : null);
       } catch (err) {
-        console.error("Failed to update print status in Firestore:", err);
+        console.error("Print toggle sync error:", err);
       }
     },
-    [printedInvoices, printedAtMap]
+    []
   );
 
-  // Upload: Parse & Save directly to Supabase cloud DB so all devices see it
+  // Group items by Invoice Key
+  const grouped = useMemo<FakturGroup[]>(() => {
+    const map = new Map<string, FakturGroup>();
+
+    for (const r of records) {
+      const key = r.invoiceKey || r.invoiceNumber;
+      if (!key) continue;
+
+      if (!map.has(key)) {
+        const isPrinted = printedInvoices.has(key);
+        const pAt = printedAtMap[key] || null;
+
+        map.set(key, {
+          key,
+          invoiceNumber: r.invoiceNumber,
+          invoiceKey: key,
+          so: r.orderNumber,
+          items: [],
+          orderDate: r.orderDate,
+          jenisTransaksi: r.jenisTransaksi,
+          customerName: r.customerName,
+          kategori: r.kategori,
+          kategoriProduk: r.kategoriProduk || "FARMA",
+          hasPrekursor: false,
+          hasOOT: false,
+          hasCCP: false,
+          hasAlkes: false,
+          hasFarma: false,
+          isDoubleInv: false,
+          totalHarga: 0,
+          totalItems: 0,
+          allPrinted: isPrinted,
+          printedAt: pAt,
+        });
+      }
+
+      const g = map.get(key)!;
+      g.items.push(r);
+      g.totalHarga += r.totalHarga;
+      g.totalItems += 1;
+
+      if (r.isDoubleInv) g.isDoubleInv = true;
+
+      const kat = (r.kategoriProduk || getProductCategory(r.itemCode, r.itemDescription) || "FARMA").toUpperCase();
+      if (kat === "PREKURSOR" || r.klasifikasiObat === "Prekursor") g.hasPrekursor = true;
+      if (kat === "OOT" || r.klasifikasiObat === "OOT") g.hasOOT = true;
+      if (kat === "CCP") g.hasCCP = true;
+      if (kat === "ALKES") g.hasAlkes = true;
+      if (kat === "FARMA") g.hasFarma = true;
+
+      if (g.hasCCP) g.kategoriProduk = "CCP";
+      else if (g.hasPrekursor) g.kategoriProduk = "PREKURSOR";
+      else if (g.hasOOT) g.kategoriProduk = "OOT";
+      else if (g.hasAlkes) g.kategoriProduk = "ALKES";
+      else g.kategoriProduk = "FARMA";
+    }
+
+    return Array.from(map.values()).sort((a, b) => {
+      const na = parseInvNum(a.invoiceNumber);
+      const nb = parseInvNum(b.invoiceNumber);
+      return nb - na; // Descending
+    });
+  }, [records, printedInvoices, printedAtMap]);
+
+  // Max Invoice KPIs
+  const highestInvoices = useMemo(() => {
+    let maxOraStr = "-";
+    let maxOraNum = -1;
+    let max1PDooStr = "-";
+    let max1PDooNum = -1;
+    let max2PStr = "-";
+    let max2PNum = -1;
+    let max3PStr = "-";
+    let max3PNum = -1;
+
+    for (const g of grouped) {
+      const num = parseInvNum(g.invoiceNumber);
+      if (num <= 0) continue;
+
+      if (g.jenisTransaksi === "ORA") {
+        if (num > maxOraNum) {
+          maxOraNum = num;
+          maxOraStr = g.invoiceNumber;
+        }
+      } else {
+        if (g.kategori === "1P" && num > max1PDooNum) {
+          max1PDooNum = num;
+          max1PDooStr = g.invoiceNumber;
+        } else if (g.kategori === "2P" && num > max2PNum) {
+          max2PNum = num;
+          max2PStr = g.invoiceNumber;
+        } else if (g.kategori === "3P" && num > max3PNum) {
+          max3PNum = num;
+          max3PStr = g.invoiceNumber;
+        }
+      }
+    }
+
+    return { maxOraStr, max1PDooStr, max2PStr, max3PStr };
+  }, [grouped]);
+
+  // Unique order dates for filter dropdown
+  const availableDates = useMemo(() => {
+    const set = new Set<string>();
+    for (const r of records) {
+      if (r.orderDate && r.orderDate !== "-") set.add(r.orderDate);
+    }
+    return Array.from(set).sort((a, b) => parseDateMs(b) - parseDateMs(a));
+  }, [records]);
+
+  // Filtered Faktur Groups
+  const filtered = useMemo(() => {
+    if (search.trim()) {
+      const s = search.toLowerCase().trim();
+      return grouped.filter(
+        (g) =>
+          g.so.toLowerCase().includes(s) ||
+          g.invoiceNumber.toLowerCase().includes(s) ||
+          g.customerName.toLowerCase().includes(s) ||
+          (g.kategoriProduk && g.kategoriProduk.toLowerCase().includes(s)) ||
+          g.items.some(
+            (i) =>
+              i.itemDescription.toLowerCase().includes(s) ||
+              i.itemCode.toLowerCase().includes(s)
+          )
+      );
+    }
+
+    let result = grouped;
+
+    if (filter === "belum") {
+      result = result.filter((g) => !g.allPrinted);
+    } else if (filter === "sudah") {
+      result = result.filter((g) => g.allPrinted);
+    } else if (filter === "double") {
+      result = result.filter((g) => g.isDoubleInv);
+    }
+
+    if (dateFilter !== "all") {
+      result = result.filter((g) => g.orderDate === dateFilter);
+    }
+    if (katFilter !== "all") {
+      result = result.filter((g) => g.kategori === katFilter);
+    }
+    if (jenisFilter !== "all") {
+      result = result.filter((g) => g.jenisTransaksi === jenisFilter);
+    }
+    if (klasFilter === "prekursor") result = result.filter((g) => g.hasPrekursor);
+    else if (klasFilter === "oot") result = result.filter((g) => g.hasOOT);
+    else if (klasFilter === "ccp") result = result.filter((g) => g.hasCCP);
+    else if (klasFilter === "alkes") result = result.filter((g) => g.hasAlkes);
+    else if (klasFilter === "farma") result = result.filter((g) => g.hasFarma);
+
+    return result;
+  }, [grouped, filter, katFilter, jenisFilter, klasFilter, dateFilter, search]);
+
+  const totalPages = Math.ceil(filtered.length / ROWS_PER_PAGE);
+  const pageData = filtered.slice(page * ROWS_PER_PAGE, (page + 1) * ROWS_PER_PAGE);
+
+  const unprintedCountInFiltered = useMemo(() => {
+    return filtered.filter((g) => !g.allPrinted).length;
+  }, [filtered]);
+
+  // Batch Done Print: Mark All Visible As Printed
+  const handleMarkAllPrinted = useCallback(async () => {
+    const unprinted = filtered.filter((g) => !g.allPrinted);
+    if (unprinted.length === 0) {
+      alert("Semua faktur yang sedang tampil sudah selesai dicetak.");
+      return;
+    }
+
+    if (!confirm(`Tandai ${unprinted.length} faktur yang tampil sebagai SUDAH TERPRINT?`)) return;
+
+    const nowIso = new Date().toISOString();
+    const targetKeys = unprinted.map((g) => g.invoiceKey);
+
+    setPrintedInvoices((prev) => {
+      const next = new Set(prev);
+      targetKeys.forEach((k) => next.add(k));
+      return next;
+    });
+
+    setPrintedAtMap((prev) => {
+      const next = { ...prev };
+      targetKeys.forEach((k) => {
+        next[k] = nowIso;
+      });
+      return next;
+    });
+
+    try {
+      setLoading(true);
+      await updateFaktursPrintStatusBatch(targetKeys, true, nowIso);
+      showToast(`✓ Berhasil menandai ${targetKeys.length} faktur selesai dicetak!`);
+    } catch (err) {
+      console.error("Batch print error:", err);
+      alert("Terjadi kesalahan saat menyimpan ke database.");
+    } finally {
+      setLoading(false);
+    }
+  }, [filtered]);
+
+  // File Upload Handler
   const handleUpload = useCallback(
     async (filesInput: File[] | FileList | File) => {
       const files: File[] = Array.isArray(filesInput)
@@ -956,9 +519,11 @@ export default function Home() {
       isUploadingRef.current = true;
       setLoading(true);
       setError(null);
+
       try {
-        let parsed: FakturRecord[] = [];
+        const parsed: FakturRecord[] = [];
         const fileNames: string[] = [];
+
         for (const file of files) {
           fileNames.push(file.name);
           const p = await parseExcelFile(file);
@@ -966,66 +531,47 @@ export default function Home() {
         }
 
         if (parsed.length === 0) {
-          setError(
-            `File yang dipilih (${fileNames.join(", ")}) berhasil dibaca tetapi tidak memiliki baris data transaksi (0 baris). Pastikan file hasil export dari Oracle memiliki data dan parameter export terisi dengan benar (misal: Entity "MBI LE").`
-          );
+          setError("File berhasil dibaca tetapi tidak memiliki baris data transaksi.");
           setLoading(false);
           return;
         }
 
         const importedAt = new Date().toISOString();
 
-        // Always fetch the freshest state from Firestore AND combine with current active in-memory records
+        // 1. Fetch fresh state from Firestore
         let existingDBDocs: FirestoreFakturDoc[] = [];
-        let loadedProgression: InvoiceProgression | null = latestProgressionRef.current;
-        let loadedPrintState: { printedKeys: string[]; printedAtMap: Record<string, string>; updatedAt: string } | null = latestPrintStateRef.current;
+        let loadedProgression: InvoiceProgression | null = null;
 
         try {
           const res = await getExistingFakturs();
           existingDBDocs = res.docs;
-          if (res.progression) loadedProgression = res.progression;
-          if (res.printState) loadedPrintState = res.printState;
+          loadedProgression = res.progression;
         } catch (err) {
-          console.warn("Could not fetch existing fakturs, falling back to cached in-memory:", err);
-          existingDBDocs = latestDBDocsRef.current;
+          console.warn("Could not fetch remote DB:", err);
         }
-        const existingDB = existingDBDocs as unknown as Array<Record<string, unknown>>;
 
+        const existingDB = existingDBDocs as unknown as Array<Record<string, unknown>>;
         const existingStatusMap = new Map<
           string,
-          {
-            no_sales_order: string | null;
-            status_cetak: boolean;
-            printed_at: string | null;
-            extra: Record<string, unknown> | null;
-          }
+          { status_cetak: boolean; printed_at: string | null; no_sales_order: string; extra: Record<string, unknown> }
         >();
-        let existingProgression: InvoiceProgression = loadedProgression || {};
-        let prev1PNum = -1;
-        let prev1PStr = "-";
+
+        let prevOraNum = -1;
+        let prevOraStr = "-";
+        let prevDooNum = -1;
+        let prevDooStr = "-";
         let prev1PDooNum = -1;
         let prev1PDooStr = "-";
         let prev2PNum = -1;
         let prev2PStr = "-";
         let prev3PNum = -1;
         let prev3PStr = "-";
-        let prevDooNum = -1;
-        let prevDooStr = "-";
-        let prevOraNum = -1;
-        let prevOraStr = "-";
 
-        existingDB.forEach((row: Record<string, unknown>) => {
-          if (row.no_faktur === "__SYSTEM_METADATA__") {
-            const extra = (row.extra as Record<string, unknown>) || {};
-            if (extra.invoiceProgression) {
-              existingProgression = extra.invoiceProgression as InvoiceProgression;
-            }
-            return;
-          }
+        existingDB.forEach((row) => {
           const rawInv = String(row.no_faktur || "");
           const cleanInv = rawInv.replace(/-1P$/i, "");
           const extra = (row.extra as Record<string, unknown>) || {};
-          const cust = String(extra.nama_pelanggan || "");
+          const cust = String(extra.nama_pelanggan || row.customer_name || "");
           const isOra = isOraCustomer(cust);
           const num = parseInvNum(cleanInv);
           const kat = isOra ? "1P" : categorize("DOO", cust);
@@ -1054,422 +600,111 @@ export default function Home() {
             }
           }
 
-          const rawFaktur = String(row.no_faktur || "").trim();
-          const cleanFaktur = rawFaktur.replace(/-1P$/i, "");
           const statusInfo = {
-            no_sales_order: (row.no_sales_order as string) || null,
             status_cetak: Boolean(row.status_cetak),
             printed_at: (row.printed_at as string) || null,
-            extra: (row.extra as Record<string, unknown>) || null,
+            no_sales_order: String(row.no_sales_order || "-"),
+            extra,
           };
 
-          if (rawFaktur) {
-            existingStatusMap.set(rawFaktur, statusInfo);
-            existingStatusMap.set(cleanFaktur, statusInfo);
-            existingStatusMap.set(`${cleanFaktur}-1P`, statusInfo);
-          }
-          if (row.no_sales_order && row.no_sales_order !== "-") {
-            String(row.no_sales_order).split(",").forEach((s) => {
-              const soClean = s.trim();
-              if (soClean && soClean !== "-" && soClean !== "0") existingStatusMap.set(`SO-${soClean}`, statusInfo);
-            });
-          }
+          existingStatusMap.set(rawInv, statusInfo);
+          existingStatusMap.set(cleanInv, statusInfo);
+          existingStatusMap.set(`${cleanInv}-1P`, statusInfo);
         });
 
-        // Check if uploaded file contains detailed items (XXCUST format)
-        const isFileItemRich = parsed.some(
-          (r) => r.itemCode && r.itemCode !== "-" && r.itemCode !== ""
-        );
-
-        const currentActiveRecords = recordsRef.current;
-        const currentActivePrintedSet = printedInvoicesRef.current;
-        const currentActivePrintedAtMap = printedAtMapRef.current;
-
-        // Pre-populate invMap with ALL existing records from DB so multiple files (ORA + DOO + XXCUST) merge seamlessly
-        const invMap = new Map<string, Record<string, unknown>>();
-        existingDB.forEach((row) => {
-          if (row.no_faktur === "__SYSTEM_METADATA__") return;
-          const rawK = String(row.no_faktur || row.id || "");
-          if (rawK) {
-            const extra = (row.extra as Record<string, unknown>) || {};
-            const cust = String(extra.nama_pelanggan || row.customer_name || "");
-            const cleanInv = rawK.replace(/-1P$/i, "");
-            const isActuallyOra = isOraCustomer(cust);
-            const k = isActuallyOra ? (rawK.endsWith("-1P") ? rawK : `${cleanInv}-1P`) : cleanInv;
-
-            const soSet = new Set<string>();
-            if (row.no_sales_order) {
-              String(row.no_sales_order).split(",").forEach((s) => {
-                const t = s.trim();
-                if (t && t !== "-") soSet.add(t);
-              });
-            }
-            const prevItems = (extra.items as Array<Record<string, unknown>>) || [];
-            prevItems.forEach((it) => {
-              const so = String(it.order_number || "").trim();
-              if (so && so !== "-") soSet.add(so);
-            });
-            const hasExistingRichItems =
-              prevItems.length > 0 &&
-              prevItems.some((it) => it.item_code && it.item_code !== "-" && it.item_code !== "");
-
-            if (invMap.has(k)) {
-              const existing = invMap.get(k)!;
-              const existingExtra = existing.extra as Record<string, unknown>;
-              if (!Array.isArray(existingExtra.items)) existingExtra.items = [];
-              const itList = existingExtra.items as Array<Record<string, unknown>>;
-              prevItems.forEach((it) => {
-                if (it.item_code && it.item_code !== "-") {
-                  const isDup = itList.some(
-                    (e) => e.item_code === it.item_code && e.lot_number === it.lot_number && e.qty === it.qty
-                  );
-                  if (!isDup) itList.push(it);
-                }
-              });
-              return;
-            }
-
-            invMap.set(k, {
-              ...row,
-              no_faktur: k,
-              id: k,
-              jenis_transaksi: isActuallyOra ? "ORA" : "DOO",
-              kategori: isActuallyOra ? "1P" : (row.kategori || categorize("DOO", cust)),
-              _soSet: soSet,
-              _hasPreservedItems: hasExistingRichItems,
-            });
-          }
+        // 2. Pre-populate invMap with existing records
+        const invMap = new Map<string, FirestoreFakturDoc>();
+        existingDBDocs.forEach((doc) => {
+          invMap.set(doc.id || doc.no_faktur, { ...doc });
         });
 
-        // Also ensure any records currently in state are preserved in invMap
-        currentActiveRecords.forEach((rec) => {
-          const k = rec.invoiceKey || rec.invoiceNumber;
-          if (!k) return;
+        const newUnprintedKeys: string[] = [];
 
-          if (!invMap.has(k)) {
-            const soSet = new Set<string>();
-            if (rec.orderNumber && rec.orderNumber !== "-") {
-              rec.orderNumber.split(",").forEach((s) => {
-                const t = s.trim();
-                if (t && t !== "-") soSet.add(t);
-              });
-            }
-            invMap.set(k, {
-              no_faktur: k,
-              no_sales_order: rec.orderNumber || "-",
-              customer_name: rec.customerName || "-",
-              order_date: rec.orderDate || "-",
-              jenis_transaksi: rec.jenisTransaksi,
-              kategori: rec.kategori,
-              status_cetak: currentActivePrintedSet.has(k),
-              printed_at: currentActivePrintedAtMap[k] || null,
-              imported_at: importedAt,
-              source_file: rec.jenisTransaksi,
-              extra: {
-                nama_pelanggan: rec.customerName,
-                order_date: rec.orderDate,
-                accounting_date: rec.orderDate,
-                jenis_transaksi: rec.jenisTransaksi,
-                kategori: rec.kategori,
-                total_harga: rec.totalHarga || 0,
-                items: [],
-              },
-              _soSet: soSet,
-              _hasPreservedItems: false,
-            });
-          }
-
-          const existingEntry = invMap.get(k)!;
-          if (rec.orderNumber && rec.orderNumber !== "-") {
-            rec.orderNumber.split(",").forEach((s) => {
-              const t = s.trim();
-              if (t && t !== "-") (existingEntry._soSet as Set<string>).add(t);
-            });
-          }
-
-          if (rec.itemCode && rec.itemCode !== "-" && rec.itemCode !== "") {
-            existingEntry._hasPreservedItems = true;
-            const extra = existingEntry.extra as Record<string, unknown>;
-            if (!Array.isArray(extra.items)) extra.items = [];
-            const itList = extra.items as Array<Record<string, unknown>>;
-            const isDup = itList.some(
-              (it) => it.item_code === rec.itemCode && it.order_number === rec.orderNumber && it.lot_number === rec.lotNumber && it.qty === rec.qty
-            );
-            if (!isDup) {
-              itList.push({
-                item_code: rec.itemCode,
-                item_description: rec.itemDescription,
-                kategori_produk: rec.kategoriProduk || "FARMA",
-                qty: rec.qty,
-                uom: rec.uom,
-                lot_number: rec.lotNumber,
-                total_harga: rec.totalHarga,
-                order_number: rec.orderNumber,
-              });
-            }
-          }
-        });
-
-        const newUnprintedKeyList: string[] = [];
-        const newGSheetKeys = new Set<string>(); // faktur genuinely baru → append ke GSheet
-        const uploadedBatchKeys = new Set<string>(); // semua faktur di file upload saat ini (baru + update)
-
-        // Merge incoming records into invMap
+        // 3. Merge incoming records
         for (const r of parsed) {
           const isOra = isOraCustomer(r.customerName);
           const cleanInv = String(r.invoiceNumber || "").trim().replace(/-1P$/i, "");
           const num = parseInvNum(cleanInv);
-          const hasInv = cleanInv && cleanInv !== "0" && cleanInv !== "-";
-          const hasValidSO = Boolean(r.orderNumber && r.orderNumber !== "-" && r.orderNumber !== "0");
-          const noFaktur = hasInv ? (isOra ? `${cleanInv}-1P` : cleanInv) : (hasValidSO ? `SO-${r.orderNumber}` : `ROW-${r.rowIndex}`);
-          if (!noFaktur || noFaktur === "SO-" || noFaktur === "SO--" || noFaktur === "-1P") continue;
+          if (!cleanInv || cleanInv === "-" || cleanInv === "0") continue;
 
-          const targetKey = noFaktur;
-          uploadedBatchKeys.add(targetKey);
-          // Check if this invoice is already in DB (check all key variants: targetKey, cleanInv, cleanInv-1P, SO-xxx)
-          const prevInfo = existingStatusMap.get(targetKey) || existingStatusMap.get(cleanInv) || existingStatusMap.get(`${cleanInv}-1P`) || (hasValidSO ? existingStatusMap.get(`SO-${r.orderNumber}`) : undefined);
+          const targetKey = isOra ? `${cleanInv}-1P` : cleanInv;
+          const prevInfo = existingStatusMap.get(targetKey) || existingStatusMap.get(cleanInv);
 
           let isPrinted = false;
           let printedAt: string | null = null;
-          let isNewInvoice = false;
 
           if (prevInfo !== undefined) {
-            // Already in database: STRICTLY preserve existing user/system print status!
-            const isPrintedInChunk = Boolean(prevInfo.status_cetak);
-            const isPrintedInState = Boolean(
-              loadedPrintState?.printedKeys?.includes(targetKey) ||
-              loadedPrintState?.printedKeys?.includes(cleanInv) ||
-              loadedPrintState?.printedKeys?.includes(`${cleanInv}-1P`) ||
-              currentActivePrintedSet.has(targetKey) ||
-              currentActivePrintedSet.has(cleanInv) ||
-              currentActivePrintedSet.has(`${cleanInv}-1P`)
-            );
-            isPrinted = isPrintedInChunk || isPrintedInState;
-            printedAt = isPrinted
-              ? (currentActivePrintedAtMap[targetKey] || currentActivePrintedAtMap[cleanInv] || currentActivePrintedAtMap[`${cleanInv}-1P`] ||
-                 loadedPrintState?.printedAtMap?.[targetKey] || loadedPrintState?.printedAtMap?.[cleanInv] || loadedPrintState?.printedAtMap?.[`${cleanInv}-1P`] ||
-                 prevInfo.printed_at || latestPrintStateRef.current?.printedAtMap?.[targetKey] || new Date().toISOString())
-              : null;
-            if (!isPrinted) {
-              newUnprintedKeyList.push(targetKey);
-            }
+            isPrinted = Boolean(prevInfo.status_cetak);
+            printedAt = prevInfo.printed_at;
           } else {
-            // Brand new to database: determine whether it is a genuinely new invoice or historical
-            const isHistoricalPrinted = num > 0 && (
+            const isHistorical = num > 0 && (
               (isOra && prevOraNum > 0 && num <= prevOraNum) ||
               (!isOra && prevDooNum > 0 && num <= prevDooNum)
             );
-
-            if (isHistoricalPrinted) {
+            if (isHistorical) {
               isPrinted = true;
               printedAt = null;
             } else {
-              // Genuinely new invoice or waiting invoice -> Belum Terprint
-              isNewInvoice = true;
               isPrinted = false;
               printedAt = null;
-              newUnprintedKeyList.push(targetKey);
-              newGSheetKeys.add(targetKey); // tandai untuk dikirim ke GSheet
+              newUnprintedKeys.push(targetKey);
             }
           }
-          const prevExtra = (prevInfo?.extra as Record<string, unknown>) || null;
-          const prevItems = (prevExtra?.items as Array<Record<string, unknown>>) || [];
-          const hasExistingRichItems =
-            prevItems.length > 0 &&
-            prevItems.some(
-              (it) => it.item_code && it.item_code !== "-" && it.item_code !== ""
-            );
-
-          const isIncomingItem = Boolean(
-            r.itemCode && r.itemCode !== "-" && r.itemCode !== ""
-          );
 
           if (!invMap.has(targetKey)) {
-            const existingName = String(prevExtra?.nama_pelanggan || "").trim();
-            const incomingName = String(r.customerName || "").trim();
-
-            const isIncomingGenericHelios =
-              incomingName.toUpperCase().includes("HELIOS") ||
-              incomingName.toUpperCase() === "PT HELIOS ALCHEMIST KESEHATAN" ||
-              incomingName === "1001" ||
-              !incomingName ||
-              incomingName === "-" ||
-              /^\d+$/.test(incomingName);
-
-            const isExistingSpecificCustomer =
-              existingName &&
-              existingName !== "-" &&
-              !/^\d+$/.test(existingName) &&
-              existingName.toUpperCase() !== "PT HELIOS ALCHEMIST KESEHATAN" &&
-              existingName.toUpperCase() !== "HELIOS";
-
-            let finalCustomerName = incomingName;
-            if (isExistingSpecificCustomer && isIncomingGenericHelios) {
-              finalCustomerName = existingName;
-            } else if (!finalCustomerName || /^\d+$/.test(finalCustomerName)) {
-              if (existingName && !/^\d+$/.test(existingName)) {
-                finalCustomerName = existingName;
-              }
-            }
-
-            const soSet = new Set<string>();
-            if (isOra) {
-              if (r.orderNumber && r.orderNumber !== "-" && r.orderNumber !== "") {
-                r.orderNumber.split(",").forEach((s) => {
-                  const t = s.trim();
-                  if (t && t !== "-") soSet.add(t);
-                });
-              } else if (prevInfo?.no_sales_order) {
-                prevInfo.no_sales_order.split(",").forEach((s) => {
-                  const t = s.trim();
-                  if (t && t !== "-") soSet.add(t);
-                });
-              }
-            } else {
-              if (prevInfo?.no_sales_order) {
-                prevInfo.no_sales_order.split(",").forEach((s) => {
-                  const t = s.trim();
-                  if (t && t !== "-") soSet.add(t);
-                });
-              }
-              if (r.orderNumber && r.orderNumber !== "-" && r.orderNumber !== "") {
-                r.orderNumber.split(",").forEach((s) => {
-                  const t = s.trim();
-                  if (t && t !== "-") soSet.add(t);
-                });
-              }
-            }
-
-            const baseItems: Array<Record<string, unknown>> = [];
-            if (hasExistingRichItems) {
-              baseItems.push(...prevItems);
-            }
-
-            const initialSO = isOra
-              ? (Array.from(soSet).filter(s => s.length > 5)[0] || Array.from(soSet)[Array.from(soSet).length - 1] || (r.orderNumber && r.orderNumber !== "-" ? r.orderNumber : "-"))
-              : (prevInfo?.no_sales_order ? String(prevInfo.no_sales_order).split(",")[0].trim() : (r.orderNumber && r.orderNumber !== "-" ? r.orderNumber : "-"));
-
+            const kategori = isOra ? "1P" : (r.kategori || categorize("DOO", r.customerName));
             invMap.set(targetKey, {
+              id: targetKey,
               no_faktur: targetKey,
-              no_sales_order: initialSO,
-              customer_name: finalCustomerName || r.customerName || "-",
+              no_sales_order: r.orderNumber || "-",
+              customer_name: r.customerName || "-",
               order_date: r.orderDate || "-",
               jenis_transaksi: isOra ? "ORA" : "DOO",
-              kategori: isOra ? "1P" : (r.kategori || categorize("DOO", finalCustomerName || r.customerName)),
+              kategori,
               status_cetak: isPrinted,
               printed_at: printedAt,
               imported_at: importedAt,
               source_file: isOra ? "ORA" : "DOO",
               extra: {
-                nama_pelanggan: finalCustomerName || r.customerName,
+                nama_pelanggan: r.customerName,
                 order_date: r.orderDate,
                 accounting_date: r.orderDate,
                 jenis_transaksi: isOra ? "ORA" : "DOO",
-                kategori: isOra ? "1P" : (r.kategori || categorize("DOO", finalCustomerName || r.customerName)),
+                kategori,
                 total_harga: r.totalHarga || 0,
-                items: baseItems,
+                items: [],
               },
-              _soSet: soSet,
-              _hasPreservedItems: hasExistingRichItems,
             });
           }
 
-          const existing = invMap.get(targetKey)!;
-          existing.status_cetak = isPrinted;
-          existing.printed_at = isPrinted ? printedAt : null;
+          const entry = invMap.get(targetKey)!;
+          entry.status_cetak = isPrinted;
+          entry.printed_at = printedAt;
 
-          // For ORA: XXCUST supplies the official Sales Order
-          // For DOO: Keep the DOO SO from DOO export unchanged!
-          if (isOra) {
-            existing.jenis_transaksi = "ORA";
-            existing.source_file = "ORA";
-            existing.kategori = "1P";
-            if (existing.extra) {
-              (existing.extra as Record<string, unknown>).jenis_transaksi = "ORA";
-              (existing.extra as Record<string, unknown>).kategori = "1P";
-            }
-          } else {
-            existing.jenis_transaksi = "DOO";
-            existing.source_file = "DOO";
-            if (existing.extra) {
-              (existing.extra as Record<string, unknown>).jenis_transaksi = "DOO";
-            }
+          if (isOra && r.orderNumber && r.orderNumber !== "-") {
+            entry.no_sales_order = r.orderNumber;
+          } else if (!isOra && (entry.no_sales_order === "-" || !entry.no_sales_order) && r.orderNumber) {
+            entry.no_sales_order = r.orderNumber;
           }
 
-          if (r.orderNumber && r.orderNumber !== "-" && r.orderNumber !== "") {
-            const isEntryOra = isOraCustomer(
-              String(existing.customer_name || r.customerName || "")
-            );
-            if (isEntryOra) {
-              (existing._soSet as Set<string>).clear();
-              r.orderNumber.split(",").forEach((s) => {
-                const t = s.trim();
-                if (t && t !== "-") (existing._soSet as Set<string>).add(t);
-              });
-            } else if (!isFileItemRich || (existing._soSet as Set<string>).size === 0) {
-              r.orderNumber.split(",").forEach((s) => {
-                const t = s.trim();
-                if (t && t !== "-") (existing._soSet as Set<string>).add(t);
-              });
-            }
-          }
-
-          // Customer name refinement: If incoming has a specific name and existing is generic Helios, update it
-          const currentCust = String(existing.customer_name || (existing.extra as Record<string, unknown>)?.nama_pelanggan || "");
+          const currentCust = String(entry.customer_name || "");
           const incomingCust = String(r.customerName || "");
-          const isCurrentGeneric =
-            !currentCust ||
-            currentCust === "-" ||
-            currentCust.toUpperCase().includes("HELIOS") ||
-            currentCust.toUpperCase() === "PT HELIOS ALCHEMIST KESEHATAN" ||
-            currentCust === "1001" ||
-            /^\d+$/.test(currentCust);
-          const isIncomingSpecific =
-            incomingCust &&
-            incomingCust !== "-" &&
-            !incomingCust.toUpperCase().includes("HELIOS") &&
-            !/^\d+$/.test(incomingCust);
-
-          if (isCurrentGeneric && isIncomingSpecific) {
-            existing.customer_name = incomingCust;
-            if (existing.extra) {
-              (existing.extra as Record<string, unknown>).nama_pelanggan = incomingCust;
-            }
+          if (
+            (currentCust.includes("HELIOS") || currentCust === "1001" || currentCust === "-") &&
+            incomingCust && !incomingCust.includes("HELIOS") && incomingCust !== "1001"
+          ) {
+            entry.customer_name = incomingCust;
+            entry.extra.nama_pelanggan = incomingCust;
           }
 
-          if (isFileItemRich && isIncomingItem) {
-            const extra = existing.extra as Record<string, unknown>;
-            if (!Array.isArray(extra.items)) extra.items = [];
-            const itList = extra.items as Array<Record<string, unknown>>;
+          if (r.itemCode && r.itemCode !== "-") {
+            if (!Array.isArray(entry.extra.items)) entry.extra.items = [];
             const katProd = getProductCategory(r.itemCode, r.itemDescription) || r.kategoriProduk || "FARMA";
-            const isEntryOra = isOraCustomer(
-              String(existing.customer_name || r.customerName || "")
-            );
-            const existingDocSO = String(existing.no_sales_order || Array.from(existing._soSet as Set<string>)[0] || "").trim();
-            const itemOrderNum = isEntryOra ? r.orderNumber : (existingDocSO && existingDocSO !== "-" ? existingDocSO : r.orderNumber);
-
-            const isDup = itList.some(
-              (it) => it.item_code === r.itemCode && it.order_number === itemOrderNum && it.lot_number === r.lotNumber && it.qty === r.qty
+            const isDup = entry.extra.items.some(
+              (it) => it.item_code === r.itemCode && it.lot_number === r.lotNumber && it.qty === r.qty
             );
             if (!isDup) {
-              itList.push({
-                item_code: r.itemCode,
-                item_description: r.itemDescription,
-                kategori_produk: katProd,
-                qty: r.qty,
-                uom: r.uom,
-                lot_number: r.lotNumber,
-                total_harga: r.totalHarga,
-                order_number: itemOrderNum,
-              });
-            }
-          } else if (!existing._hasPreservedItems) {
-            const extra = existing.extra as Record<string, unknown>;
-            if (!Array.isArray(extra.items)) extra.items = [];
-            const itList = extra.items as Array<Record<string, unknown>>;
-            if (itList.length === 0) {
-              const katProd = getProductCategory(r.itemCode, r.itemDescription) || r.kategoriProduk || "FARMA";
-              itList.push({
+              entry.extra.items.push({
                 item_code: r.itemCode,
                 item_description: r.itemDescription,
                 kategori_produk: katProd,
@@ -1483,64 +718,14 @@ export default function Home() {
           }
         }
 
-        const payload: FirestoreFakturDoc[] = Array.from(invMap.values()).map(({ _soSet, _hasPreservedItems, ...rest }) => {
-          const soArr = Array.from(_soSet as Set<string>).filter((s) => s && s !== "-");
-          const cleanDocSO = rest.no_sales_order ? String(rest.no_sales_order).split(",").map(s => s.trim()).filter(s => s && s !== "-").join(", ") : "";
-          const isDocOra = isOraCustomer(String(rest.customer_name || ""));
-          let finalSO = "-";
-          if (isDocOra) {
-            finalSO = soArr.length > 0
-              ? (soArr.filter(s => s.length > 5)[0] || soArr[soArr.length - 1] || soArr.join(", "))
-              : (cleanDocSO && cleanDocSO !== "-" ? (cleanDocSO.includes(",") ? cleanDocSO.split(",").map(s => s.trim()).filter(s => s.length > 5)[0] || cleanDocSO.split(",").pop()?.trim() || cleanDocSO : cleanDocSO) : "-");
-          } else {
-            // For DOO: SO is strictly preserved from the DOO export
-            if (cleanDocSO && cleanDocSO !== "-") {
-              finalSO = cleanDocSO.split(",")[0].trim();
-            } else if (soArr.length > 0) {
-              finalSO = soArr[0];
-            }
-          }
-          return {
-            ...rest,
-            id: String(rest.no_faktur),
-            jenis_transaksi: isDocOra ? "ORA" : "DOO",
-            source_file: isDocOra ? "ORA" : "DOO",
-            no_sales_order: finalSO,
-            updated_at: new Date().toISOString(),
-          };
-        }) as unknown as FirestoreFakturDoc[];
+        const payload = Array.from(invMap.values());
 
-        // Calculate min/max invoices per category (1P DOO, 2P, 3P, ORA, DOO) in the uploaded file
-        let minUploaded1PDooNum = Infinity;
-        let minUploaded1PDooStr = "-";
-        let maxUploaded1PDooNum = -1;
-        let maxUploaded1PDooStr = "-";
-
-        let minUploaded2PNum = Infinity;
-        let minUploaded2PStr = "-";
-        let maxUploaded2PNum = -1;
-        let maxUploaded2PStr = "-";
-
-        let minUploaded3PNum = Infinity;
-        let minUploaded3PStr = "-";
-        let maxUploaded3PNum = -1;
-        let maxUploaded3PStr = "-";
-
-        let minUploadedOraNum = Infinity;
-        let minUploadedOraStr = "-";
-        let maxUploadedOraNum = -1;
-        let maxUploadedOraStr = "-";
-
-        let minUploadedDooNum = Infinity;
-        let minUploadedDooStr = "-";
-        let maxUploadedDooNum = -1;
-        let maxUploadedDooStr = "-";
-        let newUnprintedCount = 0;
-
-        for (const item of invMap.values()) {
-          const isPrinted = (item as { status_cetak?: boolean }).status_cetak;
-          if (!isPrinted) newUnprintedCount++;
-        }
+        // 4. Calculate Progression Ranges
+        let minOra = Infinity; let maxOra = -1; let maxOraStr = "-"; let minOraStr = "-";
+        let minDoo = Infinity; let maxDoo = -1; let maxDooStr = "-"; let minDooStr = "-";
+        let min1PDoo = Infinity; let max1PDoo = -1; let max1PDooStr = "-"; let min1PDooStr = "-";
+        let min2P = Infinity; let max2P = -1; let max2PStr = "-"; let min2PStr = "-";
+        let min3P = Infinity; let max3P = -1; let max3PStr = "-"; let min3PStr = "-";
 
         for (const r of parsed) {
           const isOra = isOraCustomer(r.customerName);
@@ -1550,143 +735,99 @@ export default function Home() {
 
           if (num > 0) {
             if (isOra) {
-              if (num > maxUploadedOraNum) {
-                maxUploadedOraNum = num;
-                maxUploadedOraStr = cleanInv;
-              }
-              if (num < minUploadedOraNum) {
-                minUploadedOraNum = num;
-                minUploadedOraStr = cleanInv;
-              }
+              if (num > maxOra) { maxOra = num; maxOraStr = cleanInv; }
+              if (num < minOra) { minOra = num; minOraStr = cleanInv; }
             } else {
-              if (num > maxUploadedDooNum) {
-                maxUploadedDooNum = num;
-                maxUploadedDooStr = cleanInv;
-              }
-              if (num < minUploadedDooNum) {
-                minUploadedDooNum = num;
-                minUploadedDooStr = cleanInv;
-              }
+              if (num > maxDoo) { maxDoo = num; maxDooStr = cleanInv; }
+              if (num < minDoo) { minDoo = num; minDooStr = cleanInv; }
 
               if (kat === "1P") {
-                if (num > maxUploaded1PDooNum) {
-                  maxUploaded1PDooNum = num;
-                  maxUploaded1PDooStr = cleanInv;
-                }
-                if (num < minUploaded1PDooNum) {
-                  minUploaded1PDooNum = num;
-                  minUploaded1PDooStr = cleanInv;
-                }
+                if (num > max1PDoo) { max1PDoo = num; max1PDooStr = cleanInv; }
+                if (num < min1PDoo) { min1PDoo = num; min1PDooStr = cleanInv; }
               } else if (kat === "2P") {
-                if (num > maxUploaded2PNum) {
-                  maxUploaded2PNum = num;
-                  maxUploaded2PStr = cleanInv;
-                }
-                if (num < minUploaded2PNum) {
-                  minUploaded2PNum = num;
-                  minUploaded2PStr = cleanInv;
-                }
+                if (num > max2P) { max2P = num; max2PStr = cleanInv; }
+                if (num < min2P) { min2P = num; min2PStr = cleanInv; }
               } else if (kat === "3P") {
-                if (num > maxUploaded3PNum) {
-                  maxUploaded3PNum = num;
-                  maxUploaded3PStr = cleanInv;
-                }
-                if (num < minUploaded3PNum) {
-                  minUploaded3PNum = num;
-                  minUploaded3PStr = cleanInv;
-                }
+                if (num > max3P) { max3P = num; max3PStr = cleanInv; }
+                if (num < min3P) { min3P = num; min3PStr = cleanInv; }
               }
             }
           }
         }
 
-        let range1PDoo = existingProgression.range1PDoo || existingProgression.rangeDoo || null;
-        let prev1PDoo = existingProgression.prev1PDoo || existingProgression.prevDoo || null;
-        let new1PDoo = existingProgression.new1PDoo || existingProgression.newDoo || null;
-        if (maxUploaded1PDooNum > 0) {
-          new1PDoo = maxUploaded1PDooStr;
-          if (prev1PDooNum > 0 && maxUploaded1PDooNum > prev1PDooNum) {
-            prev1PDoo = prev1PDooStr;
-            range1PDoo = `${prev1PDooNum + 1} ➔ ${maxUploaded1PDooStr}`;
-          } else if (minUploaded1PDooNum > 0 && minUploaded1PDooNum !== maxUploaded1PDooNum) {
-            prev1PDoo = minUploaded1PDooStr;
-            range1PDoo = `${minUploaded1PDooStr} ➔ ${maxUploaded1PDooStr}`;
-          } else {
-            prev1PDoo = prev1PDooStr !== "-" ? prev1PDooStr : maxUploaded1PDooStr;
-            range1PDoo = maxUploaded1PDooStr;
-          }
-        }
-
-        let range2P = existingProgression.range2P || null;
-        let prev2P = existingProgression.prev2P || null;
-        let new2P = existingProgression.new2P || null;
-        if (maxUploaded2PNum > 0) {
-          new2P = maxUploaded2PStr;
-          if (prev2PNum > 0 && maxUploaded2PNum > prev2PNum) {
-            prev2P = prev2PStr;
-            range2P = `${prev2PNum + 1} ➔ ${maxUploaded2PStr}`;
-          } else if (minUploaded2PNum > 0 && minUploaded2PNum !== maxUploaded2PNum) {
-            prev2P = minUploaded2PStr;
-            range2P = `${minUploaded2PStr} ➔ ${maxUploaded2PStr}`;
-          } else {
-            prev2P = prev2PStr !== "-" ? prev2PStr : maxUploaded2PStr;
-            range2P = maxUploaded2PStr;
-          }
-        }
-
-        let range3P = existingProgression.range3P || null;
-        let prev3P = existingProgression.prev3P || null;
-        let new3P = existingProgression.new3P || null;
-        if (maxUploaded3PNum > 0) {
-          new3P = maxUploaded3PStr;
-          if (prev3PNum > 0 && maxUploaded3PNum > prev3PNum) {
-            prev3P = prev3PStr;
-            range3P = `${prev3PNum + 1} ➔ ${maxUploaded3PStr}`;
-          } else if (minUploaded3PNum > 0 && minUploaded3PNum !== maxUploaded3PNum) {
-            prev3P = minUploaded3PStr;
-            range3P = `${minUploaded3PStr} ➔ ${maxUploaded3PStr}`;
-          } else {
-            prev3P = prev3PStr !== "-" ? prev3PStr : maxUploaded3PStr;
-            range3P = maxUploaded3PStr;
-          }
-        }
-
-        let rangeOra = existingProgression.rangeOra || null;
-        let prevOra = existingProgression.prevOra || null;
-        let newOra = existingProgression.newOra || null;
-        if (maxUploadedOraNum > 0) {
-          newOra = maxUploadedOraStr;
-          if (prevOraNum > 0 && maxUploadedOraNum > prevOraNum) {
+        const existingProg: InvoiceProgression = loadedProgression || {};
+        let rangeOra = existingProg.rangeOra || null;
+        let prevOra = existingProg.prevOra || null;
+        let newOra = existingProg.newOra || null;
+        if (maxOra > 0) {
+          newOra = maxOraStr;
+          if (prevOraNum > 0 && maxOra > prevOraNum) {
             prevOra = prevOraStr;
-            rangeOra = `${prevOraNum + 1} ➔ ${maxUploadedOraStr}`;
-          } else if (minUploadedOraNum > 0 && minUploadedOraNum !== maxUploadedOraNum) {
-            prevOra = minUploadedOraStr;
-            rangeOra = `${minUploadedOraStr} ➔ ${maxUploadedOraStr}`;
+            rangeOra = `${prevOraNum + 1} ➔ ${maxOraStr}`;
           } else {
-            prevOra = prevOraStr !== "-" ? prevOraStr : maxUploadedOraStr;
-            rangeOra = maxUploadedOraStr;
+            prevOra = prevOraStr !== "-" ? prevOraStr : maxOraStr;
+            rangeOra = minOraStr !== maxOraStr ? `${minOraStr} ➔ ${maxOraStr}` : maxOraStr;
           }
         }
 
-        let rangeDoo = existingProgression.rangeDoo || null;
-        let prevDoo = existingProgression.prevDoo || null;
-        let newDoo = existingProgression.newDoo || null;
-        if (maxUploadedDooNum > 0) {
-          newDoo = maxUploadedDooStr;
-          if (prevDooNum > 0 && maxUploadedDooNum > prevDooNum) {
+        let rangeDoo = existingProg.rangeDoo || null;
+        let prevDoo = existingProg.prevDoo || null;
+        let newDoo = existingProg.newDoo || null;
+        if (maxDoo > 0) {
+          newDoo = maxDooStr;
+          if (prevDooNum > 0 && maxDoo > prevDooNum) {
             prevDoo = prevDooStr;
-            rangeDoo = `${prevDooNum + 1} ➔ ${maxUploadedDooStr}`;
-          } else if (minUploadedDooNum > 0 && minUploadedDooNum !== maxUploadedDooNum) {
-            prevDoo = minUploadedDooStr;
-            rangeDoo = `${minUploadedDooStr} ➔ ${maxUploadedDooStr}`;
+            rangeDoo = `${prevDooNum + 1} ➔ ${maxDooStr}`;
           } else {
-            prevDoo = prevDooStr !== "-" ? prevDooStr : maxUploadedDooStr;
-            rangeDoo = maxUploadedDooStr;
+            prevDoo = prevDooStr !== "-" ? prevDooStr : maxDooStr;
+            rangeDoo = minDooStr !== maxDooStr ? `${minDooStr} ➔ ${maxDooStr}` : maxDooStr;
+          }
+        }
+
+        let range1PDoo = existingProg.range1PDoo || null;
+        let prev1PDoo = existingProg.prev1PDoo || null;
+        let new1PDoo = existingProg.new1PDoo || null;
+        if (max1PDoo > 0) {
+          new1PDoo = max1PDooStr;
+          if (prev1PDooNum > 0 && max1PDoo > prev1PDooNum) {
+            prev1PDoo = prev1PDooStr;
+            range1PDoo = `${prev1PDooNum + 1} ➔ ${max1PDooStr}`;
+          } else {
+            prev1PDoo = prev1PDooStr !== "-" ? prev1PDooStr : max1PDooStr;
+            range1PDoo = min1PDooStr !== max1PDooStr ? `${min1PDooStr} ➔ ${max1PDooStr}` : max1PDooStr;
+          }
+        }
+
+        let range2P = existingProg.range2P || null;
+        let prev2P = existingProg.prev2P || null;
+        let new2P = existingProg.new2P || null;
+        if (max2P > 0) {
+          new2P = max2PStr;
+          if (prev2PNum > 0 && max2P > prev2PNum) {
+            prev2P = prev2PStr;
+            range2P = `${prev2PNum + 1} ➔ ${max2PStr}`;
+          } else {
+            prev2P = prev2PStr !== "-" ? prev2PStr : max2PStr;
+            range2P = min2PStr !== max2PStr ? `${min2PStr} ➔ ${max2PStr}` : max2PStr;
+          }
+        }
+
+        let range3P = existingProg.range3P || null;
+        let prev3P = existingProg.prev3P || null;
+        let new3P = existingProg.new3P || null;
+        if (max3P > 0) {
+          new3P = max3PStr;
+          if (prev3PNum > 0 && max3P > prev3PNum) {
+            prev3P = prev3PStr;
+            range3P = `${prev3PNum + 1} ➔ ${max3PStr}`;
+          } else {
+            prev3P = prev3PStr !== "-" ? prev3PStr : max3PStr;
+            range3P = min3PStr !== max3PStr ? `${min3PStr} ➔ ${max3PStr}` : max3PStr;
           }
         }
 
         const progObj: InvoiceProgression = {
-          ...existingProgression,
+          ...existingProg,
           prev1PDoo,
           new1PDoo,
           range1PDoo,
@@ -1705,2673 +846,752 @@ export default function Home() {
           updatedAt: new Date().toLocaleTimeString("id-ID"),
         };
 
-        // 1. INSTANT LOCAL STATE UPDATE
+        // 5. Update Local State Instantly
         const { records: localRecs, printedSet: localPrintedSet, printedAtMap: localPrintedAtMap } = dbRowsToFakturRecords(
           payload as unknown as Array<Record<string, unknown>>
         );
 
         setRecords(localRecs);
-        const mergedPrintedSet = new Set([...currentActivePrintedSet, ...localPrintedSet]);
-        const mergedPrintedMap = { ...currentActivePrintedAtMap, ...localPrintedAtMap };
-
-        // Only genuinely new unprinted invoices from this upload batch are removed from the printed set
-        newUnprintedKeyList.forEach((k) => {
-          mergedPrintedSet.delete(k);
-          delete mergedPrintedMap[k];
-        });
-
-        // Retain recent local toggles (< 10s old) to prevent any toggle from being dropped
-        recentTogglesRef.current.forEach((val, key) => {
-          if (!newUnprintedKeyList.includes(key)) {
-            if (val.printed) {
-              mergedPrintedSet.add(key);
-              if (!mergedPrintedMap[key]) mergedPrintedMap[key] = new Date(val.time).toISOString();
-            } else {
-              mergedPrintedSet.delete(key);
-              delete mergedPrintedMap[key];
-            }
-          }
-        });
-
-        setPrintedInvoices(mergedPrintedSet);
-        setPrintedAtMap(mergedPrintedMap);
+        setPrintedInvoices(localPrintedSet);
+        setPrintedAtMap(localPrintedAtMap);
         setInvoiceProgression(progObj);
 
-        // 2. FIRESTORE SYNC
+        // 6. Save to Firestore
         await saveFaktursBatch(
-          payload as FirestoreFakturDoc[],
+          payload,
           progObj,
           {
-            printedKeys: Array.from(mergedPrintedSet),
-            printedAtMap: mergedPrintedMap,
+            printedKeys: Array.from(localPrintedSet),
+            printedAtMap: localPrintedAtMap,
             updatedAt: new Date().toISOString(),
           },
-          newUnprintedKeyList
+          newUnprintedKeys
         );
-
-        // 3. GOOGLE SHEETS BACKUP — kirim HANYA faktur yang benar-benar baru ke Google Sheets
-        // (mencegah penumpukan duplikat puluhan ribu baris setiap kali upload file export kumulatif)
-        if (newGSheetKeys.size > 0) {
-          const newFaktursForGSheet = (payload as FirestoreFakturDoc[]).filter(
-            (f) => newGSheetKeys.has(f.id || f.no_faktur)
-          );
-          const gsheetPrintState = {
-            printedKeys: Array.from(mergedPrintedSet),
-            printedAtMap: mergedPrintedMap,
-            updatedAt: new Date().toISOString(),
-          };
-          try {
-            const result = await appendNewToGSheet(newFaktursForGSheet, gsheetPrintState);
-            if (result.success) {
-              console.log(`✅ GSheet backup: ${result.count} faktur baru ditambahkan ke Google Sheet.`);
-            } else {
-              console.warn("⚠️ GSheet backup gagal:", result.error);
-            }
-          } catch (err) {
-            console.warn("⚠️ GSheet backup error:", err);
-          }
-        }
 
         setUploadNotification({
           fileName: fileNames.join(", "),
           prevOra,
-          maxOra: maxUploadedOraStr,
+          maxOra: maxOraStr,
           rangeOra,
           prevDoo,
-          maxDoo: maxUploadedDooStr,
+          maxDoo: maxDooStr,
           rangeDoo,
           totalItems: parsed.length,
           totalInvoices: invMap.size,
-          newUnprinted: newUnprintedCount,
+          newUnprinted: newUnprintedKeys.length,
           time: new Date().toLocaleTimeString("id-ID"),
         });
 
-        setUploadedFiles((prev) => [
-          ...prev,
-          ...files.map((f) => ({
-            name: f.name,
-            count: parsed.length,
-            time: new Date().toLocaleString("id-ID"),
-          })),
-        ]);
         setPage(0);
-      } catch (e) {
-        console.error("Upload error:", e);
-        setError(e instanceof Error ? e.message : "Gagal membaca file.");
+        showToast(`✓ Berhasil mengupload ${parsed.length} baris data!`);
+      } catch (err) {
+        console.error("Upload error:", err);
+        setError(err instanceof Error ? err.message : "Gagal memproses file upload.");
       } finally {
         isUploadingRef.current = false;
         setLoading(false);
       }
-
     },
     []
   );
 
-  const onDrop = useCallback(
-    (e: React.DragEvent) => {
-      e.preventDefault();
-      setDragOver(false);
-      if (IS_SYSTEM_UPDATING) {
-        alert("⚠️ SISTEM SEDANG DALAM PROSES UPDATE & OPTIMASI PERFORMA.\n\nMohon jangan upload file apapun dulu yaa hingga pembaruan selesai.");
-        return;
-      }
-      const files = Array.from(e.dataTransfer.files || []);
-      if (files.length > 0) handleUpload(files);
-    },
-    [handleUpload]
-  );
-
-  const onFileInput = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      if (IS_SYSTEM_UPDATING) {
-        alert("⚠️ SISTEM SEDANG DALAM PROSES UPDATE & OPTIMASI PERFORMA.\n\nMohon jangan upload file apapun dulu yaa hingga pembaruan selesai.");
-        e.target.value = "";
-        return;
-      }
-      const files = e.target.files ? Array.from(e.target.files) : [];
-      if (files.length > 0) handleUpload(files);
-      e.target.value = "";
-    },
-    [handleUpload]
-  );
-
-  const clearAll = async () => {
-    if (!confirm("Yakin ingin menghapus semua data? Data di database cloud juga akan terhapus.")) return;
-    setLoading(true);
-    setRecords([]);
-    setUploadedFiles([]);
-    setPrintedInvoices(new Set());
-    setExpandedInvoices(new Set());
-    setPrintedAtMap({});
-    setFilter("all");
-    setKatFilter("all");
-    setJenisFilter("all");
-    setSearch("");
-    setPage(0);
-    setInvoiceProgression(null);
-    latestDBDocsRef.current = [];
-    latestProgressionRef.current = null;
-    latestPrintStateRef.current = null;
-    try {
-      localStorage.removeItem("records");
-      localStorage.removeItem("uploadedFiles");
-      localStorage.removeItem("printedInvoices");
-      localStorage.removeItem("printedAtMap");
-      localStorage.removeItem("invoiceProgression");
-    } catch {}
-
-    await clearAllFakturs();
-    setLoading(false);
-  };
-
-  // 1. Heavy grouping and sorting - ONLY runs when records, sortBy, or sortOrder change!
-  const baseGrouped = useMemo<FakturGroup[]>(() => {
-    const map: Record<string, FakturRecord[]> = {};
-    for (const r of records) {
-      const gKey = r.invoiceKey || r.invoiceNumber;
-      if (!map[gKey]) map[gKey] = [];
-      map[gKey].push(r);
-    }
-
-    // Detect double invoices per individual SO
-    const soInvMap: Record<string, Set<string>> = {};
-    for (const r of records) {
-      if (r.orderNumber && r.orderNumber !== "-") {
-        r.orderNumber.split(",").forEach((s) => {
-          const cleanSO = s.trim();
-          if (cleanSO && cleanSO !== "-") {
-            if (!soInvMap[cleanSO]) soInvMap[cleanSO] = new Set();
-            if (r.invoiceNumber && r.invoiceNumber !== "0" && r.invoiceNumber !== "-") {
-              soInvMap[cleanSO].add(r.invoiceNumber);
-            }
-          }
-        });
-      }
-    }
-
-    return Object.entries(map)
-      .map(([key, items]) => {
-        const invNum = items[0].invoiceNumber;
-        const invKey = items[0].invoiceKey;
-        const soList: string[] = [];
-        items.forEach((i) => {
-          if (i.orderNumber && i.orderNumber !== "-") {
-            i.orderNumber.split(",").forEach((s) => {
-              const cleanSO = s.trim();
-              if (cleanSO && cleanSO !== "-" && !soList.includes(cleanSO)) {
-                soList.push(cleanSO);
-              }
-            });
-          }
-        });
-
-        let finalSoList = soList;
-        const realSOs = soList.filter((s) => s.length >= 5 || s.includes("-"));
-        if (realSOs.length > 0) {
-          finalSoList = realSOs;
-        }
-
-        const isOra = items[0].jenisTransaksi === "ORA";
-        const soStr = finalSoList.length > 0
-          ? (isOra ? finalSoList[0] : finalSoList.join(", "))
-          : "-";
-        const isDouble = soList.some((s) => (soInvMap[s]?.size || 0) > 1);
-
-        const catCounts: Record<string, number> = {};
-        let hasPrekursor = false;
-        let hasOOT = false;
-        let hasCCP = false;
-        let hasAlkes = false;
-        let hasFarma = false;
-
-        items.forEach((i) => {
-          const itemCat = (i.kategoriProduk || getProductCategory(i.itemCode, i.itemDescription) || "FARMA").toUpperCase();
-          if (itemCat === "PREKURSOR") hasPrekursor = true;
-          else if (itemCat === "OOT") hasOOT = true;
-          else if (itemCat === "CCP") hasCCP = true;
-          else if (itemCat === "ALKES") hasAlkes = true;
-          else hasFarma = true;
-
-          catCounts[itemCat] = (catCounts[itemCat] || 0) + 1;
-        });
-
-        // Tentukan kategori dominan: kategori dengan jumlah item terbanyak (paling dominan di SO/faktur ini)
-        const prioOrder = ["PREKURSOR", "OOT", "CCP", "ALKES", "FARMA"];
-        let dominantCategory = "FARMA";
-        let maxCount = -1;
-        for (const [cat, count] of Object.entries(catCounts)) {
-          if (count > maxCount) {
-            maxCount = count;
-            dominantCategory = cat;
-          } else if (count === maxCount && count > 0) {
-            // Jika jumlah item sama persis (seri), pilih prioritas regulasi yang lebih tinggi
-            const currPrio = prioOrder.indexOf(dominantCategory);
-            const candPrio = prioOrder.indexOf(cat);
-            if (candPrio !== -1 && (currPrio === -1 || candPrio < currPrio)) {
-              dominantCategory = cat;
-            }
-          }
-        }
-
-        return {
-          key,
-          invoiceNumber: invNum,
-          invoiceKey: invKey,
-          so: soStr || items[0].orderNumber,
-          items,
-          orderDate: items[0].orderDate,
-          jenisTransaksi: items[0].jenisTransaksi,
-          customerName: items[0].customerName,
-          kategori: items[0].kategori,
-          kategoriProduk: dominantCategory,
-          kategoriProdukCounts: catCounts,
-          hasPrekursor,
-          hasOOT,
-          hasCCP,
-          hasAlkes,
-          hasFarma,
-          isDoubleInv: isDouble,
-          totalHarga: items.reduce((sum, i) => sum + i.totalHarga, 0),
-          totalItems: items.length,
-          allPrinted: false,
-          anyPrinted: false,
-          printedAt: null,
-        };
-      })
-      .sort((a, b) => {
-        let diff = 0;
-        if (sortBy === "date") {
-          diff = parseDateMs(a.orderDate) - parseDateMs(b.orderDate);
-          if (diff === 0) diff = parseInvNum(a.invoiceNumber) - parseInvNum(b.invoiceNumber);
-        } else if (sortBy === "totalHarga") {
-          diff = a.totalHarga - b.totalHarga;
-          if (diff === 0) diff = parseInvNum(a.invoiceNumber) - parseInvNum(b.invoiceNumber);
-        } else {
-          // Default: Sort by Invoice Number
-          const invA = parseInvNum(a.invoiceNumber);
-          const invB = parseInvNum(b.invoiceNumber);
-          diff = invA !== invB ? invA - invB : parseDateMs(a.orderDate) - parseDateMs(b.orderDate);
-        }
-        return sortOrder === "desc" ? -diff : diff;
-      });
-  }, [records, sortBy, sortOrder]);
-
-  // 2. Ultra-lightweight print status mapping (< 1ms, reuses objects when unchanged)
-  const grouped = useMemo<FakturGroup[]>(() => {
-    return baseGrouped.map((g) => {
-      const isPrinted = printedInvoices.has(g.invoiceKey);
-      const pAt = printedAtMap[g.invoiceKey] || null;
-      if (g.allPrinted === isPrinted && g.printedAt === pAt) {
-        return g;
-      }
-      return {
-        ...g,
-        allPrinted: isPrinted,
-        anyPrinted: isPrinted,
-        printedAt: pAt,
-      };
-    });
-  }, [baseGrouped, printedInvoices, printedAtMap]);
-
-  const highestInvoices = useMemo(() => {
-    let max1POra = { invoiceNumber: "-", totalHarga: 0, orderDate: "-", isPrinted: false, customerName: "", jenisTransaksi: "ORA" };
-    let max1PDoo = { invoiceNumber: "-", totalHarga: 0, orderDate: "-", isPrinted: false, customerName: "", jenisTransaksi: "DOO" };
-    let max2P = { invoiceNumber: "-", totalHarga: 0, orderDate: "-", isPrinted: false, customerName: "", jenisTransaksi: "2P" };
-    let max3P = { invoiceNumber: "-", totalHarga: 0, orderDate: "-", isPrinted: false, customerName: "", jenisTransaksi: "3P" };
-
-    let max1POraNum = -1;
-    let max1PDooNum = -1;
-    let max2PNum = -1;
-    let max3PNum = -1;
-
-    for (const g of grouped) {
-      const num = parseInvNum(g.invoiceNumber);
-      if (num <= 0) continue;
-
-      const itemInfo = {
-        invoiceNumber: g.invoiceNumber,
-        totalHarga: g.totalHarga,
-        orderDate: g.orderDate,
-        isPrinted: g.allPrinted,
-        customerName: g.customerName,
-        jenisTransaksi: g.jenisTransaksi,
-      };
-
-      const isOra = isOraCustomer(g.customerName);
-      if (isOra) {
-        if (num > max1POraNum) {
-          max1POraNum = num;
-          max1POra = itemInfo;
-        }
-      } else {
-        if (g.kategori === "1P" && num > max1PDooNum) {
-          max1PDooNum = num;
-          max1PDoo = itemInfo;
-        } else if (g.kategori === "2P" && num > max2PNum) {
-          max2PNum = num;
-          max2P = itemInfo;
-        } else if (g.kategori === "3P" && num > max3PNum) {
-          max3PNum = num;
-          max3P = itemInfo;
-        }
-      }
-    }
-
-    return {
-      max1POra,
-      max1PDoo,
-      max2P,
-      max3P,
-    };
-  }, [grouped]);
-
-  const availableDates = useMemo(() => {
-    const set = new Set<string>();
-    for (const r of records) {
-      if (r.orderDate && r.orderDate !== "-") set.add(r.orderDate);
-    }
-    return Array.from(set).sort((a, b) => parseDateMs(b) - parseDateMs(a));
-  }, [records]);
-
-  const isGlobalSearchActive = Boolean(search.trim());
-
-  const filtered = useMemo(() => {
-    // 1. JIKA KOTAK PENCARIAN DIISI:
-    // Langsung lakukan GLOBAL SEARCH ke seluruh database (bypass tab & filter lain agar no SO/Inv selalu ketemu)
-    if (search.trim()) {
-      const s = search.toLowerCase().trim();
-      return grouped.filter(
-        (g) =>
-          g.so.toLowerCase().includes(s) ||
-          g.invoiceNumber.toLowerCase().includes(s) ||
-          g.customerName.toLowerCase().includes(s) ||
-          (g.kategoriProduk && g.kategoriProduk.toLowerCase().includes(s)) ||
-          g.items.some(
-            (i) =>
-              i.itemDescription.toLowerCase().includes(s) ||
-              i.itemCode.toLowerCase().includes(s) ||
-              (i.kategoriProduk && i.kategoriProduk.toLowerCase().includes(s)) ||
-              (i.klasifikasiObat && i.klasifikasiObat.toLowerCase().includes(s))
-          )
-      );
-    }
-
-    // 2. JIKA KOTAK PENCARIAN KOSONG: Terapkan filter tab & dropdown normal
-    let result = grouped;
-
-    // Filter Status (Belum / Sudah / Double)
-    if (filter === "belum") {
-      result = result.filter(
-        (g) => !g.allPrinted || sessionPrintedKeys.has(g.invoiceKey)
-      );
-    } else if (filter === "sudah") {
-      result = result.filter((g) => g.allPrinted);
-    } else if (filter === "double") {
-      result = result.filter((g) => g.isDoubleInv);
-    }
-
-    // Filter Tanggal
-    if (dateFilter !== "all") {
-      result = result.filter((g) => g.orderDate === dateFilter);
-    }
-
-    // Filter Kategori (1P / 2P / 3P)
-    if (katFilter !== "all") {
-      result = result.filter((g) => g.kategori === katFilter);
-    }
-
-    // Filter Jenis Transaksi (ORA / DOO)
-    if (jenisFilter !== "all") {
-      result = result.filter((g) => g.jenisTransaksi === jenisFilter);
-    }
-
-    // Filter Klasifikasi Obat
-    if (klasFilter === "prekursor") result = result.filter((g) => g.hasPrekursor);
-    else if (klasFilter === "oot") result = result.filter((g) => g.hasOOT);
-    else if (klasFilter === "ccp") result = result.filter((g) => g.hasCCP);
-    else if (klasFilter === "alkes") result = result.filter((g) => g.hasAlkes);
-    else if (klasFilter === "farma") result = result.filter((g) => g.hasFarma);
-
-    return result;
-  }, [grouped, filter, katFilter, jenisFilter, klasFilter, dateFilter, search, sessionPrintedKeys]);
-
-  const totalPages = Math.ceil(filtered.length / ROWS_PER_PAGE);
-  const pageData = filtered.slice(page * ROWS_PER_PAGE, (page + 1) * ROWS_PER_PAGE);
-
-  const unprintedCountInFiltered = useMemo(() => {
-    return filtered.filter(
-      (g) => !g.allPrinted && g.invoiceNumber && g.invoiceNumber !== "0" && g.invoiceNumber !== "-"
-    ).length;
-  }, [filtered]);
-
-  // Mark All As Printed (Tandai Semua Selesai)
-  const handleMarkAllPrinted = useCallback(async () => {
-    const unprintedInView = filtered.filter(
-      (g) => !g.allPrinted && g.invoiceNumber && g.invoiceNumber !== "0" && g.invoiceNumber !== "-"
-    );
-
-    if (unprintedInView.length === 0) {
-      alert("Semua faktur yang tampil sudah berstatus Selesai Terprint.");
+  // Clear / Reset All Data
+  const handleClearAll = async () => {
+    if (!confirm("⚠️ YAKIN INGIN MENGHAPUS SEMUA DATA?\n\nSemua data faktur dan riwayat status cetak di database cloud akan direset seperti semula.")) {
       return;
     }
 
-    const confirmMsg = `Yakin ingin menandai ${unprintedInView.length} faktur yang tampil sebagai SUDAH TERPRINT?`;
-    if (!confirm(confirmMsg)) return;
-
-    const nowIso = new Date().toISOString();
-    const targetKeys = unprintedInView.map((g) => g.invoiceKey);
-
-    // 1. Optimistic Update Local State
-    setPrintedInvoices((prev) => {
-      const next = new Set(prev);
-      targetKeys.forEach((k) => next.add(k));
-      return next;
-    });
-
-    setSessionPrintedKeys((prev) => {
-      const sNext = new Set(prev);
-      targetKeys.forEach((k) => sNext.add(k));
-      return sNext;
-    });
-
-    setPrintedAtMap((prev) => {
-      const nextMap = { ...prev };
-      targetKeys.forEach((k) => {
-        nextMap[k] = nowIso;
-      });
-      return nextMap;
-    });
-
-    // 2. Batch Update to Firestore Cloud DB
+    setLoading(true);
     try {
-      setLoading(true);
-      await updateFaktursPrintStatusBatch(targetKeys, true, nowIso);
-      await updateGSheetPrintStatusBatch(targetKeys, true, nowIso);
-      setCopyToast(`✓ Berhasil menandai ${targetKeys.length} faktur selesai diprint!`);
-      setTimeout(() => setCopyToast(null), 3500);
+      await clearAllFakturs();
+      setRecords([]);
+      setPrintedInvoices(new Set());
+      setPrintedAtMap({});
+      setInvoiceProgression(null);
+      setUploadNotification(null);
+      setExpandedInvoices(new Set());
+      setPage(0);
+      showToast("✓ Seluruh data berhasil direset.");
     } catch (err) {
-      console.error("Gagal update batch print ke Firestore:", err);
-      alert("Terjadi kesalahan saat menyimpan status ke database cloud.");
+      console.error("Clear error:", err);
+      alert("Gagal mereset data di database.");
     } finally {
       setLoading(false);
     }
-  }, [filtered]);
+  };
 
-  useEffect(() => {
-    setPage(0);
-    setSelectedRowIndex(0);
-  }, [filter, katFilter, jenisFilter, klasFilter, dateFilter, search, sortBy, sortOrder]);
-
-  // Clamp selection on page change
-  useEffect(() => {
-    setSelectedRowIndex((prev) => Math.min(Math.max(0, prev), Math.max(0, pageData.length - 1)));
-  }, [page, pageData.length]);
-
-  // Auto-scroll active row into view instantly (0ms delay)
-  useEffect(() => {
-    if (pageData.length === 0) return;
-    const rowEl = document.getElementById(`faktur-row-${selectedRowIndex}`);
-    if (rowEl) {
-      rowEl.scrollIntoView({ block: "nearest", behavior: "auto" });
-    }
-  }, [selectedRowIndex, pageData.length]);
-
-  // Keyboard navigation listener (Spreadsheet-like)
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement;
-      if (
-        target &&
-        (target.tagName === "INPUT" ||
-          target.tagName === "TEXTAREA" ||
-          target.isContentEditable)
-      ) {
-        return;
-      }
-
-      if (pageData.length === 0) return;
-
-      if (e.key === "ArrowDown") {
-        e.preventDefault();
-        setSelectedRowIndex((prev) => {
-          if (prev < pageData.length - 1) return prev + 1;
-          if (page < totalPages - 1) {
-            setPage((p) => p + 1);
-            return 0;
-          }
-          return prev;
-        });
-      } else if (e.key === "ArrowUp") {
-        e.preventDefault();
-        setSelectedRowIndex((prev) => {
-          if (prev > 0) return prev - 1;
-          if (page > 0) {
-            setPage((p) => p - 1);
-            return ROWS_PER_PAGE - 1;
-          }
-          return prev;
-        });
-      } else if (e.key === "ArrowRight") {
-        e.preventDefault();
-        setSelectedColIdx((prev) => Math.min(10, prev + 1));
-      } else if (e.key === "ArrowLeft") {
-        e.preventDefault();
-        setSelectedColIdx((prev) => Math.max(0, prev - 1));
-      } else if (e.key === " " || e.code === "Space") {
-        e.preventDefault();
-        if (target && target.tagName === "BUTTON") {
-          target.blur();
-        }
-        const currentGroup = pageData[selectedRowIndex];
-        if (
-          currentGroup &&
-          currentGroup.invoiceNumber &&
-          currentGroup.invoiceNumber !== "0" &&
-          currentGroup.invoiceNumber !== "-"
-        ) {
-          togglePrint(currentGroup);
-        }
-      } else if (e.key === "Enter") {
-        e.preventDefault();
-        const currentGroup = pageData[selectedRowIndex];
-        if (currentGroup) {
-          toggleExpand(currentGroup.key);
-        }
-      } else if (e.key === "PageDown" || e.key === "]") {
-        e.preventDefault();
-        setPage((p) => Math.min(totalPages - 1, p + 1));
-      } else if (e.key === "PageUp" || e.key === "[") {
-        e.preventDefault();
-        setPage((p) => Math.max(0, p - 1));
-      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "c") {
-        const selection = window.getSelection()?.toString();
-        if (!selection) {
-          e.preventDefault();
-          const currentGroup = pageData[selectedRowIndex];
-          if (currentGroup) {
-            let textToCopy = "";
-            switch (selectedColIdx) {
-              case 0: // Expand / Whole row
-                textToCopy = [
-                  currentGroup.allPrinted ? "✓" : "○",
-                  currentGroup.so,
-                  currentGroup.invoiceNumber,
-                  currentGroup.kategoriProduk || "-",
-                  currentGroup.jenisTransaksi,
-                  currentGroup.customerName,
-                  currentGroup.orderDate,
-                  currentGroup.kategori,
-                  currentGroup.printedAt ? formatPrintTime(currentGroup.printedAt) : "-",
-                  currentGroup.totalHarga,
-                ].join("\t");
-                break;
-              case 1: // Print status
-                textToCopy = currentGroup.allPrinted ? "Sudah Terprint" : "Belum Terprint";
-                break;
-              case 2: // No SO
-                textToCopy = currentGroup.so;
-                break;
-              case 3: // No Invoice
-                textToCopy = currentGroup.invoiceNumber;
-                break;
-              case 4: // Kategori Produk
-                textToCopy = currentGroup.kategoriProduk || "-";
-                break;
-              case 5: // Jenis Transaksi
-                textToCopy = currentGroup.jenisTransaksi;
-                break;
-              case 6: // Pelanggan
-                textToCopy = currentGroup.customerName;
-                break;
-              case 7: // Order Date
-                textToCopy = currentGroup.orderDate;
-                break;
-              case 8: // Kategori 1P/2P/3P
-                textToCopy = currentGroup.kategori;
-                break;
-              case 9: // Done Print
-                textToCopy = currentGroup.printedAt ? formatPrintTime(currentGroup.printedAt) : "-";
-                break;
-              case 10: // Total Harga
-                textToCopy = String(currentGroup.totalHarga);
-                break;
-              default:
-                textToCopy = currentGroup.invoiceNumber || currentGroup.so;
-            }
-
-            if (textToCopy) {
-              navigator.clipboard.writeText(textToCopy);
-              const preview = textToCopy.length > 35 ? textToCopy.slice(0, 35) + "..." : textToCopy;
-              setCopyToast(`📋 Disalin: ${preview}`);
-              setTimeout(() => setCopyToast(null), 2500);
-            }
-          }
-        }
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [pageData, selectedRowIndex, selectedColIdx, page, totalPages, togglePrint, toggleExpand]);
-
-  const summary = useMemo(() => {
-    const uniqueInvoices = new Set(
-      records.map((r) => r.invoiceKey).filter((k) => k && k !== "0" && k !== "-")
-    );
-    const uniqueSO = new Set<string>();
-    records.forEach((r) => {
-      if (r.orderNumber && r.orderNumber !== "-") {
-        r.orderNumber.split(",").forEach((s) => {
-          const cleanSO = s.trim();
-          if (cleanSO && cleanSO !== "-") {
-            uniqueSO.add(cleanSO);
-          }
-        });
-      }
-    });
-
-    const belumTerprint = [...uniqueInvoices].filter(
-      (key) => !printedInvoices.has(key)
-    ).length;
-    const sudahTerprint = [...uniqueInvoices].filter((key) =>
-      printedInvoices.has(key)
-    ).length;
-    const doubleInv = grouped.filter((g) => g.isDoubleInv).length;
-    const totalHarga = records.reduce((sum, r) => sum + r.totalHarga, 0);
-
-    return {
-      totalInvoices: uniqueInvoices.size,
-      totalSO: uniqueSO.size,
-      totalItems: records.length,
-      belumTerprint,
-      sudahTerprint,
-      doubleInv,
-      totalHarga,
-    };
-  }, [records, printedInvoices, grouped]);
-
-  const exportToExcel = useCallback(() => {
-    if (records.length === 0 && grouped.length === 0) {
-      alert("Tidak ada data untuk diekspor.");
+  // Export to Excel (Ascending order)
+  const handleExportExcel = () => {
+    if (filtered.length === 0) {
+      alert("Tidak ada data faktur untuk diekspor.");
       return;
     }
 
-    // Sheet 1: Rekap Faktur (Diurutkan nomor faktur ascending)
-    const sortedGroups = [...grouped].sort((a, b) => {
-      const invA = parseInvNum(a.invoiceNumber);
-      const invB = parseInvNum(b.invoiceNumber);
-      if (invA > 0 && invB > 0 && invA !== invB) return invA - invB;
-      if (invA > 0 && invB <= 0) return -1;
-      if (invB > 0 && invA <= 0) return 1;
-      return parseDateMs(a.orderDate) - parseDateMs(b.orderDate);
+    const sortedForExport = [...filtered].sort((a, b) => {
+      const na = parseInvNum(a.invoiceNumber);
+      const nb = parseInvNum(b.invoiceNumber);
+      return na - nb; // Ascending
     });
 
-    const rekapFakturData = sortedGroups.map((g, idx) => ({
-      "No": idx + 1,
-      "Order Date": g.orderDate || "-",
-      "No Invoice": g.invoiceNumber || "Menunggu Faktur",
-      "No SO": g.so || "-",
-      "Kategori Produk": g.kategoriProduk || "-",
-      "Jenis Transaksi": g.jenisTransaksi || "-",
-      "Kategori": g.kategori || "-",
-      "Pelanggan": g.customerName || "-",
+    const rows = sortedForExport.map((g, idx) => ({
+      No: idx + 1,
+      "No SO": g.so,
+      "No Invoice": g.invoiceNumber,
+      "Kat Produk": g.kategoriProduk,
+      "Jenis Transaksi": g.jenisTransaksi,
+      Pelanggan: g.customerName,
+      "Tanggal Order": g.orderDate,
+      Kategori: g.kategori,
       "Status Cetak": g.allPrinted ? "Sudah Terprint" : "Belum Terprint",
-      "Waktu Selesai Cetak": g.printedAt ? formatPrintTime(g.printedAt) : "-",
-      "Jumlah Item": g.totalItems || g.items.length || 1,
+      "Waktu Cetak": g.allPrinted && g.printedAt ? formatPrintTime(g.printedAt) : "-",
       "Total Harga": g.totalHarga,
     }));
 
-    // Sheet 2: Rekap per Sales Order (100% Seluruh SO Pasti Masuk Satu per Satu)
-    const soMap = new Map<string, FakturRecord[]>();
-    for (const r of records) {
-      const soKey = String(r.orderNumber || "").trim() || (r.invoiceNumber ? `INV-${r.invoiceNumber}` : `ROW-${r.rowIndex}`);
-      if (!soMap.has(soKey)) soMap.set(soKey, []);
-      soMap.get(soKey)!.push(r);
-    }
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Faktur Tracker");
+    XLSX.writeFile(wb, `Faktur_Tracker_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  };
 
-    const sortedSORows = Array.from(soMap.entries()).map(([soKey, items]) => {
-      const invList = [...new Set(items.map((i) => i.invoiceNumber).filter((x) => x && x !== "0" && x !== "-"))];
-      const invKeyList = [...new Set(items.map((i) => i.invoiceKey).filter(Boolean))];
-      const isPrinted = invKeyList.some((k) => printedInvoices.has(k));
-      const pAt = invKeyList.map((k) => printedAtMap[k]).find(Boolean) || null;
-
-      const catCounts: Record<string, number> = {};
-      items.forEach((i) => {
-        const itemCat = (i.kategoriProduk || getProductCategory(i.itemCode, i.itemDescription) || "FARMA").toUpperCase();
-        catCounts[itemCat] = (catCounts[itemCat] || 0) + 1;
-      });
-
-      const prioOrder = ["PREKURSOR", "OOT", "CCP", "ALKES", "FARMA"];
-      let dominantCategory = "FARMA";
-      let maxCount = -1;
-      for (const [cat, count] of Object.entries(catCounts)) {
-        if (count > maxCount) {
-          maxCount = count;
-          dominantCategory = cat;
-        } else if (count === maxCount && count > 0) {
-          const currPrio = prioOrder.indexOf(dominantCategory);
-          const candPrio = prioOrder.indexOf(cat);
-          if (candPrio !== -1 && (currPrio === -1 || candPrio < currPrio)) {
-            dominantCategory = cat;
-          }
-        }
-      }
-
-      return {
-        soNumber: items[0].orderNumber || soKey,
-        invoiceNumber: invList.length > 0 ? invList.join(", ") : "Menunggu Faktur",
-        orderDate: items[0].orderDate || "-",
-        kategoriProduk: dominantCategory,
-        jenisTransaksi: items[0].jenisTransaksi || "-",
-        kategori: items[0].kategori || "3P",
-        customerName: items[0].customerName || "-",
-        isPrinted,
-        printedAt: pAt,
-        totalItems: items.length,
-        totalHarga: items.reduce((sum, i) => sum + (Number(i.totalHarga) || 0), 0),
-      };
-    }).sort((a, b) => {
-      return a.soNumber.localeCompare(b.soNumber, undefined, { numeric: true });
+  const toggleExpand = (key: string) => {
+    setExpandedInvoices((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
     });
-
-    const rekapSOData = sortedSORows.map((s, idx) => ({
-      "No": idx + 1,
-      "Order Date": s.orderDate,
-      "No SO": s.soNumber,
-      "No Invoice": s.invoiceNumber,
-      "Kategori Produk": s.kategoriProduk,
-      "Jenis Transaksi": s.jenisTransaksi,
-      "Kategori": s.kategori,
-      "Pelanggan": s.customerName,
-      "Status Cetak": s.isPrinted ? "Sudah Terprint" : "Belum Terprint",
-      "Waktu Selesai Cetak": s.printedAt ? formatPrintTime(s.printedAt) : "-",
-      "Jumlah Item": s.totalItems,
-      "Total Harga SO": s.totalHarga,
-    }));
-
-    // Sheet 3: Detail Rincian Barang per Baris (Semua Item dari Seluruh SO)
-    const detailItemsData: Array<Record<string, unknown>> = [];
-    let itemIdx = 1;
-    for (const r of records) {
-      const hasInv = r.invoiceNumber && r.invoiceNumber !== "0" && r.invoiceNumber !== "-";
-      detailItemsData.push({
-        "No": itemIdx++,
-        "No SO": r.orderNumber || "-",
-        "No Invoice": hasInv ? r.invoiceNumber : "Menunggu Faktur",
-        "Kode Barang": r.itemCode || "-",
-        "Kategori Produk": r.kategoriProduk || getProductCategory(r.itemCode, r.itemDescription) || "FARMA",
-        "Nama Barang / Deskripsi": r.itemDescription || "-",
-        "Qty": r.qty,
-        "UOM": r.uom || "-",
-        "LOT / Batch Number": r.lotNumber || "-",
-        "Total Harga Barang": r.totalHarga,
-        "Pelanggan": r.customerName || "-",
-        "Order Date": r.orderDate || "-",
-        "Jenis Transaksi": r.jenisTransaksi || "-",
-        "Kategori": r.kategori || "-",
-        "Status Cetak": printedInvoices.has(r.invoiceKey) ? "Sudah Terprint" : "Belum Terprint",
-      });
-    }
-
-    const workbook = XLSX.utils.book_new();
-
-    // 1. Append Sheet Rekap Faktur
-    const wsRekap = XLSX.utils.json_to_sheet(rekapFakturData);
-    wsRekap["!cols"] = [
-      { wch: 6 },  // No
-      { wch: 14 }, // Order Date
-      { wch: 16 }, // No Invoice
-      { wch: 20 }, // No SO
-      { wch: 20 }, // Kategori Produk
-      { wch: 16 }, // Jenis Transaksi
-      { wch: 10 }, // Kategori
-      { wch: 35 }, // Pelanggan
-      { wch: 18 }, // Status Cetak
-      { wch: 22 }, // Waktu Selesai Cetak
-      { wch: 14 }, // Jumlah Item
-      { wch: 18 }, // Total Harga
-    ];
-    XLSX.utils.book_append_sheet(workbook, wsRekap, "Rekap Faktur");
-
-    // 2. Append Sheet Rekap per SO
-    const wsRekapSO = XLSX.utils.json_to_sheet(rekapSOData);
-    wsRekapSO["!cols"] = [
-      { wch: 6 },  // No
-      { wch: 14 }, // Order Date
-      { wch: 20 }, // No SO
-      { wch: 18 }, // No Invoice
-      { wch: 20 }, // Kategori Produk
-      { wch: 16 }, // Jenis Transaksi
-      { wch: 10 }, // Kategori
-      { wch: 35 }, // Pelanggan
-      { wch: 18 }, // Status Cetak
-      { wch: 22 }, // Waktu Selesai Cetak
-      { wch: 14 }, // Jumlah Item
-      { wch: 18 }, // Total Harga SO
-    ];
-    XLSX.utils.book_append_sheet(workbook, wsRekapSO, "Rekap per SO");
-
-    // 3. Append Sheet Detail Barang
-    if (detailItemsData.length > 0) {
-      const wsDetail = XLSX.utils.json_to_sheet(detailItemsData);
-      wsDetail["!cols"] = [
-        { wch: 6 },  // No
-        { wch: 20 }, // No SO
-        { wch: 16 }, // No Invoice
-        { wch: 14 }, // Kode Barang
-        { wch: 18 }, // Kategori Produk
-        { wch: 45 }, // Nama Barang / Deskripsi
-        { wch: 10 }, // Qty
-        { wch: 10 }, // UOM
-        { wch: 20 }, // LOT / Batch Number
-        { wch: 18 }, // Total Harga Barang
-        { wch: 35 }, // Pelanggan
-        { wch: 14 }, // Order Date
-        { wch: 16 }, // Jenis Transaksi
-        { wch: 10 }, // Kategori
-        { wch: 18 }, // Status Cetak
-      ];
-      XLSX.utils.book_append_sheet(workbook, wsDetail, "Detail Barang");
-    }
-
-    const now = new Date();
-    const pad = (n: number) => String(n).padStart(2, "0");
-    const dateStr = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
-    XLSX.writeFile(workbook, `Rekap_Faktur_Lengkap_${dateStr}.xlsx`);
-  }, [grouped, records, printedInvoices, printedAtMap]);
+  };
 
   return (
-    <main className="min-h-screen bg-gray-50">
-      {/* MAINTENANCE / UPDATE BANNER */}
-      {IS_SYSTEM_UPDATING && (
-        <div className="bg-gradient-to-r from-amber-600 via-amber-500 to-amber-600 text-white px-4 py-2.5 shadow-md sticky top-0 z-50 border-b-2 border-amber-700">
-          <div className="max-w-7xl mx-auto flex items-center justify-between gap-3 text-xs sm:text-sm">
-            <div className="flex items-center gap-2">
-              <span className="text-base sm:text-lg animate-bounce">⚠️</span>
-              <span>
-                <strong className="font-extrabold uppercase tracking-wide">PEMBERITAHUAN SISTEM:</strong>{" "}
-                Sistem sedang dalam proses optimasi performa & update.{" "}
-                <span className="bg-amber-900/90 px-2 py-0.5 rounded font-extrabold text-amber-100 border border-amber-300">
-                  MOHON JANGAN UPLOAD FILE APAPUN DULU
-                </span>{" "}
-                sampai proses pembaruan ini selesai.
-              </span>
-            </div>
-            <span className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-900/70 text-amber-200 border border-amber-400/40 whitespace-nowrap animate-pulse">
-              <span className="w-2 h-2 rounded-full bg-amber-300"></span>
-              Sedang Diupdate
-            </span>
-          </div>
+    <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col font-sans">
+      {/* Toast Notification */}
+      {toastMsg && (
+        <div className="fixed top-5 right-5 z-50 bg-slate-900 text-white px-4 py-3 rounded-xl shadow-2xl flex items-center gap-3 border border-slate-700 animate-in fade-in slide-in-from-top-2 duration-200">
+          <span className="text-emerald-400 font-bold">✓</span>
+          <span className="text-sm font-medium">{toastMsg}</span>
         </div>
       )}
 
-      <header className={`bg-white border-b border-gray-200 sticky ${IS_SYSTEM_UPDATING ? "top-[41px]" : "top-0"} z-10 shadow-sm`}>
-        <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+      {/* Main Container */}
+      <main className="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6 space-y-5">
+        {/* Top Header Card */}
+        <div className="bg-white border border-slate-200 rounded-2xl p-4 md:p-5 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold text-sm shadow-xs">
-              FT
+            <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center font-bold shadow-md shadow-blue-500/20 text-lg">
+              🖨️
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-lg font-bold text-gray-900">Faktur Tracker</h1>
-                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200" title="Data tersinkronisasi otomatis secara realtime antar semua perangkat tanpa jeda">
-                  <span className="relative flex h-2 w-2">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                  </span>
-                  <span>Realtime Live</span>
+              <h1 className="text-lg md:text-xl font-bold text-slate-900 flex items-center gap-2">
+                Faktur Tracker
+                <span className="text-xs px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 font-semibold border border-blue-200">
+                  v2.0
                 </span>
-                {IS_SYSTEM_UPDATING && (
-                  <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-800 border border-amber-300 flex items-center gap-1 animate-pulse">
-                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
-                    Sedang Diupdate
-                  </span>
-                )}
-              </div>
-              <p className="text-xs text-gray-500">Tracking faktur dari Oracle export · Sinkronisasi instan multi-perangkat</p>
+              </h1>
+              <p className="text-xs text-slate-500">
+                Sistem Pelacak Status Cetak Faktur Farmasi Oracle ERP
+              </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setShowUpdateModal(true)}
-              className="inline-flex items-center gap-1.5 text-xs font-bold text-amber-900 bg-amber-50 hover:bg-amber-100 border border-amber-300 px-2.5 py-1.5 rounded-lg shadow-xs transition-transform hover:scale-105"
-              title="Lihat info pembaruan sistem terbaru"
+
+          {/* Header Action Buttons */}
+          <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
+            {/* Upload File Button */}
+            <label
+              onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={(e) => {
+                e.preventDefault();
+                setDragOver(false);
+                const files = Array.from(e.dataTransfer.files || []);
+                if (files.length > 0) handleUpload(files);
+              }}
+              className={`cursor-pointer px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 shadow-xs ${
+                dragOver
+                  ? "bg-blue-100 text-blue-700 border-2 border-dashed border-blue-500"
+                  : "bg-blue-600 hover:bg-blue-700 text-white shadow-blue-500/20"
+              }`}
             >
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
-              </span>
-              <span>📢 Info Update</span>
-            </button>
-            <button
-              onClick={() => setShowFeedbackModal(true)}
-              className="inline-flex items-center gap-1.5 text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 px-2.5 py-1.5 rounded-lg shadow-xs transition-colors"
-              title="Ada kendala atau keluhan? Ketik di sini"
-            >
-              <span>💬</span>
-              <span>Lapor Kendala</span>
-              {feedbacks.length > 0 && (
-                <span className="px-1.5 py-0.2 bg-rose-600 text-white text-[10px] font-bold rounded-full">
-                  {feedbacks.length}
-                </span>
-              )}
-            </button>
-            <button
-              onClick={() => setShowHelpModal(true)}
-              className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 flex items-center justify-center text-sm shadow-xs transition-all hover:scale-105"
-              title="Panduan & Pintasan Keyboard"
-            >
-              ⌨️
-            </button>
+              <span>📤</span>
+              <span>Upload Export (.xls / .xlsx)</span>
+              <input
+                type="file"
+                multiple
+                accept=".xls,.xlsx"
+                className="hidden"
+                onChange={(e) => {
+                  const files = e.target.files ? Array.from(e.target.files) : [];
+                  if (files.length > 0) handleUpload(files);
+                  e.target.value = "";
+                }}
+              />
+            </label>
+
+            {/* Refresh Button */}
             <button
               onClick={handleManualRefresh}
-              className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 px-3 py-1.5 rounded-lg shadow-sm transition-colors"
-              title="Refresh dan perbarui data dari database cloud"
+              disabled={loading}
+              className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5"
+              title="Refresh Data dari Server"
             >
-              <span>🔄</span>
-              <span>Refresh Data</span>
-              {sessionPrintedKeys.size > 0 && (
-                <span className="ml-0.5 px-1.5 py-0.2 bg-blue-600 text-white text-[10px] font-bold rounded-full">
-                  {sessionPrintedKeys.size}
-                </span>
-              )}
+              <span className={loading ? "animate-spin" : ""}>🔄</span>
+              <span className="hidden sm:inline">Refresh</span>
             </button>
+
+            {/* Export Excel Button */}
             <button
-              onClick={() => setShowApotekModal(true)}
-              className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 px-3 py-1.5 rounded-lg shadow-sm transition-colors"
-              title="Buka Database Master Apotek (1P, 2P, 3P)"
+              onClick={handleExportExcel}
+              className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5"
+              title="Ekspor Data ke Excel (Ascending)"
             >
-              <span>🏪</span>
-              <span>Master Apotek</span>
+              <span>📥</span>
+              <span className="hidden sm:inline">Ekspor Excel</span>
             </button>
+
+            {/* Reset / Hapus Semua Data Button */}
             <button
-              onClick={() => setShowProductModal(true)}
-              className="inline-flex items-center gap-1.5 text-xs font-semibold text-purple-800 bg-purple-50 hover:bg-purple-100 border border-purple-300 px-3 py-1.5 rounded-lg shadow-sm transition-colors"
-              title="Buka Database Master Produk (Farma, Alkes, CCP, Prekursor, OOT)"
+              onClick={handleClearAll}
+              className="px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5"
+              title="Hapus Semua Data & Reset Database"
             >
-              <span>📦</span>
-              <span>Master Produk</span>
+              <span className="text-rose-600">🗑️</span>
+              <span className="hidden sm:inline">Reset Data</span>
             </button>
-            {records.length > 0 && (
-              <button
-                onClick={exportToExcel}
-                className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 px-3.5 py-1.5 rounded-lg shadow-sm transition-colors"
-                title="Ekspor rekap faktur ascending (terkecil ke terbesar) ke Excel"
-              >
-                <span>📥</span>
-                <span>Ekspor Excel (Ascending)</span>
-              </button>
-            )}
           </div>
         </div>
-      </header>
 
-      <div
-        onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-        onDragLeave={() => setDragOver(false)}
-        onDrop={onDrop}
-        className="max-w-7xl mx-auto px-4 py-4"
-      >
-        {error && (
-          <div className="mb-3 bg-red-50 border border-red-200 text-red-700 px-4 py-2 rounded-lg text-sm">
-            {error}
-          </div>
-        )}
-
-        {/* Upload Notification Banner (Slim & Compact) */}
+        {/* Upload Notification Banner */}
         {uploadNotification && (
-          <div className="mb-3 bg-emerald-50 border border-emerald-300 rounded-lg px-3 py-1.5 shadow-2xs flex items-center justify-between gap-2 text-xs">
-            <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
-              <span className="font-bold text-emerald-950 flex items-center gap-1">
-                <span>✓</span> Upload Sukses: {uploadNotification.fileName}
-              </span>
-              <span className="text-[11px] font-mono text-emerald-700 bg-emerald-100 px-1.5 py-0.2 rounded">
-                {uploadNotification.time}
-              </span>
-              <span className="text-gray-600">
-                ({uploadNotification.totalInvoices.toLocaleString("id-ID")} faktur · {uploadNotification.totalItems.toLocaleString("id-ID")} baris)
-              </span>
-              {uploadNotification.maxDoo !== "-" && (
-                <span className="font-medium bg-emerald-100/90 text-emerald-950 px-2 py-0.5 rounded font-mono text-[11px] border border-emerald-300">
-                  🏬 DOO: {uploadNotification.rangeDoo ? uploadNotification.rangeDoo : `#${uploadNotification.maxDoo}`}
-                </span>
-              )}
-              {uploadNotification.maxOra !== "-" && (
-                <span className="font-medium bg-blue-100/90 text-blue-950 px-2 py-0.5 rounded font-mono text-[11px] border border-blue-300">
-                  🏢 ORA: {uploadNotification.rangeOra ? uploadNotification.rangeOra : `#${uploadNotification.maxOra}`}
-                </span>
-              )}
-              {uploadNotification.newUnprinted > 0 ? (
-                <span className="font-bold text-amber-900 bg-amber-100 px-2 py-0.5 rounded text-[11px] border border-amber-300">
-                  🚨 {uploadNotification.newUnprinted} Faktur Baru Belum Print
-                </span>
-              ) : (
-                <span className="text-emerald-800 bg-emerald-100 font-semibold text-[11px] px-2 py-0.5 rounded border border-emerald-300">
-                  ✅ Semua Terprint
-                </span>
-              )}
+          <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 text-xs text-blue-900 flex items-start justify-between gap-3 shadow-xs">
+            <div className="flex items-start gap-3">
+              <span className="text-xl">📋</span>
+              <div className="space-y-1">
+                <div className="font-bold flex items-center gap-2">
+                  <span>File Berhasil Diunggah: <span className="underline">{uploadNotification.fileName}</span></span>
+                  <span className="text-[10px] bg-blue-200/80 px-2 py-0.5 rounded-full font-semibold">{uploadNotification.time}</span>
+                </div>
+                <div className="text-blue-800/90 flex flex-wrap gap-x-4 gap-y-1">
+                  {uploadNotification.rangeOra && (
+                    <span>• <strong>ORA</strong>: {uploadNotification.rangeOra}</span>
+                  )}
+                  {uploadNotification.rangeDoo && (
+                    <span>• <strong>DOO</strong>: {uploadNotification.rangeDoo}</span>
+                  )}
+                  <span>• Total Baru: <strong>{uploadNotification.newUnprinted} faktur belum dicetak</strong></span>
+                </div>
+              </div>
             </div>
             <button
               onClick={() => setUploadNotification(null)}
-              className="text-gray-400 hover:text-gray-700 font-bold px-1.5 py-0.5 rounded hover:bg-emerald-100 text-xs transition-colors"
-              title="Tutup notifikasi"
+              className="text-blue-400 hover:text-blue-700 p-1 rounded-lg"
             >
               ✕
             </button>
           </div>
         )}
 
-        {/* Empty state when no data loaded */}
-        {records.length === 0 && (
-          <div className="bg-white rounded-xl border-2 border-dashed border-gray-300 p-12 text-center my-6 shadow-xs">
-            <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center text-3xl mx-auto mb-3">
-              📊
+        {/* Error Banner */}
+        {error && (
+          <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4 text-xs text-rose-800 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 font-medium">
+              <span className="text-rose-600">⚠️</span>
+              <span>{error}</span>
             </div>
-            <h3 className="text-base font-bold text-gray-800 mb-1">Belum Ada Data Faktur</h3>
-            <p className="text-xs text-gray-500 mb-4 max-w-md mx-auto">
-              Silakan upload file Excel export dari Oracle (.xlsx / .xls) untuk tracking faktur dan sinkronisasi otomatis antar perangkat.
-            </p>
-            {IS_SYSTEM_UPDATING ? (
-              <div className="flex flex-col items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => alert("⚠️ SISTEM SEDANG DALAM PROSES UPDATE & OPTIMASI PERFORMA.\n\nMohon jangan upload file apapun dulu yaa hingga pembaruan selesai.")}
-                  className="inline-flex items-center gap-2 bg-amber-100 border border-amber-300 text-amber-900 px-5 py-2.5 rounded-xl cursor-not-allowed text-sm font-semibold shadow-xs"
-                >
-                  <span>🔒</span>
-                  <span>Upload Ditangguhkan (Sedang Update Performa)</span>
-                </button>
-                <span className="text-[11px] text-amber-700 font-medium">
-                  Harap tunggu sampai proses update dan optimasi selesai.
-                </span>
-              </div>
-            ) : (
-              <label className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl cursor-pointer text-sm font-semibold shadow transition-colors">
-                <span>📁</span>
-                <span>Upload File Excel</span>
-                <input type="file" accept=".xlsx,.xls" multiple onChange={onFileInput} className="hidden" />
-              </label>
-            )}
-            {loading && <p className="text-xs text-gray-500 mt-3 animate-pulse">Membaca file...</p>}
+            <button onClick={() => setError(null)} className="text-rose-400 hover:text-rose-700">
+              ✕
+            </button>
           </div>
         )}
 
-        {/* Data loaded */}
-        {records.length > 0 && (
-          <>
-            {/* Summary & Category Cards: 2 Rows x 4 Columns (Compact & Sleek) */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 mb-2.5">
-              {/* Row 1, Col 1: Total SO */}
-              <div className="bg-white rounded-md border border-gray-200 px-2 py-1 shadow-2xs flex flex-col justify-between">
-                <p className="text-[9px] font-bold uppercase tracking-wider text-gray-500 truncate">Total SO</p>
-                <p className="text-sm font-bold font-mono text-gray-900 truncate leading-tight">{summary.totalSO.toLocaleString("id-ID")}</p>
-              </div>
-
-              {/* Row 1, Col 2: Belum Terprint */}
-              <div className="bg-white rounded-md border border-orange-200 px-2 py-1 shadow-2xs flex flex-col justify-between">
-                <div className="flex items-center justify-between gap-1">
-                  <p className="text-[9px] font-bold uppercase tracking-wider text-orange-600 truncate">Belum Terprint</p>
-                  {summary.belumTerprint > 0 && (
-                    <span className="px-1 py-0.2 rounded text-[8px] font-bold bg-orange-100 text-orange-800">
-                      🚨 Pending
-                    </span>
-                  )}
-                </div>
-                <p className="text-sm font-bold font-mono text-orange-600 truncate leading-tight">{summary.belumTerprint.toLocaleString("id-ID")}</p>
-              </div>
-
-              {/* Row 1, Col 3: 1P ORA */}
-              <div className="bg-white rounded-md border border-blue-200 px-2 py-1 shadow-2xs flex flex-col justify-between">
-                <div>
-                  <div className="flex items-center justify-between gap-1">
-                    <span className="text-[9px] font-bold text-blue-800 uppercase flex items-center gap-0.5 truncate">
-                      <span>🏢</span> 1P ORA
-                    </span>
-                    {highestInvoices.max1POra.invoiceNumber !== "-" && (
-                      <span className={`px-1 py-0.2 rounded text-[8px] font-bold ${
-                        highestInvoices.max1POra.isPrinted ? "bg-green-100 text-green-800" : "bg-orange-100 text-orange-800"
-                      }`}>
-                        {highestInvoices.max1POra.isPrinted ? "✓" : "○"}
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-sm font-bold font-mono text-blue-950 truncate leading-tight">
-                    {highestInvoices.max1POra.invoiceNumber !== "-" ? `#${highestInvoices.max1POra.invoiceNumber}` : "-"}
-                  </p>
-                </div>
-                <div className="flex items-center justify-between gap-1 text-[8.5px] font-mono mt-0.5 pt-0.5 border-t border-blue-50">
-                  {invoiceProgression?.rangeOra ? (
-                    <span className="text-blue-700 font-bold bg-blue-50 border border-blue-200 px-1 py-0.2 rounded text-[8px] truncate" title={`Rentang Upload: ${invoiceProgression.rangeOra}`}>
-                      {invoiceProgression.rangeOra}
-                    </span>
-                  ) : (
-                    <span className="text-gray-400">-</span>
-                  )}
-                  <span className="text-gray-500 text-[8px] truncate">📅 {highestInvoices.max1POra.orderDate || "-"}</span>
-                </div>
-              </div>
-
-              {/* Row 1, Col 4: 2P */}
-              <div className="bg-white rounded-md border border-emerald-200 px-2 py-1 shadow-2xs flex flex-col justify-between">
-                <div>
-                  <div className="flex items-center justify-between gap-1">
-                    <span className="text-[9px] font-bold text-emerald-800 uppercase flex items-center gap-0.5 truncate">
-                      <span>🏪</span> 2P
-                    </span>
-                    {highestInvoices.max2P.invoiceNumber !== "-" && (
-                      <span className={`px-1 py-0.2 rounded text-[8px] font-bold ${
-                        highestInvoices.max2P.isPrinted ? "bg-green-100 text-green-800" : "bg-orange-100 text-orange-800"
-                      }`}>
-                        {highestInvoices.max2P.isPrinted ? "✓" : "○"}
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-sm font-bold font-mono text-emerald-950 truncate leading-tight">
-                    {highestInvoices.max2P.invoiceNumber !== "-" ? `#${highestInvoices.max2P.invoiceNumber}` : "-"}
-                  </p>
-                </div>
-                <div className="flex items-center justify-between gap-1 text-[8.5px] font-mono mt-0.5 pt-0.5 border-t border-emerald-50">
-                  {invoiceProgression?.range2P ? (
-                    <span className="text-emerald-700 font-bold bg-emerald-50 border border-emerald-200 px-1 py-0.2 rounded text-[8px] truncate" title={`Rentang Upload: ${invoiceProgression.range2P}`}>
-                      {invoiceProgression.range2P}
-                    </span>
-                  ) : (
-                    <span className="text-gray-400">-</span>
-                  )}
-                  <span className="text-gray-500 text-[8px] truncate">📅 {highestInvoices.max2P.orderDate || "-"}</span>
-                </div>
-              </div>
-
-              {/* Row 2, Col 1: Total Invoice */}
-              <div className="bg-white rounded-md border border-gray-200 px-2 py-1 shadow-2xs flex flex-col justify-between">
-                <p className="text-[9px] font-bold uppercase tracking-wider text-gray-500 truncate">Total Invoice</p>
-                <p className="text-sm font-bold font-mono text-gray-900 truncate leading-tight">{summary.totalInvoices.toLocaleString("id-ID")}</p>
-              </div>
-
-              {/* Row 2, Col 2: Double INV */}
-              <div className="bg-white rounded-md border border-red-200 px-2 py-1 shadow-2xs flex flex-col justify-between">
-                <div className="flex items-center justify-between gap-1">
-                  <p className="text-[9px] font-bold uppercase tracking-wider text-red-600 truncate">Double INV</p>
-                  {summary.doubleInv > 0 && (
-                    <span className="px-1 py-0.2 rounded text-[8px] font-bold bg-red-100 text-red-800">
-                      ⚠️ Cek
-                    </span>
-                  )}
-                </div>
-                <p className="text-sm font-bold font-mono text-red-600 truncate leading-tight">{summary.doubleInv.toLocaleString("id-ID")}</p>
-              </div>
-
-              {/* Row 2, Col 3: 1P DOO */}
-              <div className="bg-white rounded-md border border-teal-200 px-2 py-1 shadow-2xs flex flex-col justify-between">
-                <div>
-                  <div className="flex items-center justify-between gap-1">
-                    <span className="text-[9px] font-bold text-teal-800 uppercase flex items-center gap-0.5 truncate">
-                      <span>🏬</span> 1P DOO
-                    </span>
-                    {highestInvoices.max1PDoo.invoiceNumber !== "-" && (
-                      <span className={`px-1 py-0.2 rounded text-[8px] font-bold ${
-                        highestInvoices.max1PDoo.isPrinted ? "bg-green-100 text-green-800" : "bg-orange-100 text-orange-800"
-                      }`}>
-                        {highestInvoices.max1PDoo.isPrinted ? "✓" : "○"}
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-sm font-bold font-mono text-teal-950 truncate leading-tight">
-                    {highestInvoices.max1PDoo.invoiceNumber !== "-" ? `#${highestInvoices.max1PDoo.invoiceNumber}` : "-"}
-                  </p>
-                </div>
-                <div className="flex items-center justify-between gap-1 text-[8.5px] font-mono mt-0.5 pt-0.5 border-t border-teal-50">
-                  {invoiceProgression?.range1PDoo || invoiceProgression?.rangeDoo ? (
-                    <span className="text-teal-700 font-bold bg-teal-50 border border-teal-200 px-1 py-0.2 rounded text-[8px] truncate" title={`Rentang Upload: ${invoiceProgression?.range1PDoo || invoiceProgression?.rangeDoo}`}>
-                      {invoiceProgression?.range1PDoo || invoiceProgression?.rangeDoo}
-                    </span>
-                  ) : (
-                    <span className="text-gray-400">-</span>
-                  )}
-                  <span className="text-gray-500 text-[8px] truncate">📅 {highestInvoices.max1PDoo.orderDate || "-"}</span>
-                </div>
-              </div>
-
-              {/* Row 2, Col 4: 3P */}
-              <div className="bg-white rounded-md border border-purple-200 px-2 py-1 shadow-2xs flex flex-col justify-between">
-                <div>
-                  <div className="flex items-center justify-between gap-1">
-                    <span className="text-[9px] font-bold text-purple-800 uppercase flex items-center gap-0.5 truncate">
-                      <span>🏢</span> 3P
-                    </span>
-                    {highestInvoices.max3P.invoiceNumber !== "-" && (
-                      <span className={`px-1 py-0.2 rounded text-[8px] font-bold ${
-                        highestInvoices.max3P.isPrinted ? "bg-green-100 text-green-800" : "bg-orange-100 text-orange-800"
-                      }`}>
-                        {highestInvoices.max3P.isPrinted ? "✓" : "○"}
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-sm font-bold font-mono text-purple-950 truncate leading-tight">
-                    {highestInvoices.max3P.invoiceNumber !== "-" ? `#${highestInvoices.max3P.invoiceNumber}` : "-"}
-                  </p>
-                </div>
-                <div className="flex items-center justify-between gap-1 text-[8.5px] font-mono mt-0.5 pt-0.5 border-t border-purple-50">
-                  {invoiceProgression?.range3P ? (
-                    <span className="text-purple-700 font-bold bg-purple-50 border border-purple-200 px-1 py-0.2 rounded text-[8px] truncate" title={`Rentang Upload: ${invoiceProgression.range3P}`}>
-                      {invoiceProgression.range3P}
-                    </span>
-                  ) : (
-                    <span className="text-gray-400">-</span>
-                  )}
-                  <span className="text-gray-500 text-[8px] truncate">📅 {highestInvoices.max3P.orderDate || "-"}</span>
-                </div>
-              </div>
+        {/* 8 Metric KPI Cards Grid */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {/* Card 1: Total SO */}
+          <div className="bg-white border border-slate-200 rounded-xl p-3.5 shadow-xs">
+            <div className="flex items-center justify-between text-slate-500 mb-1">
+              <span className="text-xs font-semibold">Total SO</span>
+              <span className="text-xs">📄</span>
             </div>
-
-            {/* Filters & Sorting Toolbar */}
-            {/* Filters & Sorting Toolbar (Opsi 1: Clean Tabs + Minimalist Dropdowns) */}
-            <div className="bg-white rounded-xl border border-gray-200 p-3 mb-4 space-y-2.5 shadow-xs">
-              {/* Row 1: Primary Status Tabs & Main Actions */}
-              <div className="flex flex-wrap items-center justify-between gap-2.5">
-                {/* Segmented Status Tabs */}
-                <div className="inline-flex rounded-xl bg-gray-100 p-1 text-xs font-semibold shadow-inner">
-                  <button
-                    onClick={() => { setFilter("belum"); setPage(0); }}
-                    className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 ${
-                      filter === "belum" && !isGlobalSearchActive
-                        ? "bg-white text-orange-700 font-bold shadow-xs"
-                        : "text-gray-600 hover:text-gray-900"
-                    }`}
-                  >
-                    <span>Belum Terprint</span>
-                    <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
-                      filter === "belum" && !isGlobalSearchActive
-                        ? "bg-orange-100 text-orange-800"
-                        : "bg-gray-200 text-gray-700"
-                    }`}>
-                      {summary.belumTerprint}
-                    </span>
-                  </button>
-
-                  <button
-                    onClick={() => { setFilter("all"); setPage(0); }}
-                    className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 ${
-                      filter === "all" && !isGlobalSearchActive
-                        ? "bg-white text-blue-700 font-bold shadow-xs"
-                        : "text-gray-600 hover:text-gray-900"
-                    }`}
-                  >
-                    <span>Semua Data</span>
-                    <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
-                      filter === "all" && !isGlobalSearchActive
-                        ? "bg-blue-100 text-blue-800"
-                        : "bg-gray-200 text-gray-700"
-                    }`}>
-                      {summary.totalInvoices}
-                    </span>
-                  </button>
-
-                  <button
-                    onClick={() => { setFilter("double"); setPage(0); }}
-                    className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 ${
-                      filter === "double" && !isGlobalSearchActive
-                        ? "bg-white text-rose-700 font-bold shadow-xs"
-                        : "text-rose-600 hover:text-rose-800"
-                    }`}
-                  >
-                    <span>Double INV</span>
-                    {summary.doubleInv > 0 && (
-                      <span className="px-1.5 py-0.2 bg-rose-100 text-rose-800 rounded-full text-[10px] font-bold">
-                        {summary.doubleInv}
-                      </span>
-                    )}
-                  </button>
-                </div>
-
-                {/* Right side actions of Row 1 */}
-                <div className="flex items-center gap-2">
-                  {/* Tandai Semua Selesai Button */}
-                  {unprintedCountInFiltered > 0 && (
-                    <button
-                      onClick={handleMarkAllPrinted}
-                      className="px-3 py-1.5 text-xs font-bold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1.5 shadow-xs transition-all active:scale-95 animate-pulse hover:animate-none"
-                      title={`Tandai ${unprintedCountInFiltered} faktur yang belum selesai di tampilan ini sebagai SUDAH TERPRINT`}
-                    >
-                      <span>✓✓</span>
-                      <span>Tandai Semua Selesai ({unprintedCountInFiltered})</span>
-                    </button>
-                  )}
-
-                  {/* Reset Filter Button */}
-                  {(filter !== "belum" || katFilter !== "all" || jenisFilter !== "all" || klasFilter !== "all" || dateFilter !== "all" || Boolean(search.trim())) && (
-                    <button
-                      onClick={() => {
-                        setFilter("belum");
-                        setKatFilter("all");
-                        setJenisFilter("all");
-                        setKlasFilter("all");
-                        setDateFilter("all");
-                        setSearch("");
-                        setPage(0);
-                      }}
-                      className="px-2.5 py-1.5 text-xs font-semibold rounded-lg border border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100 flex items-center gap-1 shadow-2xs transition-colors"
-                      title="Reset semua filter kembali ke default (Belum Terprint)"
-                    >
-                      <span>✕</span>
-                      <span>Reset Filter</span>
-                    </button>
-                  )}
-
-                  {/* Refresh Button */}
-                  <button
-                    onClick={handleManualRefresh}
-                    className="px-2.5 py-1.5 text-xs font-semibold rounded-lg border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 flex items-center gap-1 shadow-2xs transition-colors"
-                    title="Refresh dan perbarui data dari database cloud"
-                  >
-                    <span>🔄</span>
-                    <span>Refresh</span>
-                    {sessionPrintedKeys.size > 0 && (
-                      <span className="px-1.5 py-0.2 bg-blue-600 text-white text-[10px] font-bold rounded-full">
-                        {sessionPrintedKeys.size}
-                      </span>
-                    )}
-                  </button>
-                </div>
-              </div>
-
-              {/* Row 2: Secondary Dropdown Pills & Sorting */}
-              <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-gray-100">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Filter:</span>
-
-                  {/* 1. Kategori Dropdown */}
-                  <div className="relative">
-                    <select
-                      value={katFilter}
-                      onChange={(e) => { setKatFilter(e.target.value as KatFilter); setPage(0); }}
-                      className={`text-xs rounded-lg px-2.5 py-1.5 font-semibold border transition-all cursor-pointer shadow-2xs focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                        katFilter !== "all"
-                          ? "bg-blue-50 border-blue-400 text-blue-800"
-                          : "bg-white border-gray-300 text-gray-700 hover:bg-gray-50"
-                      }`}
-                    >
-                      <option value="all">Kategori: Semua (1P, 2P, 3P)</option>
-                      <option value="1P">Kategori: 1P Saja</option>
-                      <option value="2P">Kategori: 2P Saja</option>
-                      <option value="3P">Kategori: 3P Saja</option>
-                    </select>
-                  </div>
-
-                  {/* 2. Jenis Transaksi Dropdown */}
-                  <div className="relative">
-                    <select
-                      value={jenisFilter}
-                      onChange={(e) => { setJenisFilter(e.target.value as JenisFilter); setPage(0); }}
-                      className={`text-xs rounded-lg px-2.5 py-1.5 font-semibold border transition-all cursor-pointer shadow-2xs focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                        jenisFilter !== "all"
-                          ? "bg-emerald-50 border-emerald-400 text-emerald-800"
-                          : "bg-white border-gray-300 text-gray-700 hover:bg-gray-50"
-                      }`}
-                    >
-                      <option value="all">Transaksi: Semua (ORA & DOO)</option>
-                      <option value="ORA">Transaksi: ORA Saja</option>
-                      <option value="DOO">Transaksi: DOO Saja</option>
-                    </select>
-                  </div>
-
-                  {/* 3. Produk & Regulasi Dropdown */}
-                  <div className="relative">
-                    <select
-                      value={klasFilter}
-                      onChange={(e) => { setKlasFilter(e.target.value as KlasFilter); setPage(0); }}
-                      className={`text-xs rounded-lg px-2.5 py-1.5 font-semibold border transition-all cursor-pointer shadow-2xs focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                        klasFilter !== "all"
-                          ? "bg-purple-50 border-purple-400 text-purple-900"
-                          : "bg-white border-gray-300 text-gray-700 hover:bg-gray-50"
-                      }`}
-                    >
-                      <option value="all">Produk: Semua Jenis</option>
-                      <option value="prekursor">💊 Produk: Prekursor Saja</option>
-                      <option value="oot">🧪 Produk: OOT Saja</option>
-                      <option value="ccp">❄️ Produk: CCP (Cold Chain) Saja</option>
-                      <option value="alkes">🩺 Produk: Alkes Saja</option>
-                      <option value="farma">💊 Produk: Farma Saja</option>
-                    </select>
-                  </div>
-
-                  {/* 4. Tanggal Dropdown */}
-                  {availableDates.length > 0 && (
-                    <div className="relative">
-                      <select
-                        value={dateFilter}
-                        onChange={(e) => { setDateFilter(e.target.value); setPage(0); }}
-                        className={`text-xs rounded-lg px-2.5 py-1.5 font-semibold border transition-all cursor-pointer shadow-2xs focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                          dateFilter !== "all"
-                            ? "bg-blue-50 border-blue-400 text-blue-900"
-                            : "bg-white border-gray-300 text-gray-700 hover:bg-gray-50"
-                        }`}
-                      >
-                        <option value="all">📅 Tanggal: Semua ({availableDates.length})</option>
-                        {availableDates.map((d) => (
-                          <option key={d} value={d}>
-                            📅 {d}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
-                </div>
-
-                {/* Sorting Controls */}
-                <div className="flex items-center gap-1.5">
-                  <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Urut:</span>
-                  <select
-                    value={sortBy}
-                    onChange={(e) => setSortBy(e.target.value as "invoice" | "date" | "totalHarga")}
-                    className="text-xs bg-white border border-gray-300 text-gray-700 rounded-lg px-2 py-1.5 font-medium shadow-2xs focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
-                  >
-                    <option value="invoice">No Faktur</option>
-                    <option value="date">Tanggal</option>
-                    <option value="totalHarga">Total Harga</option>
-                  </select>
-
-                  <button
-                    onClick={() => setSortOrder((prev) => (prev === "desc" ? "asc" : "desc"))}
-                    className="px-2 py-1.5 text-xs font-bold rounded-lg bg-white hover:bg-gray-50 text-blue-700 border border-gray-300 flex items-center gap-1 shadow-2xs transition-colors"
-                    title="Klik untuk mengubah arah urutan (Ascending / Descending)"
-                  >
-                    {sortOrder === "desc" ? "⬇ Terbesar" : "⬆ Terkecil"}
-                  </button>
-                </div>
-              </div>
-
-              {/* Row 2: Long Search Bar & Upload Excel Button */}
-              <div className="pt-1 border-t border-gray-100 space-y-1.5">
-                <div className="flex items-center gap-2">
-                  <div className="flex-1 flex items-center">
-                    <div className="relative w-full">
-                      <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400 text-xs">
-                        🔍
-                      </span>
-                      <input
-                        type="text"
-                        placeholder="Cari nomor SO, no Invoice, nama Apotek / Pelanggan, item obat (Global Search)..."
-                        value={search}
-                        onChange={(e) => {
-                          setSearch(e.target.value);
-                          setPage(0);
-                        }}
-                        className={`w-full pl-8 pr-10 py-1.5 text-sm border rounded-lg focus:outline-none focus:ring-2 bg-white shadow-2xs transition-all ${
-                          isGlobalSearchActive
-                            ? "border-emerald-400 focus:ring-emerald-500 text-emerald-950 font-medium"
-                            : "border-gray-300 focus:ring-blue-500"
-                        }`}
-                      />
-                      {search && (
-                        <button
-                          onClick={() => {
-                            setSearch("");
-                            setPage(0);
-                          }}
-                          className="absolute inset-y-0 right-0 pr-2.5 flex items-center text-gray-400 hover:text-gray-700 font-bold text-xs"
-                          title="Hapus pencarian dan kembali ke filter normal"
-                        >
-                          ✕
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  {IS_SYSTEM_UPDATING ? (
-                    <button
-                      type="button"
-                      onClick={() => alert("⚠️ SISTEM SEDANG DALAM PROSES UPDATE & OPTIMASI PERFORMA.\n\nMohon jangan upload file apapun dulu yaa hingga pembaruan selesai.")}
-                      className="bg-amber-100 border border-amber-300 text-amber-800 px-3.5 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap shadow-xs flex items-center gap-1.5 cursor-not-allowed opacity-90"
-                      title="Upload dinonaktifkan sementara karena sistem sedang dalam proses optimasi performa"
-                    >
-                      <span>🔒</span>
-                      <span>Upload Ditangguhkan (Sedang Update)</span>
-                    </button>
-                  ) : (
-                    <label className="bg-blue-600 hover:bg-blue-700 text-white px-3.5 py-1.5 rounded-lg cursor-pointer text-xs font-semibold whitespace-nowrap shadow-sm flex items-center gap-1.5 transition-colors">
-                      <span>📁</span>
-                      <span>Upload Excel</span>
-                      <input type="file" accept=".xlsx,.xls" multiple onChange={onFileInput} className="hidden" />
-                    </label>
-                  )}
-                  {loading && <span className="text-xs text-gray-500 animate-pulse whitespace-nowrap">Membaca...</span>}
-                </div>
-
-                {/* Global Search Active Banner */}
-                {isGlobalSearchActive && (
-                  <div className="flex flex-wrap items-center justify-between text-xs bg-emerald-50 border border-emerald-300 text-emerald-950 px-3 py-1 rounded-lg gap-2 shadow-2xs">
-                    <div className="flex items-center gap-1.5 font-medium">
-                      <span className="text-emerald-700 font-bold">🌐</span>
-                      <span>
-                        <strong>Pencarian Global Aktif:</strong> Menampilkan hasil pencarian <strong>"{search}"</strong> di seluruh database ({filtered.length} faktur ditemukan). Tab filter diabaikan agar data selalu ketemu.
-                      </span>
-                    </div>
-                    <button
-                      onClick={() => {
-                        setSearch("");
-                        setPage(0);
-                      }}
-                      className="text-xs font-bold text-emerald-800 hover:text-emerald-950 underline shrink-0 hover:bg-emerald-100 px-1.5 py-0.5 rounded transition-colors"
-                    >
-                      Kembali ke Filter Normal ✕
-                    </button>
-                  </div>
-                )}
-              </div>
+            <div className="text-xl font-extrabold text-slate-900 font-mono">
+              {new Set(grouped.map((g) => g.so).filter((s) => s && s !== "-")).size}
             </div>
-
-            {/* Table */}
-            <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm">
-              {/* Top Pagination & Summary Header */}
-              <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-200 flex flex-wrap items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-blue-100 text-blue-800">
-                    Hal {page + 1} / {totalPages || 1}
-                  </span>
-                  <p className="text-xs text-gray-600 font-medium">
-                    {filtered.length.toLocaleString("id-ID")} SO · {summary.totalInvoices.toLocaleString("id-ID")} invoice
-                  </p>
-                  {unprintedCountInFiltered > 0 && (
-                    <button
-                      onClick={handleMarkAllPrinted}
-                      className="ml-1.5 px-2.5 py-1 text-xs font-bold rounded-md bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1 shadow-xs transition-all active:scale-95"
-                      title={`Tandai ${unprintedCountInFiltered} faktur yang belum selesai sebagai SUDAH TERPRINT`}
-                    >
-                      <span>✓✓</span>
-                      <span>Tandai Semua Selesai ({unprintedCountInFiltered})</span>
-                    </button>
-                  )}
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <button
-                    onClick={() => setPage(Math.max(0, page - 1))}
-                    disabled={page === 0}
-                    className="px-2.5 py-1 text-xs font-medium rounded border border-gray-300 bg-white disabled:opacity-30 hover:bg-gray-100 transition-colors shadow-sm"
-                  >
-                    ← Prev
-                  </button>
-                  <span className="text-xs font-semibold text-gray-700 px-1">
-                    {page + 1} / {totalPages || 1}
-                  </span>
-                  <button
-                    onClick={() => setPage(Math.min(totalPages - 1, page + 1))}
-                    disabled={page >= totalPages - 1}
-                    className="px-2.5 py-1 text-xs font-medium rounded border border-gray-300 bg-white disabled:opacity-30 hover:bg-gray-100 transition-colors shadow-sm"
-                  >
-                    Next →
-                  </button>
-                </div>
-              </div>
-
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm select-text">
-                  <thead className="bg-gray-50 border-b border-gray-200 select-none">
-                    <tr>
-                      <th className="px-2 py-2 w-8 text-center text-xs font-medium text-gray-500">#</th>
-                      <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 whitespace-nowrap">Print</th>
-                      <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 whitespace-nowrap">No SO</th>
-                      <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 whitespace-nowrap">No Invoice</th>
-                      <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 whitespace-nowrap">Kat Produk</th>
-                      <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 whitespace-nowrap">Jenis Transaksi</th>
-                      <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 whitespace-nowrap">Pelanggan</th>
-                      <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 whitespace-nowrap">Order Date</th>
-                      <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 whitespace-nowrap">Kat</th>
-                      <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 whitespace-nowrap">Done Print (Waktu)</th>
-                      <th className="px-2 py-2 text-right text-xs font-medium text-gray-500 whitespace-nowrap">Total Harga</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {pageData.map((g, rowIdx) => (
-                      <FakturTableRow
-                        key={g.key}
-                        g={g}
-                        rowIdx={rowIdx}
-                        isRowSelected={selectedRowIndex === rowIdx}
-                        selectedColIdx={selectedRowIndex === rowIdx ? selectedColIdx : null}
-                        expanded={expandedInvoices.has(g.key)}
-                        onSelectRow={onSelectRow}
-                        onSelectCell={onSelectCell}
-                        onToggleExpand={toggleExpand}
-                        onTogglePrint={togglePrint}
-                      />
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Pagination */}
-              <div className="px-4 py-3 border-t border-gray-200 flex items-center justify-between">
-                <p className="text-xs text-gray-500">
-                  {filtered.length.toLocaleString("id-ID")} SO · {summary.totalInvoices.toLocaleString("id-ID")} invoice
-                </p>
-                <div className="flex items-center gap-2">
-                  <button onClick={() => setPage(Math.max(0, page - 1))} disabled={page === 0}
-                    className="px-3 py-1 text-sm rounded border border-gray-300 disabled:opacity-30 hover:bg-gray-50">←</button>
-                  <span className="text-sm text-gray-600">{page + 1} / {totalPages || 1}</span>
-                  <button onClick={() => setPage(Math.min(totalPages - 1, page + 1))} disabled={page >= totalPages - 1}
-                    className="px-3 py-1 text-sm rounded border border-gray-300 disabled:opacity-30 hover:bg-gray-50">→</button>
-                </div>
-              </div>
-            </div>
-          </>
-        )}
-      </div>
-
-      {/* Floating Copy Toast */}
-      {copyToast && (
-        <div className="fixed bottom-5 right-5 z-50 bg-slate-900/95 text-white font-semibold text-xs px-4 py-2.5 rounded-xl shadow-2xl border border-slate-700 flex items-center gap-2 animate-bounce">
-          <span>📋</span>
-          <span>{copyToast}</span>
-        </div>
-      )}
-
-      {/* Keyboard Shortcuts Modal */}
-      <HelpModal isOpen={showHelpModal} onClose={() => setShowHelpModal(false)} />
-
-      {/* Master Apotek Modal */}
-      <MasterApotekModal isOpen={showApotekModal} onClose={() => setShowApotekModal(false)} />
-
-      {/* Master Product Modal */}
-      <MasterProductModal isOpen={showProductModal} onClose={() => setShowProductModal(false)} />
-
-      {/* Update Notice Modal */}
-      <UpdateNoticeModal
-        isOpen={showUpdateModal}
-        onClose={() => {
-          localStorage.setItem("ft_seen_update_v2_2", "true");
-          setShowUpdateModal(false);
-        }}
-        onOpenFeedback={() => {
-          localStorage.setItem("ft_seen_update_v2_2", "true");
-          setShowUpdateModal(false);
-          setShowFeedbackModal(true);
-        }}
-      />
-
-      {/* Team Feedback & Complaint Modal */}
-      <TeamFeedbackModal
-        isOpen={showFeedbackModal}
-        onClose={() => setShowFeedbackModal(false)}
-        feedbacks={feedbacks}
-      />
-    </main>
-  );
-}
-
-function HelpModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
-  if (!isOpen) return null;
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs animate-in fade-in duration-150">
-      <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-gray-100 relative">
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 w-8 h-8 rounded-full flex items-center justify-center hover:bg-gray-100 transition-colors text-lg"
-          title="Tutup"
-        >
-          ✕
-        </button>
-        <div className="flex items-center gap-3 mb-4">
-          <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xl shadow-xs">
-            ⌨️
           </div>
-          <div>
-            <h2 className="text-base font-bold text-gray-900">Cara Penggunaan & Pintasan Keyboard</h2>
-            <p className="text-xs text-gray-500">Navigasi cepat ala spreadsheet tanpa perlu mouse</p>
+
+          {/* Card 2: Belum Terprint */}
+          <div className="bg-white border border-amber-200 rounded-xl p-3.5 shadow-xs bg-gradient-to-br from-amber-50/50 to-white">
+            <div className="flex items-center justify-between text-amber-700 mb-1">
+              <span className="text-xs font-bold">Belum Terprint</span>
+              <span className="text-xs">⏱️</span>
+            </div>
+            <div className="text-xl font-extrabold text-amber-800 font-mono">
+              {grouped.filter((g) => !g.allPrinted).length}
+            </div>
+          </div>
+
+          {/* Card 3: 1P ORA */}
+          <div className="bg-white border border-slate-200 rounded-xl p-3.5 shadow-xs">
+            <div className="flex items-center justify-between text-slate-500 mb-1">
+              <span className="text-xs font-semibold">1P ORA (Max)</span>
+              <span className="text-[10px] bg-blue-100 text-blue-800 px-1.5 py-0.2 rounded font-bold">ORA</span>
+            </div>
+            <div className="text-lg font-bold text-slate-900 font-mono">
+              {highestInvoices.maxOraStr}
+            </div>
+            <div className="text-[11px] text-slate-400 truncate mt-0.5">
+              {invoiceProgression?.rangeOra ? `Rentang: ${invoiceProgression.rangeOra}` : "Belum ada upload"}
+            </div>
+          </div>
+
+          {/* Card 4: 2P */}
+          <div className="bg-white border border-slate-200 rounded-xl p-3.5 shadow-xs">
+            <div className="flex items-center justify-between text-slate-500 mb-1">
+              <span className="text-xs font-semibold">2P (Max)</span>
+              <span className="text-[10px] bg-emerald-100 text-emerald-800 px-1.5 py-0.2 rounded font-bold">2P</span>
+            </div>
+            <div className="text-lg font-bold text-slate-900 font-mono">
+              {highestInvoices.max2PStr}
+            </div>
+            <div className="text-[11px] text-slate-400 truncate mt-0.5">
+              {invoiceProgression?.range2P ? `Rentang: ${invoiceProgression.range2P}` : "Belum ada upload"}
+            </div>
+          </div>
+
+          {/* Card 5: Total Invoice */}
+          <div className="bg-white border border-slate-200 rounded-xl p-3.5 shadow-xs">
+            <div className="flex items-center justify-between text-slate-500 mb-1">
+              <span className="text-xs font-semibold">Total Faktur</span>
+              <span className="text-xs">📑</span>
+            </div>
+            <div className="text-xl font-extrabold text-slate-900 font-mono">
+              {grouped.length}
+            </div>
+          </div>
+
+          {/* Card 6: Double Invoice */}
+          <div className="bg-white border border-slate-200 rounded-xl p-3.5 shadow-xs">
+            <div className="flex items-center justify-between text-slate-500 mb-1">
+              <span className="text-xs font-semibold">Double INV</span>
+              <span className="text-xs text-rose-500 font-bold">⚠️</span>
+            </div>
+            <div className="text-xl font-extrabold text-rose-600 font-mono">
+              {grouped.filter((g) => g.isDoubleInv).length}
+            </div>
+          </div>
+
+          {/* Card 7: 1P DOO */}
+          <div className="bg-white border border-slate-200 rounded-xl p-3.5 shadow-xs">
+            <div className="flex items-center justify-between text-slate-500 mb-1">
+              <span className="text-xs font-semibold">1P DOO (Max)</span>
+              <span className="text-[10px] bg-blue-100 text-blue-800 px-1.5 py-0.2 rounded font-bold">1P DOO</span>
+            </div>
+            <div className="text-lg font-bold text-slate-900 font-mono">
+              {highestInvoices.max1PDooStr}
+            </div>
+            <div className="text-[11px] text-slate-400 truncate mt-0.5">
+              {invoiceProgression?.range1PDoo ? `Rentang: ${invoiceProgression.range1PDoo}` : "Belum ada upload"}
+            </div>
+          </div>
+
+          {/* Card 8: 3P */}
+          <div className="bg-white border border-slate-200 rounded-xl p-3.5 shadow-xs">
+            <div className="flex items-center justify-between text-slate-500 mb-1">
+              <span className="text-xs font-semibold">3P (Max)</span>
+              <span className="text-[10px] bg-purple-100 text-purple-800 px-1.5 py-0.2 rounded font-bold">3P</span>
+            </div>
+            <div className="text-lg font-bold text-slate-900 font-mono">
+              {highestInvoices.max3PStr}
+            </div>
+            <div className="text-[11px] text-slate-400 truncate mt-0.5">
+              {invoiceProgression?.range3P ? `Rentang: ${invoiceProgression.range3P}` : "Belum ada upload"}
+            </div>
           </div>
         </div>
 
-        <div className="space-y-2.5 text-xs">
-          <div className="grid grid-cols-2 gap-2 bg-gray-50 p-3 rounded-xl border border-gray-200">
-            <div className="flex items-center justify-between pr-2 border-r border-gray-200">
-              <span className="text-gray-700">Pindah Baris</span>
-              <div className="flex gap-1">
-                <kbd className="px-1.5 py-0.5 bg-white rounded border border-gray-300 text-[11px] font-mono font-bold shadow-2xs">↑</kbd>
-                <kbd className="px-1.5 py-0.5 bg-white rounded border border-gray-300 text-[11px] font-mono font-bold shadow-2xs">↓</kbd>
-              </div>
-            </div>
-            <div className="flex items-center justify-between pl-1">
-              <span className="text-gray-700">Pindah Kolom/Sel</span>
-              <div className="flex gap-1">
-                <kbd className="px-1.5 py-0.5 bg-white rounded border border-gray-300 text-[11px] font-mono font-bold shadow-2xs">←</kbd>
-                <kbd className="px-1.5 py-0.5 bg-white rounded border border-gray-300 text-[11px] font-mono font-bold shadow-2xs">→</kbd>
-              </div>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-2 bg-gray-50 p-3 rounded-xl border border-gray-200">
-            <div className="flex items-center justify-between pr-2 border-r border-gray-200">
-              <span className="text-gray-700">Cetak (Centang)</span>
-              <kbd className="px-2 py-0.5 bg-amber-500 text-white rounded border border-amber-600 text-[11px] font-mono font-bold shadow-2xs">Space</kbd>
-            </div>
-            <div className="flex items-center justify-between pl-1">
-              <span className="text-gray-700">Salin Data Sel</span>
-              <kbd className="px-1.5 py-0.5 bg-white rounded border border-gray-300 text-[11px] font-mono font-bold shadow-2xs">Ctrl+C</kbd>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-2 bg-gray-50 p-3 rounded-xl border border-gray-200">
-            <div className="flex items-center justify-between pr-2 border-r border-gray-200">
-              <span className="text-gray-700">Buka Detail Item</span>
-              <kbd className="px-2 py-0.5 bg-white rounded border border-gray-300 text-[11px] font-mono font-bold shadow-2xs">Enter</kbd>
-            </div>
-            <div className="flex items-center justify-between pl-1">
-              <span className="text-gray-700">Pindah Halaman</span>
-              <div className="flex gap-1">
-                <kbd className="px-1.5 py-0.5 bg-white rounded border border-gray-300 text-[11px] font-mono font-bold shadow-2xs">PgUp</kbd>
-                <kbd className="px-1.5 py-0.5 bg-white rounded border border-gray-300 text-[11px] font-mono font-bold shadow-2xs">PgDn</kbd>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-blue-900 mt-3">
-            <p className="font-bold mb-1 flex items-center gap-1">
-              <span>💡</span> Tips Singkronisasi Multi-Device:
-            </p>
-            <p className="text-[11px] text-blue-800 leading-relaxed">
-              Data faktur, status centang cetak, dan rentang faktur terbaru otomatis tersinkronisasi realtime ke semua perangkat melalui Supabase Cloud.
-            </p>
-          </div>
-        </div>
-
-        <div className="mt-5 flex justify-end">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 bg-gray-900 hover:bg-gray-800 text-white text-xs font-semibold rounded-xl shadow transition-colors"
-          >
-            Mengerti & Tutup
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function MasterApotekModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
-  const [search, setSearch] = useState("");
-  const [katFilter, setKatFilter] = useState<"all" | "1P" | "2P" | "3P">("all");
-  const [page, setPage] = useState(0);
-  const rowsPerPage = 30;
-
-  const filtered = useMemo(() => {
-    let list = masterApotekList as Array<{
-      namaApotek: string;
-      kodeCustomer: string;
-      namaMerchant: string;
-      kategori: string;
-      keterangan: string;
-    }>;
-
-    if (katFilter !== "all") {
-      list = list.filter((a) => a.kategori === katFilter);
-    }
-
-    if (search.trim()) {
-      const s = search.toLowerCase().trim();
-      list = list.filter(
-        (a) =>
-          a.namaApotek.toLowerCase().includes(s) ||
-          a.kodeCustomer.toLowerCase().includes(s) ||
-          a.namaMerchant.toLowerCase().includes(s) ||
-          a.keterangan.toLowerCase().includes(s)
-      );
-    }
-
-    return list;
-  }, [search, katFilter]);
-
-  const totalPages = Math.ceil(filtered.length / rowsPerPage);
-  const pagedData = useMemo(() => {
-    const start = page * rowsPerPage;
-    return filtered.slice(start, start + rowsPerPage);
-  }, [filtered, page]);
-
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs animate-in fade-in duration-150">
-      <div className="bg-white rounded-2xl max-w-4xl w-full p-6 shadow-2xl border border-gray-100 relative flex flex-col max-h-[90vh]">
-        {/* Header */}
-        <div className="flex items-center justify-between pb-3 border-b border-gray-200 shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center text-xl shadow-xs">
-              🏪
-            </div>
-            <div>
-              <h2 className="text-base font-bold text-gray-900">Database Master Apotek & Pelanggan</h2>
-              <p className="text-xs text-gray-500">
-                Total {masterApotekList.length.toLocaleString("id-ID")} apotek terdaftar (Acuan Klasifikasi 1P / 2P / 3P)
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-700 w-8 h-8 rounded-full flex items-center justify-center hover:bg-gray-100 transition-colors text-lg"
-            title="Tutup"
-          >
-            ✕
-          </button>
-        </div>
-
-        {/* Toolbar & Filters */}
-        <div className="py-3 flex flex-wrap items-center justify-between gap-2 shrink-0 border-b border-gray-100">
-          <div className="flex items-center gap-1.5 overflow-x-auto">
-            <FBtn active={katFilter === "all"} onClick={() => { setKatFilter("all"); setPage(0); }}>
-              Semua ({masterApotekList.length})
-            </FBtn>
-            <FBtn active={katFilter === "1P"} onClick={() => { setKatFilter("1P"); setPage(0); }} color="blue">
-              🏪 1P Prioritas 1 (45)
-            </FBtn>
-            <FBtn active={katFilter === "2P"} onClick={() => { setKatFilter("2P"); setPage(0); }} color="green">
-              🏪 2P Mitra Merchant (252)
-            </FBtn>
-            <FBtn active={katFilter === "3P"} onClick={() => { setKatFilter("3P"); setPage(0); }} color="purple">
-              🏢 3P Reguler (2.400)
-            </FBtn>
-          </div>
-
-          <div className="relative w-72">
-            <span className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-gray-400 text-xs">
-              🔍
-            </span>
-            <input
-              type="text"
-              placeholder="Cari apotek, kode, merchant, zona..."
-              value={search}
-              onChange={(e) => { setSearch(e.target.value); setPage(0); }}
-              className="w-full pl-7 pr-7 py-1 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white shadow-2xs"
-            />
-            {search && (
+        {/* Filter and Search Bar Section */}
+        <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs space-y-3">
+          {/* Top Row Filters */}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            {/* Status Filter Tabs */}
+            <div className="flex items-center bg-slate-100 p-1 rounded-xl">
               <button
-                onClick={() => { setSearch(""); setPage(0); }}
-                className="absolute inset-y-0 right-0 pr-2 flex items-center text-gray-400 hover:text-gray-600 font-bold text-xs"
+                onClick={() => { setFilter("belum"); setPage(0); }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  filter === "belum"
+                    ? "bg-white text-slate-900 shadow-xs"
+                    : "text-slate-600 hover:text-slate-900"
+                }`}
               >
-                ✕
+                Belum Terprint ({grouped.filter((g) => !g.allPrinted).length})
+              </button>
+              <button
+                onClick={() => { setFilter("sudah"); setPage(0); }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  filter === "sudah"
+                    ? "bg-white text-slate-900 shadow-xs"
+                    : "text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                Sudah Terprint ({grouped.filter((g) => g.allPrinted).length})
+              </button>
+              <button
+                onClick={() => { setFilter("all"); setPage(0); }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  filter === "all"
+                    ? "bg-white text-slate-900 shadow-xs"
+                    : "text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                Semua ({grouped.length})
+              </button>
+              <button
+                onClick={() => { setFilter("double"); setPage(0); }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  filter === "double"
+                    ? "bg-white text-rose-700 shadow-xs"
+                    : "text-rose-600 hover:text-rose-800"
+                }`}
+              >
+                Double INV ({grouped.filter((g) => g.isDoubleInv).length})
+              </button>
+            </div>
+
+            {/* Batch Done Print Button */}
+            {unprintedCountInFiltered > 0 && (
+              <button
+                onClick={handleMarkAllPrinted}
+                className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 shadow-sm"
+              >
+                <span>✓</span>
+                <span>Tandai Semua Selesai ({unprintedCountInFiltered})</span>
               </button>
             )}
           </div>
+
+          {/* Secondary Dropdown Filters & Search */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-2.5 pt-2 border-t border-slate-100">
+            {/* Global Search Input */}
+            <div className="relative md:col-span-1">
+              <span className="absolute left-3 top-2.5 text-xs text-slate-400">🔍</span>
+              <input
+                type="text"
+                placeholder="Cari SO / Invoice / Obat..."
+                value={search}
+                onChange={(e) => { setSearch(e.target.value); setPage(0); }}
+                className="w-full pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+              />
+            </div>
+
+            {/* Kategori Filter */}
+            <select
+              value={katFilter}
+              onChange={(e) => { setKatFilter(e.target.value as KatFilter); setPage(0); }}
+              className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-blue-500"
+            >
+              <option value="all">Semua Kategori (1P/2P/3P)</option>
+              <option value="1P">1P</option>
+              <option value="2P">2P</option>
+              <option value="3P">3P</option>
+            </select>
+
+            {/* Jenis Transaksi Filter */}
+            <select
+              value={jenisFilter}
+              onChange={(e) => { setJenisFilter(e.target.value as JenisFilter); setPage(0); }}
+              className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-blue-500"
+            >
+              <option value="all">Semua Jenis (ORA/DOO)</option>
+              <option value="ORA">ORA</option>
+              <option value="DOO">DOO</option>
+            </select>
+
+            {/* Kategori Produk Filter */}
+            <select
+              value={klasFilter}
+              onChange={(e) => { setKlasFilter(e.target.value as KlasFilter); setPage(0); }}
+              className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-blue-500"
+            >
+              <option value="all">Semua Produk</option>
+              <option value="prekursor">Prekursor</option>
+              <option value="oot">OOT</option>
+              <option value="ccp">CCP (Cold Chain)</option>
+              <option value="alkes">Alkes</option>
+              <option value="farma">Farma</option>
+            </select>
+
+            {/* Filter Tanggal */}
+            <select
+              value={dateFilter}
+              onChange={(e) => { setDateFilter(e.target.value); setPage(0); }}
+              className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-blue-500"
+            >
+              <option value="all">Semua Tanggal</option>
+              {availableDates.map((d) => (
+                <option key={d} value={d}>{d}</option>
+              ))}
+            </select>
+          </div>
         </div>
 
-        {/* Table Body */}
-        <div className="overflow-y-auto flex-1 my-2 border border-gray-200 rounded-lg">
-          <table className="w-full text-xs">
-            <thead className="bg-gray-50 border-b border-gray-200 sticky top-0 z-10 select-none">
-              <tr>
-                <th className="px-2.5 py-2 text-center text-gray-500 w-10">#</th>
-                <th className="px-2.5 py-2 text-left text-gray-500 w-24">Kategori</th>
-                <th className="px-2.5 py-2 text-left text-gray-500 w-28">Kode Customer</th>
-                <th className="px-2.5 py-2 text-left text-gray-500">Nama Apotek</th>
-                <th className="px-2.5 py-2 text-left text-gray-500">Nama Merchant / Platform</th>
-                <th className="px-2.5 py-2 text-left text-gray-500">Zona / Keterangan</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {pagedData.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="text-center py-8 text-gray-400">
-                    Tidak ditemukan apotek yang sesuai pencarian.
-                  </td>
+        {/* Faktur Table Card */}
+        <div className="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr className="bg-slate-100/80 border-b border-slate-200 text-slate-600 font-semibold">
+                  <th className="px-3 py-2.5 w-8 text-center">#</th>
+                  <th className="px-3 py-2.5 w-12 text-center">Print</th>
+                  <th className="px-3 py-2.5">No SO</th>
+                  <th className="px-3 py-2.5">No Invoice</th>
+                  <th className="px-3 py-2.5">Kat Produk</th>
+                  <th className="px-3 py-2.5">Jenis</th>
+                  <th className="px-3 py-2.5">Pelanggan</th>
+                  <th className="px-3 py-2.5">Order Date</th>
+                  <th className="px-3 py-2.5">Kat</th>
+                  <th className="px-3 py-2.5">Done Print (Waktu)</th>
+                  <th className="px-3 py-2.5 text-right">Total Harga</th>
                 </tr>
-              ) : (
-                pagedData.map((a, idx) => (
-                  <tr key={idx} className="hover:bg-gray-50">
-                    <td className="px-2.5 py-1.5 text-center text-gray-400 font-mono">
-                      {page * rowsPerPage + idx + 1}
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {loading && filtered.length === 0 ? (
+                  <tr>
+                    <td colSpan={11} className="text-center py-12 text-slate-400">
+                      <div className="flex flex-col items-center gap-2">
+                        <span className="text-2xl animate-spin">🔄</span>
+                        <span className="text-xs font-medium">Memuat data faktur...</span>
+                      </div>
                     </td>
-                    <td className="px-2.5 py-1.5 whitespace-nowrap">
-                      <span
-                        className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${
-                          a.kategori === "1P"
-                            ? "bg-blue-100 text-blue-800"
-                            : a.kategori === "2P"
-                            ? "bg-green-100 text-green-800"
-                            : "bg-purple-100 text-purple-800"
-                        }`}
-                      >
-                        {a.kategori}
-                      </span>
-                    </td>
-                    <td className="px-2.5 py-1.5 font-mono text-gray-700 whitespace-nowrap">
-                      {a.kodeCustomer !== "-" ? a.kodeCustomer : <span className="text-gray-400">-</span>}
-                    </td>
-                    <td className="px-2.5 py-1.5 font-medium text-gray-900">{a.namaApotek}</td>
-                    <td className="px-2.5 py-1.5 text-gray-600 font-mono text-[11px]">{a.namaMerchant}</td>
-                    <td className="px-2.5 py-1.5 text-gray-500">{a.keterangan}</td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Footer Pagination */}
-        <div className="pt-3 border-t border-gray-200 flex items-center justify-between text-xs shrink-0">
-          <span className="text-gray-500">
-            Menampilkan {filtered.length.toLocaleString("id-ID")} apotek · Halaman {page + 1} / {totalPages || 1}
-          </span>
-          <div className="flex items-center gap-1.5">
-            <button
-              onClick={() => setPage((p) => Math.max(0, p - 1))}
-              disabled={page === 0}
-              className="px-2.5 py-1 border border-gray-300 rounded bg-white hover:bg-gray-50 disabled:opacity-30 shadow-2xs"
-            >
-              ← Prev
-            </button>
-            <span className="font-semibold text-gray-700 px-1">
-              {page + 1} / {totalPages || 1}
-            </span>
-            <button
-              onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
-              disabled={page >= totalPages - 1}
-              className="px-2.5 py-1 border border-gray-300 rounded bg-white hover:bg-gray-50 disabled:opacity-30 shadow-2xs"
-            >
-              Next →
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function MasterProductModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
-  const [search, setSearch] = useState("");
-  const [catFilter, setCatFilter] = useState<string>("all");
-  const [page, setPage] = useState(0);
-  const rowsPerPage = 30;
-
-  const filtered = useMemo(() => {
-    let list = masterProductList as Array<{
-      kodeBarang?: string;
-      kodeOracle?: string | number;
-      kodeAccurate?: string | number;
-      namaBarang: string;
-      kategori: string;
-      klasifikasi?: string;
-      kategoriWarehouse?: string;
-    }>;
-
-    if (catFilter !== "all") {
-      list = list.filter((p) => p.kategori.toUpperCase() === catFilter.toUpperCase());
-    }
-
-    if (search.trim()) {
-      const s = search.toLowerCase().trim();
-      list = list.filter(
-        (p) =>
-          p.namaBarang.toLowerCase().includes(s) ||
-          String(p.kodeOracle || "").toLowerCase().includes(s) ||
-          String(p.kodeAccurate || "").toLowerCase().includes(s) ||
-          String(p.kodeBarang || "").toLowerCase().includes(s) ||
-          String(p.klasifikasi || "").toLowerCase().includes(s) ||
-          String(p.kategoriWarehouse || "").toLowerCase().includes(s)
-      );
-    }
-
-    return list;
-  }, [search, catFilter]);
-
-  const totalPages = Math.ceil(filtered.length / rowsPerPage);
-  const pagedData = useMemo(() => {
-    const start = page * rowsPerPage;
-    return filtered.slice(start, start + rowsPerPage);
-  }, [filtered, page]);
-
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs animate-in fade-in duration-150">
-      <div className="bg-white rounded-2xl max-w-5xl w-full p-6 shadow-2xl border border-gray-100 relative flex flex-col max-h-[90vh]">
-        {/* Header */}
-        <div className="flex items-center justify-between pb-3 border-b border-gray-200 shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-purple-100 text-purple-800 flex items-center justify-center text-xl shadow-xs">
-              📦
-            </div>
-            <div>
-              <h2 className="text-base font-bold text-gray-900">Database Master Produk & Obat</h2>
-              <p className="text-xs text-gray-500">
-                Total {masterProductList.length.toLocaleString("id-ID")} produk terdaftar (Acuan FARMA, ALKES, CCP, PREKURSOR, OOT)
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-700 w-8 h-8 rounded-full flex items-center justify-center hover:bg-gray-100 transition-colors text-lg"
-            title="Tutup"
-          >
-            ✕
-          </button>
-        </div>
-
-        {/* Toolbar & Filters */}
-        <div className="py-3 flex flex-wrap items-center justify-between gap-2 shrink-0 border-b border-gray-100">
-          <div className="flex items-center gap-1.5 overflow-x-auto">
-            <FBtn active={catFilter === "all"} onClick={() => { setCatFilter("all"); setPage(0); }}>
-              Semua ({masterProductList.length})
-            </FBtn>
-            <FBtn active={catFilter === "PREKURSOR"} onClick={() => { setCatFilter("PREKURSOR"); setPage(0); }} color="amber">
-              💊 Prekursor (96)
-            </FBtn>
-            <FBtn active={catFilter === "OOT"} onClick={() => { setCatFilter("OOT"); setPage(0); }} color="purple">
-              🧪 OOT (21)
-            </FBtn>
-            <FBtn active={catFilter === "CCP"} onClick={() => { setCatFilter("CCP"); setPage(0); }} color="sky">
-              ❄️ CCP (70)
-            </FBtn>
-            <FBtn active={catFilter === "ALKES"} onClick={() => { setCatFilter("ALKES"); setPage(0); }} color="teal">
-              🩺 Alkes (821)
-            </FBtn>
-            <FBtn active={catFilter === "FARMA"} onClick={() => { setCatFilter("FARMA"); setPage(0); }} color="indigo">
-              💊 Farma (6.143)
-            </FBtn>
-          </div>
-
-          <div className="relative w-72">
-            <span className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-gray-400 text-xs">
-              🔍
-            </span>
-            <input
-              type="text"
-              placeholder="Cari obat, kode Oracle/Accurate..."
-              value={search}
-              onChange={(e) => { setSearch(e.target.value); setPage(0); }}
-              className="w-full pl-7 pr-7 py-1 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 bg-white shadow-2xs"
-            />
-            {search && (
-              <button
-                onClick={() => { setSearch(""); setPage(0); }}
-                className="absolute inset-y-0 right-0 pr-2 flex items-center text-gray-400 hover:text-gray-600 font-bold text-xs"
-              >
-                ✕
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Table Body */}
-        <div className="overflow-y-auto flex-1 my-2 border border-gray-200 rounded-lg">
-          <table className="w-full text-xs">
-            <thead className="bg-gray-50 border-b border-gray-200 sticky top-0 z-10 select-none">
-              <tr>
-                <th className="px-2.5 py-2 text-center text-gray-500 w-10">#</th>
-                <th className="px-2.5 py-2 text-left text-gray-500 w-28">Kategori</th>
-                <th className="px-2.5 py-2 text-left text-gray-500 w-28">Kode Oracle</th>
-                <th className="px-2.5 py-2 text-left text-gray-500 w-28">Kode Accurate</th>
-                <th className="px-2.5 py-2 text-left text-gray-500">Nama Barang / Deskripsi</th>
-                <th className="px-2.5 py-2 text-left text-gray-500 w-36">Klasifikasi</th>
-                <th className="px-2.5 py-2 text-left text-gray-500 w-36">Warehouse Cat</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {pagedData.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="text-center py-8 text-gray-400">
-                    Tidak ditemukan produk yang sesuai pencarian.
-                  </td>
-                </tr>
-              ) : (
-                pagedData.map((p, idx) => (
-                  <tr key={idx} className="hover:bg-gray-50">
-                    <td className="px-2.5 py-1.5 text-center text-gray-400 font-mono">
-                      {page * rowsPerPage + idx + 1}
+                ) : filtered.length === 0 ? (
+                  <tr>
+                    <td colSpan={11} className="text-center py-12 text-slate-400">
+                      <div className="flex flex-col items-center gap-2">
+                        <span className="text-3xl">📄</span>
+                        <span className="text-xs font-medium">Tidak ada faktur yang sesuai filter.</span>
+                      </div>
                     </td>
-                    <td className="px-2.5 py-1.5 whitespace-nowrap">
-                      <span
-                        className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold border ${
-                          p.kategori === "ALKES"
-                            ? "bg-teal-100 text-teal-800 border-teal-300"
-                            : p.kategori === "CCP"
-                            ? "bg-sky-100 text-sky-900 border-sky-300"
-                            : p.kategori === "PREKURSOR"
-                            ? "bg-amber-100 text-amber-900 border-amber-300"
-                            : p.kategori === "OOT"
-                            ? "bg-purple-100 text-purple-900 border-purple-300"
-                            : "bg-indigo-50 text-indigo-700 border-indigo-200"
-                        }`}
-                      >
-                        {p.kategori === "CCP" ? "❄️ CCP" : p.kategori}
-                      </span>
-                    </td>
-                    <td className="px-2.5 py-1.5 font-mono text-gray-800 whitespace-nowrap">
-                      {p.kodeOracle ? String(p.kodeOracle) : <span className="text-gray-400">-</span>}
-                    </td>
-                    <td className="px-2.5 py-1.5 font-mono text-gray-600 whitespace-nowrap">
-                      {p.kodeAccurate ? String(p.kodeAccurate) : <span className="text-gray-400">-</span>}
-                    </td>
-                    <td className="px-2.5 py-1.5 font-medium text-gray-900">{p.namaBarang}</td>
-                    <td className="px-2.5 py-1.5 text-gray-600">{p.klasifikasi || "-"}</td>
-                    <td className="px-2.5 py-1.5 text-gray-500">{p.kategoriWarehouse || "-"}</td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Footer Pagination */}
-        <div className="pt-3 border-t border-gray-200 flex items-center justify-between text-xs shrink-0">
-          <span className="text-gray-500">
-            Menampilkan {filtered.length.toLocaleString("id-ID")} produk · Halaman {page + 1} / {totalPages || 1}
-          </span>
-          <div className="flex items-center gap-1.5">
-            <button
-              onClick={() => setPage((p) => Math.max(0, p - 1))}
-              disabled={page === 0}
-              className="px-2.5 py-1 border border-gray-300 rounded bg-white hover:bg-gray-50 disabled:opacity-30 shadow-2xs"
-            >
-              ← Prev
-            </button>
-            <span className="font-semibold text-gray-700 px-1">
-              {page + 1} / {totalPages || 1}
-            </span>
-            <button
-              onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
-              disabled={page >= totalPages - 1}
-              className="px-2.5 py-1 border border-gray-300 rounded bg-white hover:bg-gray-50 disabled:opacity-30 shadow-2xs"
-            >
-              Next →
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function Card({ label, value, color, small }: { label: string; value: string; color?: "orange" | "red"; small?: boolean }) {
-  const colorClass = color === "orange" ? "text-orange-600" : color === "red" ? "text-red-600" : "text-gray-900";
-  return (
-    <div className="bg-white rounded-lg border border-gray-200 p-2.5 shadow-2xs flex flex-col justify-between">
-      <p className="text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-0.5 truncate">{label}</p>
-      <p className={`${small ? "text-sm" : "text-base"} font-bold font-mono ${colorClass} truncate`}>{value}</p>
-    </div>
-  );
-}
-
-function FBtn({ active, onClick, children, color = "gray" }: {
-  active: boolean; onClick: () => void; children: React.ReactNode;
-  color?: "gray" | "orange" | "red" | "blue" | "green" | "purple" | "emerald" | "amber" | "sky" | "teal" | "indigo";
-}) {
-  const colors: Record<string, string> = {
-    gray: active ? "bg-gray-800 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200",
-    orange: active ? "bg-orange-500 text-white" : "bg-orange-100 text-orange-700 hover:bg-orange-200",
-    red: active ? "bg-red-500 text-white" : "bg-red-100 text-red-700 hover:bg-red-200",
-    blue: active ? "bg-blue-600 text-white" : "bg-blue-100 text-blue-700 hover:bg-blue-200",
-    green: active ? "bg-green-600 text-white" : "bg-green-100 text-green-700 hover:bg-green-200",
-    purple: active ? "bg-purple-600 text-white" : "bg-purple-100 text-purple-700 hover:bg-purple-200",
-    emerald: active ? "bg-emerald-600 text-white" : "bg-emerald-100 text-emerald-700 hover:bg-emerald-200",
-    amber: active ? "bg-amber-600 text-white" : "bg-amber-100 text-amber-800 hover:bg-amber-200",
-    sky: active ? "bg-sky-600 text-white" : "bg-sky-100 text-sky-800 hover:bg-sky-200",
-    teal: active ? "bg-teal-600 text-white" : "bg-teal-100 text-teal-800 hover:bg-teal-200",
-    indigo: active ? "bg-indigo-600 text-white" : "bg-indigo-100 text-indigo-700 hover:bg-indigo-200",
-  };
-  return (
-    <button onClick={onClick} className={`px-2 py-1 text-[11px] font-semibold rounded-md transition-colors whitespace-nowrap shadow-2xs ${colors[color]}`}>
-      {children}
-    </button>
-  );
-}
-
-function UpdateNoticeModal({
-  isOpen,
-  onClose,
-  onOpenFeedback,
-}: {
-  isOpen: boolean;
-  onClose: () => void;
-  onOpenFeedback: () => void;
-}) {
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs animate-in fade-in duration-150">
-      <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-gray-100 relative">
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 w-8 h-8 rounded-full flex items-center justify-center hover:bg-gray-100 transition-colors text-lg"
-          title="Tutup"
-        >
-          ✕
-        </button>
-
-        {/* Modal Header */}
-        <div className="flex items-center gap-3 mb-4">
-          <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-amber-500 to-amber-400 text-white flex items-center justify-center text-2xl shadow-md">
-            📢
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-base font-bold text-gray-900">UPDATE SISTEM FAKTUR TRACKER</h2>
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-300">
-                v2.2
-              </span>
-            </div>
-            <p className="text-xs text-gray-500">Halo tim, sistem sudah selesai di-update ya:</p>
-          </div>
-        </div>
-
-        {/* Update Bullet Points */}
-        <div className="space-y-2.5 text-xs">
-          <div className="p-3 bg-teal-50/80 border border-teal-200 rounded-xl flex items-start gap-3">
-            <span className="text-base leading-none">🛡️</span>
-            <div>
-              <p className="font-bold text-teal-950">Anti-Reset Print (Aman Tabrakan Upload)</p>
-              <p className="text-gray-600 mt-0.5">
-                Faktur yang sudah dicentang print dijamin <strong>aman permanen & tidak akan ke-reset</strong>, meskipun ada yang mengupload file di saat bersamaan.
-              </p>
-            </div>
-          </div>
-
-          <div className="p-3 bg-amber-50/70 border border-amber-200/80 rounded-xl flex items-start gap-3">
-            <span className="text-base leading-none">⚡</span>
-            <div>
-              <p className="font-bold text-amber-950">Jauh Lebih Cepat & Enteng</p>
-              <p className="text-gray-600 mt-0.5">
-                Klik centang print sekarang instan & ga lemot lagi (zero delay). Navigasi panah keyboard juga jauh lebih halus.
-              </p>
-            </div>
-          </div>
-
-          <div className="p-3 bg-blue-50/70 border border-blue-200/80 rounded-xl flex items-start gap-3">
-            <span className="text-base leading-none">🔍</span>
-            <div>
-              <p className="font-bold text-blue-950">Smart Search (Pencarian Pintar)</p>
-              <p className="text-gray-600 mt-0.5">
-                Kolom pencarian otomatis nyari ke <strong>seluruh data faktur</strong> tanpa perlu bingung ganti-ganti tab atau filter.
-              </p>
-            </div>
-          </div>
-
-          <div className="p-3 bg-purple-50/70 border border-purple-200/80 rounded-xl flex items-start gap-3">
-            <span className="text-base leading-none">🎛️</span>
-            <div>
-              <p className="font-bold text-purple-950">Tampilan Filter Lebih Rapi</p>
-              <p className="text-gray-600 mt-0.5">
-                Menu filter kini berbentuk dropdown ringkas + ada tombol <strong>Reset Filter</strong> untuk kembali ke setelan awal dengan 1 klik.
-              </p>
-            </div>
-          </div>
-
-          <div className="p-3 bg-emerald-50/70 border border-emerald-200/80 rounded-xl flex items-start gap-3">
-            <span className="text-base leading-none">📂</span>
-            <div>
-              <p className="font-bold text-emerald-950">Upload File Normal Kembali</p>
-              <p className="text-gray-600 mt-0.5">
-                Sistem database sudah sinkron dan fitur upload file Excel sudah aktif normal kembali seperti biasa.
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Tip Box */}
-        <div className="mt-3 p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[11px] text-slate-600 flex items-center justify-between">
-          <span className="flex items-center gap-1.5">
-            <span>💡</span> Tekan <strong>Ctrl + Shift + R</strong> jika tampilan belum berubah.
-          </span>
-        </div>
-
-        {/* Feedback Promo Card */}
-        <div className="mt-3 p-3 bg-rose-50 border border-rose-200 rounded-xl flex items-center justify-between gap-3">
-          <div className="text-xs">
-            <p className="font-bold text-rose-900">Ada keluhan atau kendala?</p>
-            <p className="text-rose-700 text-[11px]">Bisa langsung ketik masukan atau laporkan masalah ke sistem.</p>
-          </div>
-          <button
-            onClick={onOpenFeedback}
-            className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-lg shadow-xs transition-colors shrink-0 flex items-center gap-1"
-          >
-            <span>💬</span>
-            <span>Tulis Keluhan</span>
-          </button>
-        </div>
-
-        {/* Footer Actions */}
-        <div className="mt-4 flex items-center justify-end">
-          <button
-            onClick={onClose}
-            className="px-5 py-2 bg-gray-900 hover:bg-gray-800 text-white text-xs font-semibold rounded-xl shadow transition-colors"
-          >
-            Mengerti & Tutup
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function TeamFeedbackModal({
-  isOpen,
-  onClose,
-  feedbacks,
-}: {
-  isOpen: boolean;
-  onClose: () => void;
-  feedbacks: TeamFeedback[];
-}) {
-  const [tab, setTab] = useState<"form" | "history">("form");
-  const [senderName, setSenderName] = useState("");
-  const [category, setCategory] = useState<"kendala" | "lemot" | "saran" | "lainnya">("kendala");
-  const [message, setMessage] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [successNotice, setSuccessNotice] = useState(false);
-
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("ft_sender_name");
-      if (saved) setSenderName(saved);
-    }
-  }, []);
-
-  if (!isOpen) return null;
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!message.trim()) {
-      alert("Mohon ketikkan isi keluhan atau masukan Anda.");
-      return;
-    }
-
-    try {
-      setSubmitting(true);
-      const name = senderName.trim() || "Anonim (Tim Faktur)";
-      localStorage.setItem("ft_sender_name", name);
-
-      await submitTeamFeedback({
-        senderName: name,
-        category,
-        message: message.trim(),
-      });
-
-      setMessage("");
-      setSuccessNotice(true);
-      setTimeout(() => setSuccessNotice(false), 5000);
-    } catch (err) {
-      console.error("Gagal submit feedback:", err);
-      alert("Terjadi kesalahan saat menyimpan keluhan ke database.");
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const handleShareWa = () => {
-    if (!message.trim()) {
-      alert("Ketik keluhan atau masukan terlebih dahulu sebelum kirim ke WhatsApp.");
-      return;
-    }
-    const catLabel =
-      category === "kendala"
-        ? "🚨 Kendala / Bug"
-        : category === "lemot"
-        ? "⏱️ Sistem Lemot"
-        : category === "saran"
-        ? "💡 Saran Fitur"
-        : "💬 Pertanyaan / Lainnya";
-
-    const text = `*LAPORAN / KELUHAN FAKTUR TRACKER*%0A%0A👤 *Pengirim:* ${encodeURIComponent(
-      senderName || "Tim Faktur"
-    )}%0A🏷️ *Kategori:* ${encodeURIComponent(catLabel)}%0A📝 *Pesan / Kendala:*%0A${encodeURIComponent(
-      message
-    )}%0A%0A_Dikirim melalui Sistem Faktur Tracker_`;
-
-    window.open(`https://api.whatsapp.com/send?text=${text}`, "_blank");
-  };
-
-  const handleDeleteFeedback = async (id?: string) => {
-    if (!id) return;
-    if (confirm("Hapus catatan keluhan ini?")) {
-      try {
-        await deleteTeamFeedback(id);
-      } catch (err) {
-        console.error("Gagal hapus feedback:", err);
-      }
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs animate-in fade-in duration-150">
-      <div className="bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl border border-gray-100 relative flex flex-col max-h-[90vh]">
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 w-8 h-8 rounded-full flex items-center justify-center hover:bg-gray-100 transition-colors text-lg"
-          title="Tutup"
-        >
-          ✕
-        </button>
-
-        {/* Modal Header */}
-        <div className="flex items-center gap-3 pb-3 border-b border-gray-200 shrink-0">
-          <div className="w-10 h-10 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center text-xl shadow-xs">
-            💬
-          </div>
-          <div>
-            <h2 className="text-base font-bold text-gray-900">Kotak Saran & Keluhan Tim</h2>
-            <p className="text-xs text-gray-500">
-              Sampaikan kendala, sistem lemot, atau saran perbaikan langsung ke sistem
-            </p>
-          </div>
-        </div>
-
-        {/* Tab Switcher */}
-        <div className="flex items-center gap-2 pt-3 pb-2 shrink-0">
-          <button
-            onClick={() => setTab("form")}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-              tab === "form"
-                ? "bg-rose-600 text-white shadow-xs"
-                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-            }`}
-          >
-            📝 Tulis Keluhan / Saran
-          </button>
-          <button
-            onClick={() => setTab("history")}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
-              tab === "history"
-                ? "bg-rose-600 text-white shadow-xs"
-                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-            }`}
-          >
-            <span>📋 Riwayat Masukan</span>
-            <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
-              tab === "history" ? "bg-white text-rose-700" : "bg-gray-200 text-gray-700"
-            }`}>
-              {feedbacks.length}
-            </span>
-          </button>
-        </div>
-
-        {/* Tab Content */}
-        <div className="flex-1 overflow-y-auto pt-2 space-y-4 text-xs">
-          {tab === "form" ? (
-            <form onSubmit={handleSubmit} className="space-y-3.5">
-              {successNotice && (
-                <div className="p-3 bg-emerald-50 border border-emerald-300 rounded-xl text-emerald-900 flex items-center gap-2 animate-in fade-in">
-                  <span className="text-base">✓</span>
-                  <div>
-                    <p className="font-bold">Laporan berhasil terkirim ke sistem!</p>
-                    <p className="text-[11px] text-emerald-700">Terima kasih, tim pengembang akan segera mengecek kendala ini.</p>
-                  </div>
-                </div>
-              )}
-
-              {/* Sender Name */}
-              <div>
-                <label className="block font-bold text-gray-700 mb-1">
-                  Nama Anda / Bagian Tim <span className="text-gray-400 font-normal">(opsional)</span>:
-                </label>
-                <input
-                  type="text"
-                  placeholder="Contoh: Budi - Tim Cetak / Logistik"
-                  value={senderName}
-                  onChange={(e) => setSenderName(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-rose-500 bg-white"
-                />
-              </div>
-
-              {/* Category Radio Pills */}
-              <div>
-                <label className="block font-bold text-gray-700 mb-1.5">Kategori Masukan:</label>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setCategory("kendala")}
-                    className={`px-2.5 py-2 rounded-lg border text-left flex items-center gap-2 transition-all ${
-                      category === "kendala"
-                        ? "border-rose-500 bg-rose-50 text-rose-900 font-bold shadow-2xs"
-                        : "border-gray-200 hover:bg-gray-50 text-gray-700"
-                    }`}
-                  >
-                    <span>🚨</span>
-                    <span>Kendala / Bug</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setCategory("lemot")}
-                    className={`px-2.5 py-2 rounded-lg border text-left flex items-center gap-2 transition-all ${
-                      category === "lemot"
-                        ? "border-amber-500 bg-amber-50 text-amber-900 font-bold shadow-2xs"
-                        : "border-gray-200 hover:bg-gray-50 text-gray-700"
-                    }`}
-                  >
-                    <span>⏱️</span>
-                    <span>Sistem Lemot</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setCategory("saran")}
-                    className={`px-2.5 py-2 rounded-lg border text-left flex items-center gap-2 transition-all ${
-                      category === "saran"
-                        ? "border-emerald-500 bg-emerald-50 text-emerald-900 font-bold shadow-2xs"
-                        : "border-gray-200 hover:bg-gray-50 text-gray-700"
-                    }`}
-                  >
-                    <span>💡</span>
-                    <span>Usul Fitur</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setCategory("lainnya")}
-                    className={`px-2.5 py-2 rounded-lg border text-left flex items-center gap-2 transition-all ${
-                      category === "lainnya"
-                        ? "border-blue-500 bg-blue-50 text-blue-900 font-bold shadow-2xs"
-                        : "border-gray-200 hover:bg-gray-50 text-gray-700"
-                    }`}
-                  >
-                    <span>💬</span>
-                    <span>Lainnya</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Message Textarea */}
-              <div>
-                <label className="block font-bold text-gray-700 mb-1">
-                  Detail Keluhan / Masukan: <span className="text-rose-500">*</span>
-                </label>
-                <textarea
-                  rows={4}
-                  required
-                  placeholder="Ketikkan apa yang terjadi atau yang ingin diperbaiki di sini (contoh: barusan faktur no 100234 waktu dicentang ga berubah, atau browser berat saat scroll)..."
-                  value={message}
-                  onChange={(e) => setMessage(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-rose-500 bg-white leading-relaxed resize-none"
-                />
-              </div>
-
-              {/* Action Buttons */}
-              <div className="pt-2 flex flex-wrap items-center justify-between gap-2">
-                <button
-                  type="button"
-                  onClick={handleShareWa}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-semibold shadow-xs transition-colors"
-                  title="Kirim keluhan ini langsung via WhatsApp admin"
-                >
-                  <span>📲</span>
-                  <span>Kirim ke WA Admin</span>
-                </button>
-
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={onClose}
-                    className="px-3.5 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-medium transition-colors"
-                  >
-                    Batal
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={submitting || !message.trim()}
-                    className="inline-flex items-center gap-1.5 px-4 py-2 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white rounded-xl font-bold shadow transition-all"
-                  >
-                    <span>{submitting ? "Mengirim..." : "🚀 Kirim ke Sistem"}</span>
-                  </button>
-                </div>
-              </div>
-            </form>
-          ) : (
-            <div className="space-y-3">
-              {feedbacks.length === 0 ? (
-                <div className="text-center py-10 text-gray-400">
-                  <p className="text-2xl mb-1">📭</p>
-                  <p>Belum ada masukan atau keluhan yang masuk.</p>
-                </div>
-              ) : (
-                feedbacks.map((item) => (
-                  <div key={item.id} className="p-3 bg-gray-50 border border-gray-200 rounded-xl relative group">
-                    <div className="flex items-center justify-between gap-2 mb-1.5">
-                      <div className="flex items-center gap-2">
-                        <span
-                          className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                            item.category === "kendala"
-                              ? "bg-rose-100 text-rose-800 border border-rose-300"
-                              : item.category === "lemot"
-                              ? "bg-amber-100 text-amber-800 border border-amber-300"
-                              : item.category === "saran"
-                              ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
-                              : "bg-blue-100 text-blue-800 border border-blue-300"
+                ) : (
+                  pageData.map((g) => {
+                    const isExpanded = expandedInvoices.has(g.key);
+                    return (
+                      <Fragment key={g.key}>
+                        <tr
+                          onClick={() => toggleExpand(g.key)}
+                          className={`cursor-pointer transition-colors ${
+                            g.isDoubleInv
+                              ? "bg-rose-50/70 hover:bg-rose-100/70"
+                              : g.allPrinted
+                              ? "bg-emerald-50/40 hover:bg-emerald-100/50"
+                              : "hover:bg-slate-50"
                           }`}
                         >
-                          {item.category === "kendala"
-                            ? "🚨 Kendala"
-                            : item.category === "lemot"
-                            ? "⏱️ Lemot"
-                            : item.category === "saran"
-                            ? "💡 Usul Fitur"
-                            : "💬 Lainnya"}
-                        </span>
-                        <span className="font-bold text-gray-800 text-[11px]">{item.senderName}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] text-gray-400 font-mono">
-                          {new Date(item.createdAt).toLocaleString("id-ID", {
-                            day: "numeric",
-                            month: "short",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                        </span>
-                        <button
-                          onClick={() => handleDeleteFeedback(item.id)}
-                          className="text-gray-300 hover:text-red-600 transition-colors p-1"
-                          title="Hapus laporan ini"
-                        >
-                          🗑️
-                        </button>
-                      </div>
-                    </div>
-                    <p className="text-gray-700 whitespace-pre-wrap leading-relaxed">{item.message}</p>
-                  </div>
-                ))
-              )}
+                          {/* Col 0: Expand */}
+                          <td className="px-3 py-2 text-center text-slate-400">
+                            {isExpanded ? "▼" : "▶"}
+                          </td>
+
+                          {/* Col 1: Print Checkbox */}
+                          <td
+                            className="px-3 py-2 text-center"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              togglePrint(g);
+                            }}
+                          >
+                            <button
+                              type="button"
+                              className={`w-6 h-6 rounded-md flex items-center justify-center text-xs font-bold transition-all shadow-xs ${
+                                g.allPrinted
+                                  ? "bg-emerald-600 text-white hover:bg-orange-500"
+                                  : "bg-slate-200 text-slate-600 hover:bg-emerald-500 hover:text-white"
+                              }`}
+                              title={g.allPrinted ? "Klik untuk UNPRINT" : "Klik untuk TANDAI PRINT"}
+                            >
+                              {g.allPrinted ? "✓" : "○"}
+                            </button>
+                          </td>
+
+                          {/* Col 2: No SO */}
+                          <td className="px-3 py-2 font-mono font-medium text-slate-900 whitespace-nowrap">
+                            <div className="flex items-center gap-1">
+                              <span>{g.so}</span>
+                              {g.isDoubleInv && (
+                                <span className="text-rose-600 font-bold" title="Double Invoice Detected">⚠</span>
+                              )}
+                            </div>
+                          </td>
+
+                          {/* Col 3: No Invoice */}
+                          <td className="px-3 py-2 font-mono font-bold text-blue-700 whitespace-nowrap">
+                            {g.invoiceNumber}
+                          </td>
+
+                          {/* Col 4: Kat Produk */}
+                          <td className="px-3 py-2 whitespace-nowrap">
+                            <span
+                              className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold border ${
+                                g.kategoriProduk === "ALKES"
+                                  ? "bg-teal-50 text-teal-800 border-teal-200"
+                                  : g.kategoriProduk === "CCP"
+                                  ? "bg-sky-50 text-sky-800 border-sky-200"
+                                  : g.kategoriProduk === "PREKURSOR"
+                                  ? "bg-amber-50 text-amber-900 border-amber-200"
+                                  : g.kategoriProduk === "OOT"
+                                  ? "bg-purple-50 text-purple-900 border-purple-200"
+                                  : "bg-indigo-50 text-indigo-700 border-indigo-200"
+                              }`}
+                            >
+                              {g.kategoriProduk}
+                            </span>
+                          </td>
+
+                          {/* Col 5: Jenis */}
+                          <td className="px-3 py-2 whitespace-nowrap">
+                            <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${
+                              g.jenisTransaksi === "ORA"
+                                ? "bg-blue-100 text-blue-800"
+                                : "bg-emerald-100 text-emerald-800"
+                            }`}>
+                              {g.jenisTransaksi}
+                            </span>
+                          </td>
+
+                          {/* Col 6: Pelanggan */}
+                          <td className="px-3 py-2 text-slate-700 max-w-xs truncate font-medium">
+                            {g.customerName}
+                          </td>
+
+                          {/* Col 7: Order Date */}
+                          <td className="px-3 py-2 text-slate-500 whitespace-nowrap">
+                            {g.orderDate}
+                          </td>
+
+                          {/* Col 8: Kat */}
+                          <td className="px-3 py-2 whitespace-nowrap">
+                            <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${
+                              g.kategori === "1P"
+                                ? "bg-blue-100 text-blue-700"
+                                : g.kategori === "2P"
+                                ? "bg-emerald-100 text-emerald-700"
+                                : "bg-purple-100 text-purple-700"
+                            }`}>
+                              {g.kategori}
+                            </span>
+                          </td>
+
+                          {/* Col 9: Done Print Waktu */}
+                          <td className="px-3 py-2 whitespace-nowrap font-mono text-[11px]">
+                            {g.allPrinted && g.printedAt ? (
+                              <span className="inline-flex items-center gap-1 text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                                ⏱ {formatPrintTime(g.printedAt)}
+                              </span>
+                            ) : (
+                              <span className="text-slate-300">-</span>
+                            )}
+                          </td>
+
+                          {/* Col 10: Total Harga */}
+                          <td className="px-3 py-2 text-right font-medium text-slate-900 whitespace-nowrap">
+                            {formatRupiah(g.totalHarga)}
+                          </td>
+                        </tr>
+
+                        {/* Expanded Detail Rows */}
+                        {isExpanded && (
+                          <tr className="bg-slate-50/80 border-b border-slate-200">
+                            <td colSpan={11} className="p-4">
+                              <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-xs space-y-3">
+                                <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-slate-100 text-xs">
+                                  <div className="text-slate-600">
+                                    <span className="font-semibold text-slate-900">Rincian Obat (Invoice: {g.invoiceNumber})</span> · SO: <span className="font-mono text-slate-900">{g.so}</span> · Pelanggan: <span className="font-semibold text-slate-900">{g.customerName}</span>
+                                    {g.allPrinted && g.printedAt && (
+                                      <span className="ml-3 inline-flex items-center gap-1 font-semibold text-emerald-700">
+                                        <span>⏱ Selesai Print:</span>
+                                        <span className="font-mono">{formatPrintTime(g.printedAt)}</span>
+                                      </span>
+                                    )}
+                                  </div>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      togglePrint(g);
+                                    }}
+                                    className={`px-3 py-1 rounded-lg text-xs font-bold transition-colors ${
+                                      g.allPrinted
+                                        ? "bg-orange-100 text-orange-800 hover:bg-orange-200"
+                                        : "bg-emerald-600 text-white hover:bg-emerald-700"
+                                    }`}
+                                  >
+                                    {g.allPrinted ? "↩ Batalkan Print" : "✓ Tandai Selesai Print"}
+                                  </button>
+                                </div>
+
+                                <table className="w-full text-xs text-left">
+                                  <thead>
+                                    <tr className="text-slate-500 border-b border-slate-100 font-semibold">
+                                      <th className="py-1.5 px-2">Item Code</th>
+                                      <th className="py-1.5 px-2">Kat</th>
+                                      <th className="py-1.5 px-2">Item Description</th>
+                                      <th className="py-1.5 px-2 text-right">Qty</th>
+                                      <th className="py-1.5 px-2">UOM</th>
+                                      <th className="py-1.5 px-2">LOT Number</th>
+                                      <th className="py-1.5 px-2 text-right">Total Harga</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-slate-100">
+                                    {g.items.map((it, idx) => (
+                                      <tr key={idx} className="hover:bg-slate-50">
+                                        <td className="py-1.5 px-2 font-mono text-slate-600">{it.itemCode}</td>
+                                        <td className="py-1.5 px-2">
+                                          <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-slate-100 text-slate-700">
+                                            {it.kategoriProduk || "FARMA"}
+                                          </span>
+                                        </td>
+                                        <td className="py-1.5 px-2 text-slate-800 font-medium">{it.itemDescription}</td>
+                                        <td className="py-1.5 px-2 text-right font-mono font-semibold text-slate-900">{it.qty}</td>
+                                        <td className="py-1.5 px-2 text-slate-500">{it.uom}</td>
+                                        <td className="py-1.5 px-2 font-mono text-slate-600">{it.lotNumber}</td>
+                                        <td className="py-1.5 px-2 text-right font-medium text-slate-900">{formatRupiah(it.totalHarga)}</td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Pagination Footer */}
+          {totalPages > 1 && (
+            <div className="p-3 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-xs text-slate-600">
+              <span>
+                Halaman <strong>{page + 1}</strong> dari <strong>{totalPages}</strong> ({filtered.length} total faktur)
+              </span>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setPage((p) => Math.max(0, p - 1))}
+                  disabled={page === 0}
+                  className="px-3 py-1 bg-white border border-slate-200 rounded-lg font-semibold disabled:opacity-40 hover:bg-slate-50"
+                >
+                  Sebelumnya
+                </button>
+                <button
+                  onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+                  disabled={page >= totalPages - 1}
+                  className="px-3 py-1 bg-white border border-slate-200 rounded-lg font-semibold disabled:opacity-40 hover:bg-slate-50"
+                >
+                  Berikutnya
+                </button>
+              </div>
             </div>
           )}
         </div>
-      </div>
+      </main>
     </div>
   );
 }
-

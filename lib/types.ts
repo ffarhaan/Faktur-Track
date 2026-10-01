@@ -1,9 +1,9 @@
-export type FakturRecord = {
+export interface FakturRecord {
   orderDate: string;
   orderNumber: string;
   invoiceNumber: string;
   invoiceKey: string;
-  jenisTransaksi: string;
+  jenisTransaksi: "ORA" | "DOO";
   customerName: string;
   itemCode: string;
   itemDescription: string;
@@ -13,12 +13,52 @@ export type FakturRecord = {
   totalHarga: number;
   kategori: "1P" | "2P" | "3P";
   kategoriProduk?: string;
-  klasifikasiObat?: "Prekursor" | "OOT" | null;
+  klasifikasiObat?: "Prekursor" | "OOT";
   isDoubleInv: boolean;
-  rowIndex: number;
-};
+  rowIndex?: number;
+}
 
-export type InvoiceProgression = {
+export interface FirestoreFakturDoc {
+  id: string;
+  no_faktur: string;
+  no_sales_order: string;
+  customer_name: string;
+  order_date: string;
+  jenis_transaksi: string;
+  kategori: string;
+  status_cetak?: boolean;
+  printed_at?: string | null;
+  extra: {
+    nama_pelanggan?: string;
+    order_date?: string;
+    accounting_date?: string;
+    jenis_transaksi?: string;
+    kategori?: string;
+    total_harga?: number;
+    items?: Array<{
+      item_code: string;
+      item_description: string;
+      kategori_produk: string;
+      qty: number | string;
+      uom: string;
+      lot_number: string;
+      total_harga: number;
+      order_number?: string;
+    }>;
+    [key: string]: unknown;
+  };
+  updated_at?: string;
+  imported_at?: string;
+  source_file?: string;
+}
+
+export interface PrintState {
+  printedKeys: string[];
+  printedAtMap: Record<string, string>;
+  updatedAt: string;
+}
+
+export interface InvoiceProgression {
   prev1P?: string | null;
   new1P?: string | null;
   range1P?: string | null;
@@ -38,4 +78,27 @@ export type InvoiceProgression = {
   newOra?: string | null;
   rangeOra?: string | null;
   updatedAt?: string;
-};
+}
+
+export interface FakturGroup {
+  key: string;
+  invoiceNumber: string;
+  invoiceKey: string;
+  so: string;
+  items: FakturRecord[];
+  orderDate: string;
+  jenisTransaksi: "ORA" | "DOO";
+  customerName: string;
+  kategori: "1P" | "2P" | "3P";
+  kategoriProduk: string;
+  hasPrekursor: boolean;
+  hasOOT: boolean;
+  hasCCP: boolean;
+  hasAlkes: boolean;
+  hasFarma: boolean;
+  isDoubleInv: boolean;
+  totalHarga: number;
+  totalItems: number;
+  allPrinted: boolean;
+  printedAt: string | null;
+}

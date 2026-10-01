@@ -3,7 +3,6 @@ import { FakturRecord } from "./types";
 import masterApotek from "./masterApotek.json";
 import master2P from "./master2P.json";
 import masterProduct from "./masterProduct.json";
-import masterPrekursorOOT from "./masterPrekursorOOT.json";
 
 const apotekMap = masterApotek as Record<string, string>;
 
@@ -62,7 +61,6 @@ const productList: Array<{ norm: string; cat: string }> = [];
 });
 
 export function getPrekursorOOTClassification(itemDescription?: string, itemCode?: string): "Prekursor" | "OOT" | null {
-  // 1. Direct masterProduct check
   if (itemCode) {
     const cleanCode = String(itemCode).trim();
     const cat = productCodeMap[cleanCode] || productCodeMap[cleanCode.replace(/[^0-9]/g, "")];
@@ -84,7 +82,7 @@ export function getPrekursorOOTClassification(itemDescription?: string, itemCode
   if (!itemDescription || itemDescription === "-" || itemDescription === "Data DOO") return null;
   const s = " " + String(itemDescription).toUpperCase().replace(/[\t\r\n\s]+/g, " ") + " ";
 
-  // 2. Strict OOT Matchers
+  // OOT Matchers
   if (/\bLAPISIV[- ]?T\b/.test(s)) return "OOT";
   if (/\bSILADEX\s+(ANTITUSSIVE|DMP)\b/.test(s)) return "OOT";
   if (/\bPANADOL\s+(FLU\s*(&|\+|DAN)\s*BATUK|BATUK\s*(&|\+|DAN)\s*FLU)\b/.test(s)) return "OOT";
@@ -97,7 +95,7 @@ export function getPrekursorOOTClassification(itemDescription?: string, itemCode
   if (/\bVICKS\s+FORMULA\s+44\b/.test(s) || /\bFORMULA\s+44\b/.test(s)) return "OOT";
   if (/\bKONIDIN\b/.test(s) && !/\bANAKONIDIN\b/.test(s)) return "OOT";
 
-  // 3. Strict Prekursor Matchers
+  // Prekursor Matchers
   if (/\bACTIFED\b/.test(s)) return "Prekursor";
   if (/\bALCO\b(?!\s*(HOL|KOHOL|N\b))/.test(s) && !/\bVALCOR\b/.test(s) && !/\bALCON\b/.test(s)) return "Prekursor";
   if (/\bALLERIN\b/.test(s)) return "Prekursor";
@@ -150,7 +148,6 @@ export function getPrekursorOOTClassification(itemDescription?: string, itemCode
 }
 
 export function getProductCategory(itemCode?: string, itemDescription?: string): string {
-  // 1. Direct code lookup (Oracle Code / Accurate Code / Item Code)
   if (itemCode) {
     const cleanCode = String(itemCode).trim();
     if (productCodeMap[cleanCode]) return productCodeMap[cleanCode];
@@ -158,20 +155,17 @@ export function getProductCategory(itemCode?: string, itemDescription?: string):
     if (numOnly && productCodeMap[numOnly]) return productCodeMap[numOnly];
   }
 
-  // 2. Direct product name exact match
   if (itemDescription) {
     const normDesc = normalize(itemDescription);
     if (productNameMap[normDesc]) return productNameMap[normDesc];
   }
 
-  // 3. Prekursor & OOT regulatory classification
   if (itemDescription || itemCode) {
     const prekOot = getPrekursorOOTClassification(itemDescription, itemCode);
     if (prekOot === "Prekursor") return "PREKURSOR";
     if (prekOot === "OOT") return "OOT";
   }
 
-  // 4. Substring / partial match with master catalog items (>= 8 chars)
   if (itemDescription) {
     const normDesc = normalize(itemDescription);
     if (normDesc.length >= 8) {
@@ -182,7 +176,6 @@ export function getProductCategory(itemCode?: string, itemDescription?: string):
       }
     }
 
-    // 5. Keyword fallbacks for Alkes equipment
     const s = " " + String(itemDescription).toUpperCase() + " ";
     if (/\b(ALCOHOL|ALKOHOL|KASA|SPUIT|SYRINGE|JARUM|UNDERPAD|MASKER|INFUSION\s+SET|IV\s+CATHETER|HANDSCOON|GLOVES|TEST\s+PACK|URINE\s+BAG|THERMOMETER|TENSIMETER|SURGICAL|COTTON\s+BALL|KAPAS\s+PEMBALUT|SAFETY\s+BOX|ABOCATH|WINGS\s+NEEDLE|SURGICAL\s+TAPE|DERMAFIX|HYPAFIX|MICROPORE)\b/.test(s)) {
       return "ALKES";
@@ -194,8 +187,8 @@ export function getProductCategory(itemCode?: string, itemDescription?: string):
 
 /**
  * ATURAN BAKU KLASIFIKASI TRANSAKSI (LOCKED):
- * - ORA: HANYA untuk PT Helios Alchemist Kesehatan / HAK.
- * - DOO: Semua transaksi reguler DOO (termasuk Apotek Medika Prima, SBS, Pasti Hemat, Halomedika, 2P, 3P).
+ * - ORA: HANYA untuk PT Helios Alchemist Kesehatan / HAK / 1001.
+ * - DOO: Semua transaksi reguler DOO.
  */
 export function isOraCustomer(customerName?: string): boolean {
   const upperCust = String(customerName || "").toUpperCase().trim();
@@ -209,7 +202,7 @@ export function isOraCustomer(customerName?: string): boolean {
 /**
  * ATURAN BAKU KATEGORI PRIORITAS (LOCKED):
  * - 1P: PT Helios (ORA) + Apotek Prioritas 1 DOO (Medika Prima, SBS, Pasti Hemat, Halomedika, Medika Akses).
- * - 2P: Apotek Prioritas 2 (dicek via Kode Customer / Ship-to Site ID & Nama Apotek di master 2P).
+ * - 2P: Apotek Prioritas 2 (dicek via master 2P).
  * - 3P: Apotek Reguler lainnya.
  */
 export function categorize(
@@ -224,7 +217,6 @@ export function categorize(
   const rawJenis = String(jenisTransaksi || "").toUpperCase();
   const rawSource = String(sourceFile || "").toUpperCase();
 
-  // 1P: Helios (ORA) atau Apotek DOO 1P (Halomedika, Medika Prima, SBS, Pasti Hemat, Medika Akses)
   if (
     rawSource.includes("ORA") ||
     rawJenis === "ORA" ||
@@ -240,33 +232,22 @@ export function categorize(
     return "1P";
   }
 
-  // 2P Lapis 1: Cek Kode Customer dari Ship-to Site
   if (shipToSite) {
     const num = String(shipToSite).replace(/[^0-9]/g, "").replace(/^0+/, "");
-    if (num && master2PCodeMap.has(num)) {
-      return "2P";
-    }
+    if (num && master2PCodeMap.has(num)) return "2P";
   }
 
-  // 2P Lapis 2: Cek Kode Customer dari Bill-to Customer Site
   if (billToSite) {
     const num = String(billToSite).replace(/[^0-9]/g, "").replace(/^0+/, "");
-    if (num && master2PCodeMap.has(num)) {
-      return "2P";
-    }
+    if (num && master2PCodeMap.has(num)) return "2P";
   }
 
-  // 2P Lapis 3: Cek kecocokan nama apotek di daftar master 2P
   const normCust = normalize(cust);
-  if (master2PNameSet.has(normCust)) {
-    return "2P";
-  }
+  if (master2PNameSet.has(normCust)) return "2P";
 
-  // Exact match from master apotek
   const exact = apotekMap[cust.toLowerCase()];
   if (exact === "1P" || exact === "2P" || exact === "3P") return exact as "1P" | "2P" | "3P";
 
-  // Normalized match (ignore spaces and punctuation)
   const norm = normMap[normCust];
   if (norm === "1P" || norm === "2P" || norm === "3P") return norm as "1P" | "2P" | "3P";
 
@@ -276,12 +257,49 @@ export function categorize(
 function detectDoubleInvoices(records: FakturRecord[]): void {
   const soInvMap: Record<string, Set<string>> = {};
   for (const r of records) {
-    if (!soInvMap[r.orderNumber]) soInvMap[r.orderNumber] = new Set();
-    soInvMap[r.orderNumber].add(r.invoiceNumber);
+    if (r.orderNumber && r.orderNumber !== "-") {
+      if (!soInvMap[r.orderNumber]) soInvMap[r.orderNumber] = new Set();
+      if (r.invoiceNumber && r.invoiceNumber !== "-") {
+        soInvMap[r.orderNumber].add(r.invoiceNumber);
+      }
+    }
   }
   for (const r of records) {
-    if (soInvMap[r.orderNumber].size > 1) r.isDoubleInv = true;
+    if (r.orderNumber && r.orderNumber !== "-" && soInvMap[r.orderNumber]?.size > 1) {
+      r.isDoubleInv = true;
+    }
   }
+}
+
+export function normalizeDateStr(v: unknown): string {
+  if (!v) return "-";
+  if (typeof v === "number") {
+    const d = new Date(Math.round((v - 25569) * 86400 * 1000));
+    if (!isNaN(d.getTime())) {
+      const pad = (n: number) => String(n).padStart(2, "0");
+      return `${pad(d.getUTCDate())}/${pad(d.getUTCMonth() + 1)}/${d.getUTCFullYear()}`;
+    }
+  }
+  let s = String(v).trim();
+  if (!s || s === "-" || s === "0") return "-";
+  const mIso = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (mIso) {
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${pad(Number(mIso[3]))}/${pad(Number(mIso[2]))}/${mIso[1]}`;
+  }
+  const mSlash = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (mSlash) {
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${pad(Number(mSlash[1]))}/${pad(Number(mSlash[2]))}/${mSlash[3]}`;
+  }
+  const mMon = s.match(/^(\d{1,2})-([A-Za-z]{3})-(\d{4})/);
+  if (mMon) {
+    const months: Record<string, string> = { jan: "01", feb: "02", mar: "03", apr: "04", may: "05", jun: "06", jul: "07", aug: "08", sep: "09", oct: "10", nov: "11", dec: "12" };
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const mon = months[mMon[2].toLowerCase()] || "01";
+    return `${pad(Number(mMon[1]))}/${mon}/${mMon[3]}`;
+  }
+  return s;
 }
 
 function parseXXCUST(data: unknown[][], headerIdx: number): FakturRecord[] {
@@ -291,7 +309,6 @@ function parseXXCUST(data: unknown[][], headerIdx: number): FakturRecord[] {
     if (h) {
       const key = h.trim().toLowerCase();
       if (!colMap[key]) colMap[key] = i;
-      // Also match normalized keys without spaces/punctuation
       const cleanKey = key.replace(/[^a-z0-9]/g, "");
       if (!colMap[cleanKey]) colMap[cleanKey] = i;
     }
@@ -334,8 +351,7 @@ function parseXXCUST(data: unknown[][], headerIdx: number): FakturRecord[] {
     if (!orderNumber && !invoiceNumber) continue;
 
     const customerName = val(idx.customerName);
-    const rawJenis = val(idx.jenisTransaksi).toUpperCase();
-    const isOra = rawJenis === "ORA" || isOraCustomer(customerName);
+    const isOra = isOraCustomer(customerName);
     const jenisTransaksi: "ORA" | "DOO" = isOra ? "ORA" : "DOO";
     const kategori = categorize(jenisTransaksi, customerName, jenisTransaksi);
     const invoiceKey = isOra ? `${invoiceNumber}-1P` : invoiceNumber;
@@ -343,20 +359,20 @@ function parseXXCUST(data: unknown[][], headerIdx: number): FakturRecord[] {
     const itemCode = val(idx.itemCode);
     const itemDescription = val(idx.itemDescription);
     const kategoriProduk = getProductCategory(itemCode, itemDescription) || undefined;
-    const klasifikasiObat = getPrekursorOOTClassification(itemDescription) || undefined;
+    const klasifikasiObat = getPrekursorOOTClassification(itemDescription, itemCode) || undefined;
 
     records.push({
       orderDate: normalizeDateStr(rawVal(idx.orderDate) ?? val(idx.orderDate)),
-      orderNumber,
-      invoiceNumber,
+      orderNumber: orderNumber || "-",
+      invoiceNumber: invoiceNumber || "-",
       invoiceKey,
       jenisTransaksi,
-      customerName,
-      itemCode,
-      itemDescription,
+      customerName: customerName || "-",
+      itemCode: itemCode || "-",
+      itemDescription: itemDescription || "-",
       qty: (rawVal(idx.qty) as number | string) ?? 0,
-      uom: val(idx.uom),
-      lotNumber: val(idx.lotNumber),
+      uom: val(idx.uom) || "-",
+      lotNumber: val(idx.lotNumber) || "-",
       totalHarga: Number(rawVal(idx.totalHarga) ?? 0),
       kategori,
       kategoriProduk,
@@ -371,7 +387,6 @@ function parseXXCUST(data: unknown[][], headerIdx: number): FakturRecord[] {
 }
 
 function parseHTMLTable(html: string): FakturRecord[] {
-  // Ultra-fast regex-based table extraction (50x faster than DOMParser)
   const trRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
   const cellRegex = /<(?:td|th)[^>]*>([\s\S]*?)<\/(?:td|th)>/gi;
   const stripHtml = (s: string) =>
@@ -396,9 +411,7 @@ function parseHTMLTable(html: string): FakturRecord[] {
     while ((cellMatch = cellRegex.exec(rowContent)) !== null) {
       cells.push(stripHtml(cellMatch[1]));
     }
-    if (cells.length > 0) {
-      rawRows.push(cells);
-    }
+    if (cells.length > 0) rawRows.push(cells);
   }
 
   let dataStartIdx = 0;
@@ -411,30 +424,12 @@ function parseHTMLTable(html: string): FakturRecord[] {
     }
   }
 
-  // Fallback to DOMParser if regex didn't find rows
-  if (!headerCells.length && typeof DOMParser !== "undefined") {
-    try {
-      const parser = new DOMParser();
-      const doc = parser.parseFromString(html, "text/html");
-      const domRows = doc.querySelectorAll("tr");
-      for (let i = 0; i < domRows.length; i++) {
-        const cells = domRows[i].querySelectorAll("th, td");
-        const texts = Array.from(cells).map((c) => c.textContent?.trim() || "");
-        if (texts.some((t) => t.toLowerCase().includes("reference"))) {
-          headerCells = texts;
-          dataStartIdx = i + 1;
-          break;
-        }
-      }
-    } catch {}
-  }
-
-  if (!headerCells.length) throw new Error("Header tidak ditemukan di file");
+  if (!headerCells.length) throw new Error("Header tabel tidak ditemukan di file export.");
 
   const colMap: Record<string, number> = {};
   headerCells.forEach((h, i) => {
     const s = h.toLowerCase().trim();
-    if (s === "accounting date" || s === "transaction date" || (!colMap["date"] && (s.includes("accounting date") || s.includes("transaction date")))) colMap["date"] = i;
+    if (s === "accounting date" || s === "transaction date" || (!colMap["date"] && s.includes("date"))) colMap["date"] = i;
     if (s === "reference") colMap["so"] = i;
     if (s === "transaction number" || (!colMap["inv"] && s.includes("transaction number"))) colMap["inv"] = i;
     if (s === "ship-to customer") colMap["customer"] = i;
@@ -449,7 +444,7 @@ function parseHTMLTable(html: string): FakturRecord[] {
   const records: FakturRecord[] = [];
   for (let i = dataStartIdx; i < rawRows.length; i++) {
     const texts = rawRows[i];
-    if (!texts || texts.length < 5) continue;
+    if (!texts || texts.length < 3) continue;
     if (texts[0] === "Context Value") continue;
 
     const soVal = texts[colMap["so"] ?? 1] || "";
@@ -462,7 +457,7 @@ function parseHTMLTable(html: string): FakturRecord[] {
       ? texts[colMap["billTo"]]
       : "";
     const rawSource = String((colMap["source"] !== undefined ? texts[colMap["source"]] : "") || "").trim().toUpperCase();
-    const isOra = rawSource.includes("ORA_") || rawSource.includes("SUPPLY CHAIN") || isOraCustomer(customerName);
+    const isOra = rawSource.includes("ORA_") || isOraCustomer(customerName);
     const jenisTransaksi: "ORA" | "DOO" = isOra ? "ORA" : "DOO";
 
     const shipSite = colMap["shipSite"] !== undefined ? texts[colMap["shipSite"]] : "";
@@ -470,9 +465,6 @@ function parseHTMLTable(html: string): FakturRecord[] {
 
     const kategori = isOra ? "1P" : categorize(jenisTransaksi, customerName, jenisTransaksi, shipSite, billSite);
     const invoiceKey = isOra ? `${invVal}-1P` : invVal;
-
-    // For ORA export, reference column contains internal reference/account IDs, so set SO to "-" until XXCUST supplies the real order number.
-    // For DOO export, reference column contains real DOO Sales Order numbers.
     const finalSO = isOra ? "-" : (soVal || "-");
 
     records.push({
@@ -498,76 +490,24 @@ function parseHTMLTable(html: string): FakturRecord[] {
   return records;
 }
 
-export function normalizeDateStr(v: unknown): string {
-  if (!v) return "-";
-  if (typeof v === "number") {
-    const d = new Date(Math.round((v - 25569) * 86400 * 1000));
-    if (!isNaN(d.getTime())) {
-      const pad = (n: number) => String(n).padStart(2, "0");
-      return `${pad(d.getUTCDate())}/${pad(d.getUTCMonth() + 1)}/${d.getUTCFullYear()}`;
-    }
-  }
-  let s = String(v).trim();
-  if (!s || s === "-" || s === "0") return "-";
-  const mIso = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
-  if (mIso) {
-    const pad = (n: number) => String(n).padStart(2, "0");
-    return `${pad(Number(mIso[3]))}/${pad(Number(mIso[2]))}/${mIso[1]}`;
-  }
-  const mSlash = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
-  if (mSlash) {
-    const pad = (n: number) => String(n).padStart(2, "0");
-    return `${pad(Number(mSlash[1]))}/${pad(Number(mSlash[2]))}/${mSlash[3]}`;
-  }
-  const mMon = s.match(/^(\d{1,2})-([A-Za-z]{3})-(\d{4})/);
-  if (mMon) {
-    const months: Record<string, string> = { jan: "01", feb: "02", mar: "03", apr: "04", may: "05", jun: "06", jul: "07", aug: "08", sep: "09", oct: "10", nov: "11", dec: "12" };
-    const pad = (n: number) => String(n).padStart(2, "0");
-    const mon = months[mMon[2].toLowerCase()] || "01";
-    return `${pad(Number(mMon[1]))}/${mon}/${mMon[3]}`;
-  }
-  return s;
-}
-
-function formatExcelDate(v: unknown): string {
-  return normalizeDateStr(v);
-}
-
-function parseExportArray(data: unknown[][], headerIdx: number = -1): FakturRecord[] {
-  let colMap: Record<string, number> = {};
-  let startIdx = 0;
-
-  if (headerIdx !== -1) {
-    const header = data[headerIdx] as string[];
-    header.forEach((h, i) => {
-      const s = String(h || "").toLowerCase().trim();
-      if (s === "accounting date" || s === "transaction date" || (!colMap["date"] && (s.includes("accounting date") || s.includes("transaction date")))) colMap["date"] = i;
-      if (s === "reference") colMap["so"] = i;
-      if (s === "transaction number" || (!colMap["inv"] && s.includes("transaction number"))) colMap["inv"] = i;
-      if (s === "ship-to customer") colMap["customer"] = i;
-      if (s === "bill-to customer") colMap["billTo"] = i;
-      if (s === "ship-to site" || (!colMap["shipSite"] && s.includes("ship-to site"))) colMap["shipSite"] = i;
-      if (s === "bill-to customer site" || (!colMap["billSite"] && s.includes("bill-to customer site"))) colMap["billSite"] = i;
-      if (s === "transaction source" || (!colMap["source"] && s.includes("transaction source"))) colMap["source"] = i;
-      if (s === "transaction type" || (!colMap["jenis"] && s.includes("transaction type"))) colMap["jenis"] = i;
-      if (s === "entered amount" || (!colMap["amount"] && s.includes("entered amount"))) colMap["amount"] = i;
-    });
-    startIdx = headerIdx + 1;
-  } else {
-    colMap = {
-      date: 0,
-      so: 1,
-      inv: 2,
-      customer: 3,
-      source: 4,
-      jenis: 6,
-      amount: 11,
-    };
-    startIdx = 0;
-  }
+function parseExportArray(data: unknown[][], headerIdx: number): FakturRecord[] {
+  const header = data[headerIdx] as string[];
+  const colMap: Record<string, number> = {};
+  header.forEach((h, i) => {
+    const s = String(h || "").toLowerCase().trim();
+    if (s === "accounting date" || s === "transaction date" || (!colMap["date"] && s.includes("date"))) colMap["date"] = i;
+    if (s === "reference") colMap["so"] = i;
+    if (s === "transaction number" || (!colMap["inv"] && s.includes("transaction number"))) colMap["inv"] = i;
+    if (s === "ship-to customer") colMap["customer"] = i;
+    if (s === "bill-to customer") colMap["billTo"] = i;
+    if (s === "ship-to site" || (!colMap["shipSite"] && s.includes("ship-to site"))) colMap["shipSite"] = i;
+    if (s === "bill-to customer site" || (!colMap["billSite"] && s.includes("bill-to customer site"))) colMap["billSite"] = i;
+    if (s === "transaction source" || (!colMap["source"] && s.includes("transaction source"))) colMap["source"] = i;
+    if (s === "entered amount" || (!colMap["amount"] && s.includes("entered amount"))) colMap["amount"] = i;
+  });
 
   const records: FakturRecord[] = [];
-  for (let i = startIdx; i < data.length; i++) {
+  for (let i = headerIdx + 1; i < data.length; i++) {
     const row = data[i];
     if (!row || row.length < 3) continue;
 
@@ -583,7 +523,7 @@ function parseExportArray(data: unknown[][], headerIdx: number = -1): FakturReco
     ).trim();
 
     const rawSource = String((colMap["source"] !== undefined ? row[colMap["source"]] : row[4]) || "").trim().toUpperCase();
-    const isOra = rawSource.includes("ORA_") || rawSource.includes("SUPPLY CHAIN") || isOraCustomer(customerName);
+    const isOra = rawSource.includes("ORA_") || isOraCustomer(customerName);
     const jenisTransaksi: "ORA" | "DOO" = isOra ? "ORA" : "DOO";
 
     const shipSite = String((colMap["shipSite"] !== undefined ? row[colMap["shipSite"]] : "") || "");
@@ -591,16 +531,12 @@ function parseExportArray(data: unknown[][], headerIdx: number = -1): FakturReco
 
     const kategori = isOra ? "1P" : categorize(jenisTransaksi, customerName, jenisTransaksi, shipSite, billSite);
     const invoiceKey = isOra ? `${invVal}-1P` : invVal;
-
     const rawAmount = row[colMap["amount"] ?? 11];
     const totalHarga = typeof rawAmount === "number" ? rawAmount : Number(String(rawAmount || "").replace(/[^0-9.-]/g, "") || 0);
-
-    // For ORA export, reference column contains internal reference/account IDs, so set SO to "-" until XXCUST supplies the real order number.
-    // For DOO export, reference column contains real DOO Sales Order numbers.
     const finalSO = isOra ? "-" : (soVal || "-");
 
     records.push({
-      orderDate: formatExcelDate(row[colMap["date"] ?? 0]),
+      orderDate: normalizeDateStr(row[colMap["date"] ?? 0]),
       orderNumber: finalSO,
       invoiceNumber: invVal,
       invoiceKey,
@@ -625,8 +561,7 @@ function parseExportArray(data: unknown[][], headerIdx: number = -1): FakturReco
 export async function parseExcelFile(file: File): Promise<FakturRecord[]> {
   const buffer = await file.arrayBuffer();
 
-  // 1. Try HTML format FIRST for .xls files (Oracle exports are HTML tables)
-  // Check the first 4KB for HTML/XML markers
+  // 1. Try HTML format for Oracle .xls exports
   const headerSample = new TextDecoder().decode(buffer.slice(0, 4096)).toLowerCase();
   if (
     headerSample.includes("<table") ||
@@ -640,13 +575,13 @@ export async function parseExcelFile(file: File): Promise<FakturRecord[]> {
     return parseHTMLTable(fullText);
   }
 
-  // 2. Otherwise parse binary Excel files (.xlsx)
+  // 2. Binary Excel format (.xlsx)
   try {
     const wb = XLSX.read(buffer, { type: "array" });
     const ws = wb.Sheets[wb.SheetNames[0]];
     const data = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true }) as unknown[][];
 
-    // Find header row with "Jenis Transaksi" or "Order Number" (XXCUST format)
+    // Find XXCUST header
     const headerIdx = data.findIndex(
       (row) =>
         row &&
@@ -660,7 +595,7 @@ export async function parseExcelFile(file: File): Promise<FakturRecord[]> {
       return parseXXCUST(data, headerIdx);
     }
 
-    // Check for export format headers with "reference" or "transaction number"
+    // Find generic Oracle export header
     const exportIdx = data.findIndex(
       (row) =>
         row &&
@@ -673,25 +608,12 @@ export async function parseExcelFile(file: File): Promise<FakturRecord[]> {
     if (exportIdx !== -1) {
       return parseExportArray(data, exportIdx);
     }
-
-    // If data has at least 5 columns and looks like Oracle export (col 1 is SO code, col 4 is DOO/ORA)
-    if (data.length > 0 && data[0] && data[0].length >= 5) {
-      const sample = data[0];
-      const s1 = String(sample[1] || "");
-      const s4 = String(sample[4] || "");
-      if (s4.includes("Distributed Order") || s4.includes("ORA_") || s1.includes("-") || /^\d{4,}/.test(s1)) {
-        return parseExportArray(data, -1);
-      }
-    }
   } catch {
-    // If XLSX read fails, try HTML as fallback
     const fullText = new TextDecoder().decode(buffer);
     if (fullText.includes("<table") || fullText.includes("<tr")) {
       return parseHTMLTable(fullText);
     }
   }
 
-  throw new Error(
-    "Format file tidak dikenali. Pastikan file adalah export dari Oracle."
-  );
+  throw new Error("Format file tidak dikenali. Pastikan file adalah hasil export resmi dari Oracle.");
 }
