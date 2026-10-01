@@ -16,6 +16,7 @@ import {
   saveFaktursBatch,
   updateFakturPrintStatus,
   updateFaktursPrintStatusBatch,
+  updateFakturCategory,
   clearAllFakturs,
 } from "@/lib/firestoreService";
 import MasterApotekModal from "@/components/MasterApotekModal";
@@ -203,12 +204,35 @@ export default function Home() {
     time: string;
   } | null>(null);
 
+  const [selectedRowIndex, setSelectedRowIndex] = useState(0);
+  const [selectedColIdx, setSelectedColIdx] = useState(3); // Default to No Invoice column
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const isUploadingRef = useRef(false);
 
   const showToast = (msg: string) => {
     setToastMsg(msg);
     setTimeout(() => setToastMsg(null), 3500);
   };
+
+  const handleUpdateCategory = useCallback(
+    async (invoiceKey: string, newKat: "1P" | "2P" | "3P") => {
+      const cleanInv = invoiceKey.replace(/-1P$/i, "");
+      setRecords((prev) =>
+        prev.map((r) =>
+          r.invoiceKey === invoiceKey || r.invoiceNumber === cleanInv
+            ? { ...r, kategori: newKat }
+            : r
+        )
+      );
+      showToast(`✓ Kategori faktur ${cleanInv} diubah ke ${newKat}`);
+      try {
+        await updateFakturCategory(invoiceKey, newKat);
+      } catch (err) {
+        console.warn("Update category error:", err);
+      }
+    },
+    []
+  );
 
   // Real-time Firestore Subscription
   useEffect(() => {
@@ -508,6 +532,96 @@ export default function Home() {
       setLoading(false);
     }
   }, [filtered]);
+
+  // Global Keyboard Navigation & Shortcut Controller
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const isInput = target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT");
+
+      if (e.key === "Escape") {
+        if (isInput) (target as HTMLElement).blur();
+        if (showApotekModal) setShowApotekModal(false);
+        if (showProductModal) setShowProductModal(false);
+        return;
+      }
+
+      if (isInput) return;
+
+      const maxRow = Math.max(0, pageData.length - 1);
+      const currentRow = pageData[selectedRowIndex];
+
+      // Quick Search Focus: '/' or 'f'
+      if (e.key === "/" || e.key === "f" || e.key === "F") {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+        return;
+      }
+
+      // Space: Toggle Print on active row
+      if (e.key === " " || e.code === "Space") {
+        e.preventDefault();
+        if (currentRow) togglePrint(currentRow);
+        return;
+      }
+
+      // Enter: Toggle Expand Detail on active row
+      if (e.key === "Enter") {
+        e.preventDefault();
+        if (currentRow) toggleExpand(currentRow.key);
+        return;
+      }
+
+      // Arrow Navigation
+      if (e.key === "ArrowDown" || e.key === "j") {
+        e.preventDefault();
+        setSelectedRowIndex((prev) => Math.min(maxRow, prev + 1));
+        return;
+      }
+      if (e.key === "ArrowUp" || e.key === "k") {
+        e.preventDefault();
+        setSelectedRowIndex((prev) => Math.max(0, prev - 1));
+        return;
+      }
+      if (e.key === "ArrowRight" || e.key === "l") {
+        e.preventDefault();
+        setSelectedColIdx((prev) => Math.min(10, prev + 1));
+        return;
+      }
+      if (e.key === "ArrowLeft" || e.key === "h") {
+        e.preventDefault();
+        setSelectedColIdx((prev) => Math.max(0, prev - 1));
+        return;
+      }
+
+      // Page Navigation
+      if (e.key === "PageDown") {
+        e.preventDefault();
+        setPage((p) => Math.min(totalPages - 1, p + 1));
+        setSelectedRowIndex(0);
+        return;
+      }
+      if (e.key === "PageUp") {
+        e.preventDefault();
+        setPage((p) => Math.max(0, p - 1));
+        setSelectedRowIndex(0);
+        return;
+      }
+
+      // Copy Invoice / SO on 'c'
+      if ((e.key === "c" || e.key === "C") && !e.ctrlKey && !e.metaKey) {
+        if (currentRow) {
+          const textToCopy = selectedColIdx === 2 ? currentRow.so : currentRow.invoiceNumber;
+          navigator.clipboard.writeText(textToCopy).then(() => {
+            showToast(`📋 Disalin ke clipboard: ${textToCopy}`);
+          });
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [pageData, selectedRowIndex, selectedColIdx, showApotekModal, showProductModal, totalPages, togglePrint]);
 
   // File Upload Handler
   const handleUpload = useCallback(
@@ -1365,8 +1479,9 @@ export default function Home() {
             <div className="relative md:col-span-1">
               <span className="absolute left-3 top-2.5 text-xs text-slate-400">🔍</span>
               <input
+                ref={searchInputRef}
                 type="text"
-                placeholder="Cari SO / Invoice / Obat..."
+                placeholder="Cari SO / Invoice / Obat... (Tekan '/' atau 'f')"
                 value={search}
                 onChange={(e) => { setSearch(e.target.value); setPage(0); }}
                 className="w-full pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
@@ -1463,14 +1578,30 @@ export default function Home() {
                     </td>
                   </tr>
                 ) : (
-                  pageData.map((g) => {
+                  pageData.map((g, rowIdx) => {
                     const isExpanded = expandedInvoices.has(g.key);
+                    const isRowSelected = selectedRowIndex === rowIdx;
+                    const getCellCls = (colIdx: number) =>
+                      isRowSelected && selectedColIdx === colIdx
+                        ? "ring-2 ring-blue-600 ring-inset bg-blue-100/90 font-semibold"
+                        : "";
+
+                    const onSelectCell = (colIdx: number) => {
+                      setSelectedRowIndex(rowIdx);
+                      setSelectedColIdx(colIdx);
+                    };
+
                     return (
                       <Fragment key={g.key}>
                         <tr
-                          onClick={() => toggleExpand(g.key)}
+                          onClick={() => {
+                            setSelectedRowIndex(rowIdx);
+                            toggleExpand(g.key);
+                          }}
                           className={`cursor-pointer transition-colors ${
-                            g.isDoubleInv
+                            isRowSelected
+                              ? "bg-blue-50/90 border-l-4 border-l-blue-600 shadow-xs"
+                              : g.isDoubleInv
                               ? "bg-rose-50/70 hover:bg-rose-100/70"
                               : g.allPrinted
                               ? "bg-emerald-50/40 hover:bg-emerald-100/50"
@@ -1478,15 +1609,23 @@ export default function Home() {
                           }`}
                         >
                           {/* Col 0: Expand */}
-                          <td className="px-3 py-2 text-center text-slate-400">
+                          <td
+                            className={`px-3 py-2 text-center text-slate-400 ${getCellCls(0)}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onSelectCell(0);
+                              toggleExpand(g.key);
+                            }}
+                          >
                             {isExpanded ? "▼" : "▶"}
                           </td>
 
                           {/* Col 1: Print Checkbox */}
                           <td
-                            className="px-3 py-2 text-center"
+                            className={`px-3 py-2 text-center ${getCellCls(1)}`}
                             onClick={(e) => {
                               e.stopPropagation();
+                              onSelectCell(1);
                               togglePrint(g);
                             }}
                           >
@@ -1504,7 +1643,13 @@ export default function Home() {
                           </td>
 
                           {/* Col 2: No SO */}
-                          <td className="px-3 py-2 font-mono font-medium text-slate-900 whitespace-nowrap">
+                          <td
+                            className={`px-3 py-2 font-mono font-medium text-slate-900 whitespace-nowrap ${getCellCls(2)}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onSelectCell(2);
+                            }}
+                          >
                             <div className="flex items-center gap-1">
                               <span>{g.so}</span>
                               {g.isDoubleInv && (
@@ -1514,12 +1659,24 @@ export default function Home() {
                           </td>
 
                           {/* Col 3: No Invoice */}
-                          <td className="px-3 py-2 font-mono font-bold text-blue-700 whitespace-nowrap">
+                          <td
+                            className={`px-3 py-2 font-mono font-bold text-blue-700 whitespace-nowrap ${getCellCls(3)}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onSelectCell(3);
+                            }}
+                          >
                             {g.invoiceNumber}
                           </td>
 
                           {/* Col 4: Kat Produk */}
-                          <td className="px-3 py-2 whitespace-nowrap">
+                          <td
+                            className={`px-3 py-2 whitespace-nowrap ${getCellCls(4)}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onSelectCell(4);
+                            }}
+                          >
                             <span
                               className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold border ${
                                 g.kategoriProduk === "ALKES"
@@ -1538,7 +1695,13 @@ export default function Home() {
                           </td>
 
                           {/* Col 5: Jenis */}
-                          <td className="px-3 py-2 whitespace-nowrap">
+                          <td
+                            className={`px-3 py-2 whitespace-nowrap ${getCellCls(5)}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onSelectCell(5);
+                            }}
+                          >
                             <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${
                               g.jenisTransaksi === "ORA"
                                 ? "bg-blue-100 text-blue-800"
@@ -1549,30 +1712,63 @@ export default function Home() {
                           </td>
 
                           {/* Col 6: Pelanggan */}
-                          <td className="px-3 py-2 text-slate-700 max-w-xs truncate font-medium">
+                          <td
+                            className={`px-3 py-2 text-slate-700 max-w-xs truncate font-medium ${getCellCls(6)}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onSelectCell(6);
+                            }}
+                          >
                             {g.customerName}
                           </td>
 
                           {/* Col 7: Order Date */}
-                          <td className="px-3 py-2 text-slate-500 whitespace-nowrap">
+                          <td
+                            className={`px-3 py-2 text-slate-500 whitespace-nowrap ${getCellCls(7)}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onSelectCell(7);
+                            }}
+                          >
                             {g.orderDate}
                           </td>
 
-                          {/* Col 8: Kat */}
-                          <td className="px-3 py-2 whitespace-nowrap">
-                            <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${
-                              g.kategori === "1P"
-                                ? "bg-blue-100 text-blue-700"
-                                : g.kategori === "2P"
-                                ? "bg-emerald-100 text-emerald-700"
-                                : "bg-purple-100 text-purple-700"
-                            }`}>
-                              {g.kategori}
-                            </span>
+                          {/* Col 8: Kat (Editable Dropdown) */}
+                          <td
+                            className={`px-3 py-2 whitespace-nowrap ${getCellCls(8)}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onSelectCell(8);
+                            }}
+                          >
+                            <select
+                              value={g.kategori}
+                              onChange={(e) => {
+                                handleUpdateCategory(g.invoiceKey, e.target.value as "1P" | "2P" | "3P");
+                              }}
+                              className={`cursor-pointer px-2 py-0.5 rounded text-[11px] font-bold border border-transparent hover:border-slate-300 focus:border-blue-500 focus:outline-none transition-colors ${
+                                g.kategori === "1P"
+                                  ? "bg-blue-100 text-blue-700"
+                                  : g.kategori === "2P"
+                                  ? "bg-emerald-100 text-emerald-700"
+                                  : "bg-purple-100 text-purple-700"
+                              }`}
+                              title="Klik untuk ubah Kategori (1P / 2P / 3P)"
+                            >
+                              <option value="1P">1P</option>
+                              <option value="2P">2P</option>
+                              <option value="3P">3P</option>
+                            </select>
                           </td>
 
                           {/* Col 9: Done Print Waktu */}
-                          <td className="px-3 py-2 whitespace-nowrap font-mono text-[11px]">
+                          <td
+                            className={`px-3 py-2 whitespace-nowrap font-mono text-[11px] ${getCellCls(9)}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onSelectCell(9);
+                            }}
+                          >
                             {g.allPrinted && g.printedAt ? (
                               <span className="inline-flex items-center gap-1 text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
                                 ⏱ {formatPrintTime(g.printedAt)}
@@ -1583,7 +1779,13 @@ export default function Home() {
                           </td>
 
                           {/* Col 10: Total Harga */}
-                          <td className="px-3 py-2 text-right font-medium text-slate-900 whitespace-nowrap">
+                          <td
+                            className={`px-3 py-2 text-right font-medium text-slate-900 whitespace-nowrap ${getCellCls(10)}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onSelectCell(10);
+                            }}
+                          >
                             {formatRupiah(g.totalHarga)}
                           </td>
                         </tr>

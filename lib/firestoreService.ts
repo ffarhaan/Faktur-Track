@@ -408,6 +408,39 @@ export async function updateFaktursPrintStatusBatch(
 }
 
 /**
+ * Update Category (1P / 2P / 3P) for an invoice in Firestore chunks
+ */
+export async function updateFakturCategory(
+  invoiceKey: string,
+  newKategori: "1P" | "2P" | "3P"
+): Promise<void> {
+  const metaSnap = await getDoc(doc(db, APP_DATA_COLLECTION, METADATA_DOC));
+  const chunkIds = (metaSnap.exists() ? (metaSnap.data().chunkIds as string[]) : []) || [];
+
+  for (const chunkId of chunkIds) {
+    const chunkRef = doc(db, CHUNKS_COLLECTION, chunkId);
+    const cSnap = await getDoc(chunkRef);
+    if (cSnap.exists()) {
+      const data = cSnap.data();
+      let updated = false;
+      const items = (data.items as FirestoreFakturDoc[]) || [];
+      for (const item of items) {
+        const k = item.id || item.no_faktur;
+        if (k === invoiceKey || k.replace(/-1P$/i, "") === invoiceKey.replace(/-1P$/i, "")) {
+          item.kategori = newKategori;
+          if (item.extra) item.extra.kategori = newKategori;
+          updated = true;
+        }
+      }
+      if (updated) {
+        await setDoc(chunkRef, { ...data, items, updatedAt: new Date().toISOString() });
+        return;
+      }
+    }
+  }
+}
+
+/**
  * Delete all Faktur chunks and reset database completely
  */
 export async function clearAllFakturs(): Promise<void> {
