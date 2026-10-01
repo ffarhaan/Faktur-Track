@@ -1047,9 +1047,9 @@ export default function Home() {
       if (willBePrinted) {
         allKeys.forEach((k) => {
           next.add(k);
-          sNext.add(k);
           nextMap[k] = nowIso;
         });
+        sNext.add(targetKey);
       } else {
         allKeys.forEach((k) => {
           next.delete(k);
@@ -2322,6 +2322,15 @@ export default function Home() {
     ).length;
   }, [filtered]);
 
+  const sessionPrintedCount = useMemo(() => {
+    const uniqueInvs = new Set<string>();
+    sessionPrintedKeys.forEach((k) => {
+      const clean = k.replace(/-1P$/i, "");
+      uniqueInvs.add(clean);
+    });
+    return uniqueInvs.size;
+  }, [sessionPrintedKeys]);
+
   // Mark All As Printed (Tandai Semua Selesai)
   const handleMarkAllPrinted = useCallback(async () => {
     const unprintedInView = filtered.filter(
@@ -2852,9 +2861,9 @@ export default function Home() {
             >
               <span>🔄</span>
               <span>Refresh Data</span>
-              {sessionPrintedKeys.size > 0 && (
+              {sessionPrintedCount > 0 && (
                 <span className="ml-0.5 px-1.5 py-0.2 bg-blue-600 text-white text-[10px] font-bold rounded-full">
-                  {sessionPrintedKeys.size}
+                  {sessionPrintedCount}
                 </span>
               )}
             </button>
@@ -3248,9 +3257,9 @@ export default function Home() {
                   >
                     <span>🔄</span>
                     <span>Refresh</span>
-                    {sessionPrintedKeys.size > 0 && (
+                    {sessionPrintedCount > 0 && (
                       <span className="px-1.5 py-0.2 bg-blue-600 text-white text-[10px] font-bold rounded-full">
-                        {sessionPrintedKeys.size}
+                        {sessionPrintedCount}
                       </span>
                     )}
                   </button>
