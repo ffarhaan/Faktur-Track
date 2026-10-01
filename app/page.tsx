@@ -541,16 +541,29 @@ export default function Home() {
         // 1. Fetch fresh state from Firestore
         let existingDBDocs: FirestoreFakturDoc[] = [];
         let loadedProgression: InvoiceProgression | null = null;
+        let loadedPrintState: { printedKeys: string[]; printedAtMap: Record<string, string> } | null = null;
 
         try {
           const res = await getExistingFakturs();
           existingDBDocs = res.docs;
           loadedProgression = res.progression;
+          loadedPrintState = res.printState;
         } catch (err) {
           console.warn("Could not fetch remote DB:", err);
         }
 
         const existingDB = existingDBDocs as unknown as Array<Record<string, unknown>>;
+        
+        // Authoritative live printed keys from both Firestore print_state and active state
+        const livePrintedKeys = new Set<string>([
+          ...(loadedPrintState?.printedKeys || []),
+          ...Array.from(printedInvoices),
+        ]);
+        const livePrintedAtMap: Record<string, string> = {
+          ...(loadedPrintState?.printedAtMap || {}),
+          ...printedAtMap,
+        };
+
         const existingStatusMap = new Map<
           string,
           { status_cetak: boolean; printed_at: string | null; no_sales_order: string; extra: Record<string, unknown> }
@@ -600,9 +613,22 @@ export default function Home() {
             }
           }
 
+          const isDocPrinted = Boolean(
+            row.status_cetak ||
+            livePrintedKeys.has(rawInv) ||
+            livePrintedKeys.has(cleanInv) ||
+            livePrintedKeys.has(`${cleanInv}-1P`)
+          );
+          const docPrintedAt =
+            livePrintedAtMap[rawInv] ||
+            livePrintedAtMap[cleanInv] ||
+            livePrintedAtMap[`${cleanInv}-1P`] ||
+            (row.printed_at as string) ||
+            null;
+
           const statusInfo = {
-            status_cetak: Boolean(row.status_cetak),
-            printed_at: (row.printed_at as string) || null,
+            status_cetak: isDocPrinted,
+            printed_at: docPrintedAt,
             no_sales_order: String(row.no_sales_order || "-"),
             extra,
           };
@@ -615,10 +641,31 @@ export default function Home() {
         // 2. Pre-populate invMap with existing records
         const invMap = new Map<string, FirestoreFakturDoc>();
         existingDBDocs.forEach((doc) => {
-          invMap.set(doc.id || doc.no_faktur, { ...doc });
+          const k = doc.id || doc.no_faktur;
+          const cleanK = k.replace(/-1P$/i, "");
+          const isDocPrinted = Boolean(
+            doc.status_cetak ||
+            livePrintedKeys.has(k) ||
+            livePrintedKeys.has(cleanK) ||
+            livePrintedKeys.has(`${cleanK}-1P`)
+          );
+          const docPAt =
+            livePrintedAtMap[k] ||
+            livePrintedAtMap[cleanK] ||
+            livePrintedAtMap[`${cleanK}-1P`] ||
+            doc.printed_at ||
+            null;
+
+          invMap.set(k, {
+            ...doc,
+            status_cetak: isDocPrinted,
+            printed_at: docPAt,
+          });
         });
 
         const newUnprintedKeys: string[] = [];
+        const mergedPrintedSet = new Set(livePrintedKeys);
+        const mergedPrintedAtMap = { ...livePrintedAtMap };
 
         // 3. Merge incoming records
         for (const r of parsed) {
@@ -634,9 +681,25 @@ export default function Home() {
           let printedAt: string | null = null;
 
           if (prevInfo !== undefined) {
-            isPrinted = Boolean(prevInfo.status_cetak);
-            printedAt = prevInfo.printed_at;
+            // Already in database: preserve existing user print status!
+            isPrinted = Boolean(
+              prevInfo.status_cetak ||
+              mergedPrintedSet.has(targetKey) ||
+              mergedPrintedSet.has(cleanInv) ||
+              mergedPrintedSet.has(`${cleanInv}-1P`)
+            );
+            printedAt = isPrinted
+              ? (mergedPrintedAtMap[targetKey] || mergedPrintedAtMap[cleanInv] || mergedPrintedAtMap[`${cleanInv}-1P`] || prevInfo.printed_at || new Date().toISOString())
+              : null;
+
+            if (isPrinted) {
+              mergedPrintedSet.add(targetKey);
+              if (printedAt) mergedPrintedAtMap[targetKey] = printedAt;
+            } else {
+              newUnprintedKeys.push(targetKey);
+            }
           } else {
+            // Brand new invoice
             const isHistorical = num > 0 && (
               (isOra && prevOraNum > 0 && num <= prevOraNum) ||
               (!isOra && prevDooNum > 0 && num <= prevDooNum)
@@ -644,10 +707,13 @@ export default function Home() {
             if (isHistorical) {
               isPrinted = true;
               printedAt = null;
+              mergedPrintedSet.add(targetKey);
             } else {
               isPrinted = false;
               printedAt = null;
               newUnprintedKeys.push(targetKey);
+              mergedPrintedSet.delete(targetKey);
+              delete mergedPrintedAtMap[targetKey];
             }
           }
 
@@ -847,13 +913,13 @@ export default function Home() {
         };
 
         // 5. Update Local State Instantly
-        const { records: localRecs, printedSet: localPrintedSet, printedAtMap: localPrintedAtMap } = dbRowsToFakturRecords(
+        const { records: localRecs } = dbRowsToFakturRecords(
           payload as unknown as Array<Record<string, unknown>>
         );
 
         setRecords(localRecs);
-        setPrintedInvoices(localPrintedSet);
-        setPrintedAtMap(localPrintedAtMap);
+        setPrintedInvoices(mergedPrintedSet);
+        setPrintedAtMap(mergedPrintedAtMap);
         setInvoiceProgression(progObj);
 
         // 6. Save to Firestore
@@ -861,8 +927,8 @@ export default function Home() {
           payload,
           progObj,
           {
-            printedKeys: Array.from(localPrintedSet),
-            printedAtMap: localPrintedAtMap,
+            printedKeys: Array.from(mergedPrintedSet),
+            printedAtMap: mergedPrintedAtMap,
             updatedAt: new Date().toISOString(),
           },
           newUnprintedKeys
