@@ -1716,13 +1716,8 @@ export default function Home() {
 
         // Only genuinely new unprinted invoices from this upload batch are removed from the printed set
         newUnprintedKeyList.forEach((k) => {
-          const cleanK = k.replace(/-1P$/i, "");
           mergedPrintedSet.delete(k);
-          mergedPrintedSet.delete(cleanK);
-          mergedPrintedSet.delete(`${cleanK}-1P`);
           delete mergedPrintedMap[k];
-          delete mergedPrintedMap[cleanK];
-          delete mergedPrintedMap[`${cleanK}-1P`];
         });
 
         // Retain recent local toggles (< 10s old) to prevent any toggle from being dropped
