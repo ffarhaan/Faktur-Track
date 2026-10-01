@@ -2355,33 +2355,49 @@ export default function Home() {
     if (!confirm(confirmMsg)) return;
 
     const nowIso = new Date().toISOString();
-    const targetKeys = unprintedInView.map((g) => g.invoiceKey);
+    const targetKeys: string[] = [];
+    const allKeysToSync: string[] = [];
+
+    unprintedInView.forEach((g) => {
+      const cleanNum = g.invoiceNumber ? g.invoiceNumber.replace(/-1P$/i, "") : "";
+      const isOra = g.jenisTransaksi === "ORA" || isOraCustomer(g.customerName);
+      const targetKey = g.invoiceKey || (isOra ? `${cleanNum}-1P` : cleanNum);
+      const keys = Array.from(new Set([targetKey, cleanNum, `${cleanNum}-1P`, g.invoiceNumber].filter(Boolean)));
+      targetKeys.push(targetKey);
+      keys.forEach((k) => {
+        allKeysToSync.push(k);
+        recentTogglesRef.current.set(k, { printed: true, time: Date.now() });
+      });
+    });
 
     // 1. Optimistic Update Local State
-    setPrintedInvoices((prev) => {
-      const next = new Set(prev);
-      targetKeys.forEach((k) => next.add(k));
-      return next;
-    });
+    const nextPrintedSet = new Set(printedInvoices);
+    allKeysToSync.forEach((k) => nextPrintedSet.add(k));
+    setPrintedInvoices(nextPrintedSet);
 
-    setSessionPrintedKeys((prev) => {
-      const sNext = new Set(prev);
-      targetKeys.forEach((k) => sNext.add(k));
-      return sNext;
-    });
+    const nextSessionSet = new Set(sessionPrintedKeys);
+    targetKeys.forEach((k) => nextSessionSet.add(k));
+    setSessionPrintedKeys(nextSessionSet);
 
-    setPrintedAtMap((prev) => {
-      const nextMap = { ...prev };
-      targetKeys.forEach((k) => {
-        nextMap[k] = nowIso;
-      });
-      return nextMap;
+    const nextPrintedMap = { ...printedAtMap };
+    allKeysToSync.forEach((k) => {
+      nextPrintedMap[k] = nowIso;
     });
+    setPrintedAtMap(nextPrintedMap);
+
+    if (latestPrintStateRef.current) {
+      latestPrintStateRef.current = {
+        ...latestPrintStateRef.current,
+        printedKeys: Array.from(nextPrintedSet),
+        printedAtMap: nextPrintedMap,
+        updatedAt: nowIso,
+      };
+    }
 
     // 2. Batch Update to Firestore Cloud DB
     try {
       setLoading(true);
-      await updateFaktursPrintStatusBatch(targetKeys, true, nowIso);
+      await updateFaktursPrintStatusBatch(targetKeys, true, nowIso, nextPrintedSet, nextPrintedMap);
       setCopyToast(`✓ Berhasil menandai ${targetKeys.length} faktur selesai diprint!`);
       setTimeout(() => setCopyToast(null), 3500);
     } catch (err) {
@@ -2395,7 +2411,7 @@ export default function Home() {
     updateGSheetPrintStatusBatch(targetKeys, true, nowIso).catch((err) =>
       console.warn("GSheet batch sync error:", err)
     );
-  }, [filtered]);
+  }, [filtered, printedInvoices, printedAtMap, sessionPrintedKeys]);
 
   useEffect(() => {
     setPage(0);

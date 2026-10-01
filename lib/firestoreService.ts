@@ -448,64 +448,33 @@ export async function updateFakturPrintStatus(
   const keysToUpdate = Array.from(new Set([invoiceKey, cleanKey, `${cleanKey}-1P`].filter(Boolean)));
   const nowIso = printedAt || new Date().toISOString();
 
+  let liveKeys = new Set<string>(currentPrintedKeys || []);
+  let liveMap: Record<string, string> = { ...(currentPrintedAtMap || {}) };
+
   try {
-    await runTransaction(db, async (transaction) => {
-      const snap = await transaction.get(printDocRef);
-      let liveKeys = new Set<string>();
-      let liveMap: Record<string, string> = {};
-
-      if (snap.exists()) {
-        const data = snap.data() as PrintState;
-        liveKeys = new Set(data.printedKeys || []);
-        liveMap = { ...(data.printedAtMap || {}) };
-      }
-
-      if (currentPrintedKeys) {
-        currentPrintedKeys.forEach((k) => {
-          if (status || !keysToUpdate.includes(k)) {
-            liveKeys.add(k);
-          }
-        });
-        if (currentPrintedAtMap) {
-          liveMap = { ...currentPrintedAtMap, ...liveMap };
-        }
-      }
-
-      if (status) {
-        keysToUpdate.forEach((k) => {
-          liveKeys.add(k);
-          liveMap[k] = nowIso;
-        });
-      } else {
-        keysToUpdate.forEach((k) => {
-          liveKeys.delete(k);
-          delete liveMap[k];
-        });
-      }
-
-      transaction.set(printDocRef, {
-        printedKeys: Array.from(liveKeys),
-        printedAtMap: liveMap,
-        updatedAt: new Date().toISOString(),
-      });
-    });
-  } catch (err) {
-    console.warn("Transaction failed, falling back to setDoc:", err);
-    let fallbackKeys = new Set<string>(currentPrintedKeys || []);
-    let fallbackMap: Record<string, string> = { ...(currentPrintedAtMap || {}) };
-    if (status) {
-      keysToUpdate.forEach((k) => {
-        fallbackKeys.add(k);
-        fallbackMap[k] = nowIso;
-      });
-    } else {
-      keysToUpdate.forEach((k) => {
-        fallbackKeys.delete(k);
-        delete fallbackMap[k];
-      });
+    const snap = await getDoc(printDocRef);
+    if (snap.exists()) {
+      const data = snap.data() as PrintState;
+      (data.printedKeys || []).forEach((k) => liveKeys.add(k));
+      liveMap = { ...(data.printedAtMap || {}), ...liveMap };
     }
-    await updatePrintState(Array.from(fallbackKeys), fallbackMap);
+  } catch (err) {
+    console.warn("Could not read live print state before toggle, using local:", err);
   }
+
+  if (status) {
+    keysToUpdate.forEach((k) => {
+      liveKeys.add(k);
+      liveMap[k] = nowIso;
+    });
+  } else {
+    keysToUpdate.forEach((k) => {
+      liveKeys.delete(k);
+      delete liveMap[k];
+    });
+  }
+
+  await updatePrintState(Array.from(liveKeys), liveMap);
 }
 
 /**
@@ -514,84 +483,50 @@ export async function updateFakturPrintStatus(
 export async function updateFaktursPrintStatusBatch(
   keys: string[],
   status: boolean,
-  printedAt: string | null
+  printedAt: string | null,
+  currentPrintedKeys?: Set<string>,
+  currentPrintedAtMap?: Record<string, string>
 ): Promise<void> {
   const printDocRef = doc(db, APP_DATA_COLLECTION, PRINT_STATE_DOC);
   const nowIso = printedAt || new Date().toISOString();
 
+  let liveKeys = new Set<string>(currentPrintedKeys || []);
+  let liveMap: Record<string, string> = { ...(currentPrintedAtMap || {}) };
+
   try {
-    await runTransaction(db, async (transaction) => {
-      const snap = await transaction.get(printDocRef);
-      let currentKeys = new Set<string>();
-      let currentMap: Record<string, string> = {};
-
-      if (snap.exists()) {
-        const data = snap.data() as PrintState;
-        currentKeys = new Set(data.printedKeys || []);
-        currentMap = { ...(data.printedAtMap || {}) };
-      }
-
-      if (status) {
-        keys.forEach((k) => {
-          const cleanKey = k.replace(/-1P$/i, "");
-          currentKeys.add(k);
-          currentKeys.add(cleanKey);
-          currentKeys.add(`${cleanKey}-1P`);
-          currentMap[k] = nowIso;
-          currentMap[cleanKey] = nowIso;
-          currentMap[`${cleanKey}-1P`] = nowIso;
-        });
-      } else {
-        keys.forEach((k) => {
-          const cleanKey = k.replace(/-1P$/i, "");
-          currentKeys.delete(k);
-          currentKeys.delete(cleanKey);
-          currentKeys.delete(`${cleanKey}-1P`);
-          delete currentMap[k];
-          delete currentMap[cleanKey];
-          delete currentMap[`${cleanKey}-1P`];
-        });
-      }
-
-      transaction.set(printDocRef, {
-        printedKeys: Array.from(currentKeys),
-        printedAtMap: currentMap,
-        updatedAt: new Date().toISOString(),
-      });
-    });
-  } catch (err) {
-    console.warn("Batch transaction failed, falling back to direct setDoc:", err);
-    const snap = await getDoc(printDocRef).catch(() => null);
-    let currentKeys = new Set<string>();
-    let currentMap: Record<string, string> = {};
-    if (snap && snap.exists()) {
+    const snap = await getDoc(printDocRef);
+    if (snap.exists()) {
       const data = snap.data() as PrintState;
-      currentKeys = new Set(data.printedKeys || []);
-      currentMap = { ...(data.printedAtMap || {}) };
+      (data.printedKeys || []).forEach((k) => liveKeys.add(k));
+      liveMap = { ...(data.printedAtMap || {}), ...liveMap };
     }
-    if (status) {
-      keys.forEach((k) => {
-        const cleanKey = k.replace(/-1P$/i, "");
-        currentKeys.add(k);
-        currentKeys.add(cleanKey);
-        currentKeys.add(`${cleanKey}-1P`);
-        currentMap[k] = nowIso;
-        currentMap[cleanKey] = nowIso;
-        currentMap[`${cleanKey}-1P`] = nowIso;
-      });
-    } else {
-      keys.forEach((k) => {
-        const cleanKey = k.replace(/-1P$/i, "");
-        currentKeys.delete(k);
-        currentKeys.delete(cleanKey);
-        currentKeys.delete(`${cleanKey}-1P`);
-        delete currentMap[k];
-        delete currentMap[cleanKey];
-        delete currentMap[`${cleanKey}-1P`];
-      });
-    }
-    await updatePrintState(Array.from(currentKeys), currentMap);
+  } catch (err) {
+    console.warn("Could not read live print state before batch toggle, using local:", err);
   }
+
+  if (status) {
+    keys.forEach((k) => {
+      const cleanKey = k.replace(/-1P$/i, "");
+      liveKeys.add(k);
+      liveKeys.add(cleanKey);
+      liveKeys.add(`${cleanKey}-1P`);
+      liveMap[k] = nowIso;
+      liveMap[cleanKey] = nowIso;
+      liveMap[`${cleanKey}-1P`] = nowIso;
+    });
+  } else {
+    keys.forEach((k) => {
+      const cleanKey = k.replace(/-1P$/i, "");
+      liveKeys.delete(k);
+      liveKeys.delete(cleanKey);
+      liveKeys.delete(`${cleanKey}-1P`);
+      delete liveMap[k];
+      delete liveMap[cleanKey];
+      delete liveMap[`${cleanKey}-1P`];
+    });
+  }
+
+  await updatePrintState(Array.from(liveKeys), liveMap);
 }
 
 /**
