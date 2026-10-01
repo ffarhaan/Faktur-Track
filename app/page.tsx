@@ -2,15 +2,7 @@
 
 import { useState, useMemo, useEffect, useCallback, useRef, Fragment, memo } from "react";
 import * as XLSX from "xlsx";
-import {
-  parseExcelFile,
-  categorize,
-  isOraCustomer,
-  getProductCategory,
-  getPrekursorOOTClassification,
-  setCustomApotekOverrides,
-  getCustomApotekOverrides,
-} from "@/lib/parser";
+import { parseExcelFile, categorize, isOraCustomer, getProductCategory, getPrekursorOOTClassification } from "@/lib/parser";
 import { FakturRecord } from "@/lib/types";
 import {
   subscribeToFakturs,
@@ -21,15 +13,10 @@ import {
   updatePrintState,
   clearAllFakturs,
   FirestoreFakturDoc,
-  PrintState,
   submitTeamFeedback,
   subscribeToTeamFeedbacks,
   deleteTeamFeedback,
   TeamFeedback,
-  ApotekOverrideEntry,
-  subscribeToMasterApotekOverrides,
-  saveMasterApotekOverride,
-  removeMasterApotekOverride,
 } from "@/lib/firestoreService";
 import { db } from "@/lib/firebase";
 import { collection, getDocs } from "firebase/firestore";
@@ -155,18 +142,15 @@ export type InvoiceProgression = {
   updatedAt?: string;
 };
 
-function dbRowsToFakturRecords(
-  rows: Array<Record<string, unknown>>,
-  externalPrintState?: PrintState | null
-): {
+function dbRowsToFakturRecords(rows: Array<Record<string, unknown>>): {
   records: FakturRecord[];
   printedSet: Set<string>;
   printedAtMap: Record<string, string>;
   progression: InvoiceProgression | null;
 } {
   const records: FakturRecord[] = [];
-  const printedSet = new Set<string>(externalPrintState?.printedKeys || []);
-  const printedAtMap: Record<string, string> = { ...(externalPrintState?.printedAtMap || {}) };
+  const printedSet = new Set<string>();
+  const printedAtMap: Record<string, string> = {};
   let progression: InvoiceProgression | null = null;
 
   for (const r of rows) {
@@ -187,36 +171,13 @@ function dbRowsToFakturRecords(
     const isOra = isOraCustomer(cust);
     const invKey = isOra ? `${cleanInv}-1P` : cleanInv;
     const cleanJenis: "DOO" | "ORA" = isOra ? "ORA" : "DOO";
-    const customOverrides = getCustomApotekOverrides();
-    const normCust = cust.toLowerCase().replace(/apotik/g, "apotek").replace(/[^a-z0-9]/g, "");
-    const customKat = customOverrides[normCust] || customOverrides[cust.toLowerCase().trim()];
-    const kategori = customKat || (r.kategori as "1P" | "2P" | "3P") || categorize(cleanJenis, cust, cleanJenis);
-    const pAt =
-      (r.printed_at as string) ||
-      (extra.printed_at as string) ||
-      printedAtMap[invKey] ||
-      printedAtMap[cleanInv] ||
-      printedAtMap[`${cleanInv}-1P`] ||
-      null;
+    const kategori = (r.kategori as "1P" | "2P" | "3P") || categorize(cleanJenis, cust, cleanJenis);
+    const pAt = (r.printed_at as string) || (extra.printed_at as string) || null;
 
-    const isPrinted = Boolean(
-      r.status_cetak ||
-      printedSet.has(invKey) ||
-      printedSet.has(cleanInv) ||
-      printedSet.has(`${cleanInv}-1P`) ||
-      printedSet.has(rawInv)
-    );
-
-    if (isPrinted) {
+    if (r.status_cetak) {
       if (invKey) {
         printedSet.add(invKey);
-        printedSet.add(cleanInv);
-        if (isOra) printedSet.add(`${cleanInv}-1P`);
-        if (pAt) {
-          printedAtMap[invKey] = pAt;
-          printedAtMap[cleanInv] = pAt;
-          if (isOra) printedAtMap[`${cleanInv}-1P`] = pAt;
-        }
+        if (pAt) printedAtMap[invKey] = pAt;
       }
     }
 
@@ -745,7 +706,6 @@ export default function Home() {
   const [copyToast, setCopyToast] = useState<string | null>(null);
   const [showHelpModal, setShowHelpModal] = useState(false);
   const [showApotekModal, setShowApotekModal] = useState(false);
-  const [apotekOverrides, setApotekOverrides] = useState<Record<string, ApotekOverrideEntry>>({});
   const [showProductModal, setShowProductModal] = useState(false);
   const [showUpdateModal, setShowUpdateModal] = useState(false);
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
@@ -772,44 +732,8 @@ export default function Home() {
       (items) => setFeedbacks(items),
       (err) => console.warn("Feedback listener err:", err)
     );
-
-    // Subscribe to Master Apotek custom overrides from database
-    const unsubOverrides = subscribeToMasterApotekOverrides(
-      (overrides) => {
-        setApotekOverrides(overrides);
-        setCustomApotekOverrides(overrides);
-
-        // Instant re-categorization of currently loaded records in memory
-        if (latestDBDocsRef.current.length > 0) {
-          const { records: recs } = dbRowsToFakturRecords(
-            latestDBDocsRef.current as unknown as Array<Record<string, unknown>>,
-            latestPrintStateRef.current
-          );
-          setRecords(recs);
-        }
-      },
-      (err) => console.warn("Master Apotek overrides listener err:", err)
-    );
-
-    return () => {
-      unsubFeedbacks();
-      unsubOverrides();
-    };
+    return () => unsubFeedbacks();
   }, []);
-
-  const handleSaveApotekOverride = useCallback(
-    async (entry: Omit<ApotekOverrideEntry, "updatedAt">) => {
-      await saveMasterApotekOverride(entry);
-    },
-    []
-  );
-
-  const handleRemoveApotekOverride = useCallback(
-    async (namaApotek: string) => {
-      await removeMasterApotekOverride(namaApotek);
-    },
-    []
-  );
 
   useEffect(() => {
     recordsRef.current = records;
@@ -837,41 +761,19 @@ export default function Home() {
         if (printState) {
           latestPrintStateRef.current = printState;
 
-          // Reconcile incoming print state with optimistic local toggles (< 8000ms old) and all key variants to prevent checkmark flicker
+          // Reconcile incoming print state with optimistic local toggles (< 4000ms old) to prevent checkmark flicker
           const now = Date.now();
-          const incomingPrintedSet = new Set<string>();
-          const incomingPrintedMap: Record<string, string> = {};
-
-          (printState.printedKeys || []).forEach((k) => {
-            const cleanK = k.replace(/-1P$/i, "");
-            incomingPrintedSet.add(k);
-            incomingPrintedSet.add(cleanK);
-            incomingPrintedSet.add(`${cleanK}-1P`);
-            const pTime =
-              printState.printedAtMap?.[k] ||
-              printState.printedAtMap?.[cleanK] ||
-              printState.printedAtMap?.[`${cleanK}-1P`];
-            if (pTime) {
-              incomingPrintedMap[k] = pTime;
-              incomingPrintedMap[cleanK] = pTime;
-              incomingPrintedMap[`${cleanK}-1P`] = pTime;
-            }
-          });
+          const incomingPrintedSet = new Set(printState.printedKeys || []);
+          const incomingPrintedMap = { ...(printState.printedAtMap || {}) };
 
           recentTogglesRef.current.forEach((val, key) => {
-            const cleanK = key.replace(/-1P$/i, "");
-            const keysToSync = [key, cleanK, `${cleanK}-1P`];
-            if (now - val.time < 8000) {
+            if (now - val.time < 4000) {
               if (val.printed) {
-                keysToSync.forEach((k) => {
-                  incomingPrintedSet.add(k);
-                  if (!incomingPrintedMap[k]) incomingPrintedMap[k] = new Date(val.time).toISOString();
-                });
+                incomingPrintedSet.add(key);
+                if (!incomingPrintedMap[key]) incomingPrintedMap[key] = new Date(val.time).toISOString();
               } else {
-                keysToSync.forEach((k) => {
-                  incomingPrintedSet.delete(k);
-                  delete incomingPrintedMap[k];
-                });
+                incomingPrintedSet.delete(key);
+                delete incomingPrintedMap[key];
               }
             } else {
               recentTogglesRef.current.delete(key);
@@ -889,50 +791,21 @@ export default function Home() {
         }
 
         // Only recreate records when chunk data actually changes (file upload or clear)
+        latestDBDocsRef.current = docs;
         if (docs.length > 0) {
-          latestDBDocsRef.current = docs;
-          const effectivePrintState = printState || latestPrintStateRef.current;
-          const { records: recs, printedSet, printedAtMap: pMap } = dbRowsToFakturRecords(
-            docs as unknown as Array<Record<string, unknown>>,
-            effectivePrintState
+          const { records: recs } = dbRowsToFakturRecords(
+            docs as unknown as Array<Record<string, unknown>>
           );
-
-          // SAFETY GUARD: If local state already has newer/more records from an upload in this session,
-          // preserve any local records that haven't propagated to Firestore yet so data never rolls back!
-          const incomingKeys = new Set(recs.map((r) => r.invoiceKey || r.invoiceNumber));
-          const currentLocal = recordsRef.current || [];
-          const missingLocal = currentLocal.filter((r) => {
-            const k = r.invoiceKey || r.invoiceNumber;
-            return k && !incomingKeys.has(k);
-          });
-          const finalRecs = missingLocal.length > 0 ? [...recs, ...missingLocal] : recs;
-
-          setRecords(finalRecs);
-          setPrintedInvoices((prev) => {
-            const rawUnion = new Set<string>([
-              ...prev,
-              ...printedSet,
-              ...(effectivePrintState?.printedKeys || []),
-            ]);
-            const expanded = new Set<string>();
-            rawUnion.forEach((k) => {
-              const cleanK = k.replace(/-1P$/i, "");
-              expanded.add(k);
-              expanded.add(cleanK);
-              expanded.add(`${cleanK}-1P`);
-            });
-            return expanded;
-          });
-          setPrintedAtMap((prev) => ({
-            ...pMap,
-            ...(effectivePrintState?.printedAtMap || {}),
-            ...prev,
-          }));
+          setRecords(recs);
+        } else {
+          setRecords([]);
+          setPrintedInvoices(new Set());
+          setPrintedAtMap({});
         }
         setLoading(false);
       },
       (err) => {
-        console.warn("Firestore sync stream notice:", err);
+        console.error("Firestore sync error:", err);
         setLoading(false);
       }
     );
@@ -986,38 +859,17 @@ export default function Home() {
     setSessionPrintedKeys(new Set());
     setLoading(true);
     getExistingFakturs()
-      .then(({ docs, progression: prog, printState }) => {
+      .then(({ docs, progression: prog }) => {
         if (prog) {
           latestProgressionRef.current = prog;
           setInvoiceProgression(prog);
         }
-        if (printState) {
-          latestPrintStateRef.current = printState;
-        }
-        latestDBDocsRef.current = docs;
-        const activePrintState = printState || latestPrintStateRef.current;
         const { records: recs, printedSet, printedAtMap: pMap } = dbRowsToFakturRecords(
-          docs as unknown as Array<Record<string, unknown>>,
-          activePrintState
+          docs as unknown as Array<Record<string, unknown>>
         );
-        const rawUnion = new Set<string>([
-          ...printedSet,
-          ...(activePrintState?.printedKeys || []),
-        ]);
-        const finalPrintedSet = new Set<string>();
-        rawUnion.forEach((k) => {
-          const cleanK = k.replace(/-1P$/i, "");
-          finalPrintedSet.add(k);
-          finalPrintedSet.add(cleanK);
-          finalPrintedSet.add(`${cleanK}-1P`);
-        });
-        const finalPrintedAtMap = {
-          ...(activePrintState?.printedAtMap || {}),
-          ...pMap,
-        };
         setRecords(recs);
-        setPrintedInvoices(finalPrintedSet);
-        setPrintedAtMap(finalPrintedAtMap);
+        setPrintedInvoices(printedSet);
+        setPrintedAtMap(pMap);
         setLoading(false);
       })
       .catch((err) => {
@@ -1030,10 +882,7 @@ export default function Home() {
   const togglePrint = useCallback(
     async (group: FakturGroup) => {
       const willBePrinted = !group.allPrinted;
-      const cleanNum = group.invoiceNumber ? group.invoiceNumber.replace(/-1P$/i, "") : "";
-      const isOra = group.jenisTransaksi === "ORA" || isOraCustomer(group.customerName);
-      const targetKey = group.invoiceKey || (isOra ? `${cleanNum}-1P` : cleanNum);
-      const allKeys = Array.from(new Set([targetKey, cleanNum, `${cleanNum}-1P`, group.invoiceNumber].filter(Boolean)));
+      const targetKey = group.invoiceKey || (group.jenisTransaksi === "ORA" ? `${group.invoiceNumber}-1P` : group.invoiceNumber);
 
       // Debounce rapid toggles on the same invoice (< 300ms)
       if (inFlightToggleRef.current.has(targetKey)) return;
@@ -1043,40 +892,34 @@ export default function Home() {
       }, 300);
 
       const nowIso = new Date().toISOString();
-      allKeys.forEach((k) => {
-        recentTogglesRef.current.set(k, { printed: willBePrinted, time: Date.now() });
-      });
-
+      recentTogglesRef.current.set(targetKey, { printed: willBePrinted, time: Date.now() });
       const next = new Set(printedInvoices);
-      const sNext = new Set(sessionPrintedKeys);
-      const nextMap = { ...printedAtMap };
 
       if (willBePrinted) {
-        allKeys.forEach((k) => {
-          next.add(k);
-          nextMap[k] = nowIso;
-        });
-        sNext.add(targetKey);
+        next.add(targetKey);
       } else {
-        allKeys.forEach((k) => {
-          next.delete(k);
-          sNext.delete(k);
-          delete nextMap[k];
-        });
+        next.delete(targetKey);
       }
-
       setPrintedInvoices(next);
-      setSessionPrintedKeys(sNext);
-      setPrintedAtMap(nextMap);
 
-      if (latestPrintStateRef.current) {
-        latestPrintStateRef.current = {
-          ...latestPrintStateRef.current,
-          printedKeys: Array.from(next),
-          printedAtMap: nextMap,
-          updatedAt: nowIso,
-        };
+      // Optimistic session state
+      setSessionPrintedKeys((prev) => {
+        const sNext = new Set(prev);
+        if (willBePrinted) {
+          sNext.add(targetKey);
+        } else {
+          sNext.delete(targetKey);
+        }
+        return sNext;
+      });
+
+      const nextMap = { ...printedAtMap };
+      if (willBePrinted) {
+        nextMap[targetKey] = nowIso;
+      } else {
+        delete nextMap[targetKey];
       }
+      setPrintedAtMap(nextMap);
 
       try {
         await updateFakturPrintStatus(
@@ -1086,18 +929,17 @@ export default function Home() {
           next,
           nextMap
         );
+        // Sync ke Google Sheets secara realtime
+        await updateGSheetPrintStatus(
+          targetKey,
+          willBePrinted,
+          willBePrinted ? nowIso : null
+        );
       } catch (err) {
         console.error("Failed to update print status in Firestore:", err);
       }
-
-      // Sync ke Google Sheets secara realtime di background (non-blocking)
-      updateGSheetPrintStatus(
-        targetKey,
-        willBePrinted,
-        willBePrinted ? nowIso : null
-      ).catch((err) => console.warn("GSheet background sync warning:", err));
     },
-    [printedInvoices, printedAtMap, sessionPrintedKeys]
+    [printedInvoices, printedAtMap]
   );
 
   // Upload: Parse & Save directly to Supabase cloud DB so all devices see it
@@ -1387,40 +1229,46 @@ export default function Home() {
           // Check if this invoice is already in DB (check all key variants: targetKey, cleanInv, cleanInv-1P, SO-xxx)
           const prevInfo = existingStatusMap.get(targetKey) || existingStatusMap.get(cleanInv) || existingStatusMap.get(`${cleanInv}-1P`) || (hasValidSO ? existingStatusMap.get(`SO-${r.orderNumber}`) : undefined);
 
-          // Check if this invoice is already in DB or already printed in any state (print_state doc, in-memory active set, or chunks)
-          const isPrintedInChunk = Boolean(prevInfo?.status_cetak);
-          const isPrintedInState = Boolean(
-            loadedPrintState?.printedKeys?.includes(targetKey) ||
-            loadedPrintState?.printedKeys?.includes(cleanInv) ||
-            loadedPrintState?.printedKeys?.includes(`${cleanInv}-1P`) ||
-            currentActivePrintedSet.has(targetKey) ||
-            currentActivePrintedSet.has(cleanInv) ||
-            currentActivePrintedSet.has(`${cleanInv}-1P`) ||
-            latestPrintStateRef.current?.printedKeys?.includes(targetKey) ||
-            latestPrintStateRef.current?.printedKeys?.includes(cleanInv) ||
-            latestPrintStateRef.current?.printedKeys?.includes(`${cleanInv}-1P`)
-          );
-
-          let isPrinted = isPrintedInChunk || isPrintedInState;
+          let isPrinted = false;
           let printedAt: string | null = null;
-          const isNewInvoice = prevInfo === undefined;
+          let isNewInvoice = false;
 
-          if (isPrinted) {
-            printedAt =
-              currentActivePrintedAtMap[targetKey] ||
-              currentActivePrintedAtMap[cleanInv] ||
-              currentActivePrintedAtMap[`${cleanInv}-1P`] ||
-              loadedPrintState?.printedAtMap?.[targetKey] ||
-              loadedPrintState?.printedAtMap?.[cleanInv] ||
-              loadedPrintState?.printedAtMap?.[`${cleanInv}-1P`] ||
-              latestPrintStateRef.current?.printedAtMap?.[targetKey] ||
-              latestPrintStateRef.current?.printedAtMap?.[cleanInv] ||
-              latestPrintStateRef.current?.printedAtMap?.[`${cleanInv}-1P`] ||
-              prevInfo?.printed_at ||
-              new Date().toISOString();
+          if (prevInfo !== undefined) {
+            // Already in database: STRICTLY preserve existing user/system print status!
+            const isPrintedInChunk = Boolean(prevInfo.status_cetak);
+            const isPrintedInState = Boolean(
+              loadedPrintState?.printedKeys?.includes(targetKey) ||
+              loadedPrintState?.printedKeys?.includes(cleanInv) ||
+              loadedPrintState?.printedKeys?.includes(`${cleanInv}-1P`) ||
+              currentActivePrintedSet.has(targetKey) ||
+              currentActivePrintedSet.has(cleanInv) ||
+              currentActivePrintedSet.has(`${cleanInv}-1P`)
+            );
+            isPrinted = isPrintedInChunk || isPrintedInState;
+            printedAt = isPrinted
+              ? (currentActivePrintedAtMap[targetKey] || currentActivePrintedAtMap[cleanInv] || currentActivePrintedAtMap[`${cleanInv}-1P`] ||
+                 loadedPrintState?.printedAtMap?.[targetKey] || loadedPrintState?.printedAtMap?.[cleanInv] || loadedPrintState?.printedAtMap?.[`${cleanInv}-1P`] ||
+                 prevInfo.printed_at || latestPrintStateRef.current?.printedAtMap?.[targetKey] || new Date().toISOString())
+              : null;
+            if (!isPrinted) {
+              newUnprintedKeyList.push(targetKey);
+            }
           } else {
-            newUnprintedKeyList.push(targetKey);
-            if (isNewInvoice) {
+            // Brand new to database: determine whether it is a genuinely new invoice or historical
+            const isHistoricalPrinted = num > 0 && (
+              (isOra && prevOraNum > 0 && num <= prevOraNum) ||
+              (!isOra && prevDooNum > 0 && num <= prevDooNum)
+            );
+
+            if (isHistoricalPrinted) {
+              isPrinted = true;
+              printedAt = null;
+            } else {
+              // Genuinely new invoice or waiting invoice -> Belum Terprint
+              isNewInvoice = true;
+              isPrinted = false;
+              printedAt = null;
+              newUnprintedKeyList.push(targetKey);
               newGSheetKeys.add(targetKey); // tandai untuk dikirim ke GSheet
             }
           }
@@ -1858,24 +1706,13 @@ export default function Home() {
         };
 
         // 1. INSTANT LOCAL STATE UPDATE
-        latestDBDocsRef.current = payload as FirestoreFakturDoc[];
-        latestProgressionRef.current = progObj;
         const { records: localRecs, printedSet: localPrintedSet, printedAtMap: localPrintedAtMap } = dbRowsToFakturRecords(
-          payload as unknown as Array<Record<string, unknown>>,
-          loadedPrintState
+          payload as unknown as Array<Record<string, unknown>>
         );
 
         setRecords(localRecs);
-        const mergedPrintedSet = new Set([
-          ...currentActivePrintedSet,
-          ...(loadedPrintState?.printedKeys || []),
-          ...localPrintedSet,
-        ]);
-        const mergedPrintedMap = {
-          ...(loadedPrintState?.printedAtMap || {}),
-          ...currentActivePrintedAtMap,
-          ...localPrintedAtMap,
-        };
+        const mergedPrintedSet = new Set([...currentActivePrintedSet, ...localPrintedSet]);
+        const mergedPrintedMap = { ...currentActivePrintedAtMap, ...localPrintedAtMap };
 
         // Only genuinely new unprinted invoices from this upload batch are removed from the printed set
         newUnprintedKeyList.forEach((k) => {
@@ -1963,12 +1800,6 @@ export default function Home() {
           })),
         ]);
         setPage(0);
-        setDateFilter("all");
-        setKatFilter("all");
-        setJenisFilter("all");
-        setKlasFilter("all");
-        setSearch("");
-        setFilter("belum");
       } catch (e) {
         console.error("Upload error:", e);
         setError(e instanceof Error ? e.message : "Gagal membaca file.");
@@ -2173,16 +2004,8 @@ export default function Home() {
   // 2. Ultra-lightweight print status mapping (< 1ms, reuses objects when unchanged)
   const grouped = useMemo<FakturGroup[]>(() => {
     return baseGrouped.map((g) => {
-      const cleanNum = g.invoiceNumber ? g.invoiceNumber.replace(/-1P$/i, "") : "";
-      const isPrinted =
-        printedInvoices.has(g.invoiceKey) ||
-        (cleanNum ? printedInvoices.has(cleanNum) : false) ||
-        (cleanNum ? printedInvoices.has(`${cleanNum}-1P`) : false);
-      const pAt =
-        printedAtMap[g.invoiceKey] ||
-        (cleanNum ? printedAtMap[cleanNum] : null) ||
-        (cleanNum ? printedAtMap[`${cleanNum}-1P`] : null) ||
-        null;
+      const isPrinted = printedInvoices.has(g.invoiceKey);
+      const pAt = printedAtMap[g.invoiceKey] || null;
       if (g.allPrinted === isPrinted && g.printedAt === pAt) {
         return g;
       }
@@ -2283,14 +2106,9 @@ export default function Home() {
 
     // Filter Status (Belum / Sudah / Double)
     if (filter === "belum") {
-      result = result.filter((g) => {
-        const cleanNum = g.invoiceNumber ? g.invoiceNumber.replace(/-1P$/i, "") : "";
-        const isSessionPrinted =
-          sessionPrintedKeys.has(g.invoiceKey) ||
-          (cleanNum ? sessionPrintedKeys.has(cleanNum) : false) ||
-          (cleanNum ? sessionPrintedKeys.has(`${cleanNum}-1P`) : false);
-        return !g.allPrinted || isSessionPrinted;
-      });
+      result = result.filter(
+        (g) => !g.allPrinted || sessionPrintedKeys.has(g.invoiceKey)
+      );
     } else if (filter === "sudah") {
       result = result.filter((g) => g.allPrinted);
     } else if (filter === "double") {
@@ -2331,15 +2149,6 @@ export default function Home() {
     ).length;
   }, [filtered]);
 
-  const sessionPrintedCount = useMemo(() => {
-    const uniqueInvs = new Set<string>();
-    sessionPrintedKeys.forEach((k) => {
-      const clean = k.replace(/-1P$/i, "");
-      uniqueInvs.add(clean);
-    });
-    return uniqueInvs.size;
-  }, [sessionPrintedKeys]);
-
   // Mark All As Printed (Tandai Semua Selesai)
   const handleMarkAllPrinted = useCallback(async () => {
     const unprintedInView = filtered.filter(
@@ -2355,64 +2164,43 @@ export default function Home() {
     if (!confirm(confirmMsg)) return;
 
     const nowIso = new Date().toISOString();
-    const targetKeys: string[] = [];
-    const allKeysToSync: string[] = [];
-
-    unprintedInView.forEach((g) => {
-      const cleanNum = g.invoiceNumber ? g.invoiceNumber.replace(/-1P$/i, "") : "";
-      const isOra = g.jenisTransaksi === "ORA" || isOraCustomer(g.customerName);
-      const targetKey = g.invoiceKey || (isOra ? `${cleanNum}-1P` : cleanNum);
-      const keys = Array.from(new Set([targetKey, cleanNum, `${cleanNum}-1P`, g.invoiceNumber].filter(Boolean)));
-      targetKeys.push(targetKey);
-      keys.forEach((k) => {
-        allKeysToSync.push(k);
-        recentTogglesRef.current.set(k, { printed: true, time: Date.now() });
-      });
-    });
+    const targetKeys = unprintedInView.map((g) => g.invoiceKey);
 
     // 1. Optimistic Update Local State
-    const nextPrintedSet = new Set(printedInvoices);
-    allKeysToSync.forEach((k) => nextPrintedSet.add(k));
-    setPrintedInvoices(nextPrintedSet);
-
-    const nextSessionSet = new Set(sessionPrintedKeys);
-    targetKeys.forEach((k) => nextSessionSet.add(k));
-    setSessionPrintedKeys(nextSessionSet);
-
-    const nextPrintedMap = { ...printedAtMap };
-    allKeysToSync.forEach((k) => {
-      nextPrintedMap[k] = nowIso;
+    setPrintedInvoices((prev) => {
+      const next = new Set(prev);
+      targetKeys.forEach((k) => next.add(k));
+      return next;
     });
-    setPrintedAtMap(nextPrintedMap);
 
-    if (latestPrintStateRef.current) {
-      latestPrintStateRef.current = {
-        ...latestPrintStateRef.current,
-        printedKeys: Array.from(nextPrintedSet),
-        printedAtMap: nextPrintedMap,
-        updatedAt: nowIso,
-      };
-    }
+    setSessionPrintedKeys((prev) => {
+      const sNext = new Set(prev);
+      targetKeys.forEach((k) => sNext.add(k));
+      return sNext;
+    });
+
+    setPrintedAtMap((prev) => {
+      const nextMap = { ...prev };
+      targetKeys.forEach((k) => {
+        nextMap[k] = nowIso;
+      });
+      return nextMap;
+    });
 
     // 2. Batch Update to Firestore Cloud DB
     try {
       setLoading(true);
-      await updateFaktursPrintStatusBatch(targetKeys, true, nowIso, nextPrintedSet, nextPrintedMap);
+      await updateFaktursPrintStatusBatch(targetKeys, true, nowIso);
+      await updateGSheetPrintStatusBatch(targetKeys, true, nowIso);
       setCopyToast(`✓ Berhasil menandai ${targetKeys.length} faktur selesai diprint!`);
       setTimeout(() => setCopyToast(null), 3500);
     } catch (err) {
-      console.warn("Update batch print ke Firestore terhambat (status tetap tersimpan di lokal):", err);
-      setCopyToast(`✓ Status tercatat lokal (${targetKeys.length} faktur selesai diprint)`);
-      setTimeout(() => setCopyToast(null), 3500);
+      console.error("Gagal update batch print ke Firestore:", err);
+      alert("Terjadi kesalahan saat menyimpan status ke database cloud.");
     } finally {
       setLoading(false);
     }
-
-    // Background sync to GSheet
-    updateGSheetPrintStatusBatch(targetKeys, true, nowIso).catch((err) =>
-      console.warn("GSheet batch sync error:", err)
-    );
-  }, [filtered, printedInvoices, printedAtMap, sessionPrintedKeys]);
+  }, [filtered]);
 
   useEffect(() => {
     setPage(0);
@@ -2887,9 +2675,9 @@ export default function Home() {
             >
               <span>🔄</span>
               <span>Refresh Data</span>
-              {sessionPrintedCount > 0 && (
+              {sessionPrintedKeys.size > 0 && (
                 <span className="ml-0.5 px-1.5 py-0.2 bg-blue-600 text-white text-[10px] font-bold rounded-full">
-                  {sessionPrintedCount}
+                  {sessionPrintedKeys.size}
                 </span>
               )}
             </button>
@@ -3283,9 +3071,9 @@ export default function Home() {
                   >
                     <span>🔄</span>
                     <span>Refresh</span>
-                    {sessionPrintedCount > 0 && (
+                    {sessionPrintedKeys.size > 0 && (
                       <span className="px-1.5 py-0.2 bg-blue-600 text-white text-[10px] font-bold rounded-full">
-                        {sessionPrintedCount}
+                        {sessionPrintedKeys.size}
                       </span>
                     )}
                   </button>
@@ -3586,14 +3374,8 @@ export default function Home() {
       {/* Keyboard Shortcuts Modal */}
       <HelpModal isOpen={showHelpModal} onClose={() => setShowHelpModal(false)} />
 
-      {/* Master Apotek Modal with Edit Capability */}
-      <MasterApotekModal
-        isOpen={showApotekModal}
-        onClose={() => setShowApotekModal(false)}
-        overrides={apotekOverrides}
-        onSaveOverride={handleSaveApotekOverride}
-        onRemoveOverride={handleRemoveApotekOverride}
-      />
+      {/* Master Apotek Modal */}
+      <MasterApotekModal isOpen={showApotekModal} onClose={() => setShowApotekModal(false)} />
 
       {/* Master Product Modal */}
       <MasterProductModal isOpen={showProductModal} onClose={() => setShowProductModal(false)} />
@@ -3710,106 +3492,22 @@ function HelpModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }
   );
 }
 
-function MasterApotekModal({
-  isOpen,
-  onClose,
-  overrides = {},
-  onSaveOverride,
-  onRemoveOverride,
-}: {
-  isOpen: boolean;
-  onClose: () => void;
-  overrides?: Record<string, ApotekOverrideEntry>;
-  onSaveOverride?: (entry: Omit<ApotekOverrideEntry, "updatedAt">) => Promise<void>;
-  onRemoveOverride?: (namaApotek: string) => Promise<void>;
-}) {
+function MasterApotekModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
   const [search, setSearch] = useState("");
-  const [katFilter, setKatFilter] = useState<"all" | "1P" | "2P" | "3P" | "custom">("all");
+  const [katFilter, setKatFilter] = useState<"all" | "1P" | "2P" | "3P">("all");
   const [page, setPage] = useState(0);
-  const [editingKey, setEditingKey] = useState<string | null>(null);
-  const [savingKey, setSavingKey] = useState<string | null>(null);
-  const [toastMsg, setToastMsg] = useState<string | null>(null);
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [newNama, setNewNama] = useState("");
-  const [newKode, setNewKode] = useState("");
-  const [newKat, setNewKat] = useState<"1P" | "2P" | "3P">("3P");
-  const [newKet, setNewKet] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const rowsPerPage = 30;
 
-  const showToast = (msg: string) => {
-    setToastMsg(msg);
-    setTimeout(() => setToastMsg(null), 3500);
-  };
-
-  // Merge base master list with custom overrides
-  const { mergedList, customCount, count1P, count2P, count3P } = useMemo(() => {
-    const list = (masterApotekList as Array<{
+  const filtered = useMemo(() => {
+    let list = masterApotekList as Array<{
       namaApotek: string;
       kodeCustomer: string;
       namaMerchant: string;
       kategori: string;
       keterangan: string;
-    }>).map((a) => {
-      const key = a.namaApotek.trim().toLowerCase();
-      const override = overrides[key];
-      const effectiveKat = (override?.kategori || a.kategori) as "1P" | "2P" | "3P";
-      const isCustom = Boolean(override);
-      return {
-        ...a,
-        kategori: effectiveKat,
-        isCustom,
-        originalKat: a.kategori,
-        updatedAt: override?.updatedAt,
-      };
-    });
+    }>;
 
-    // Also include any custom added apoteks that aren't in the original json
-    const seenNames = new Set(list.map((a) => a.namaApotek.trim().toLowerCase()));
-    Object.values(overrides).forEach((ov) => {
-      const key = ov.namaApotek.trim().toLowerCase();
-      if (!seenNames.has(key)) {
-        seenNames.add(key);
-        list.push({
-          namaApotek: ov.namaApotek,
-          kodeCustomer: ov.kodeCustomer || "-",
-          namaMerchant: ov.namaMerchant || "-",
-          kategori: ov.kategori,
-          keterangan: ov.keterangan || "Apotek Kustom (Ditambahkan Manual)",
-          isCustom: true,
-          originalKat: "-",
-          updatedAt: ov.updatedAt,
-        });
-      }
-    });
-
-    let c1 = 0;
-    let c2 = 0;
-    let c3 = 0;
-    let cCustom = 0;
-
-    list.forEach((item) => {
-      if (item.kategori === "1P") c1++;
-      else if (item.kategori === "2P") c2++;
-      else if (item.kategori === "3P") c3++;
-      if (item.isCustom) cCustom++;
-    });
-
-    return {
-      mergedList: list,
-      customCount: cCustom,
-      count1P: c1,
-      count2P: c2,
-      count3P: c3,
-    };
-  }, [overrides]);
-
-  const filtered = useMemo(() => {
-    let list = mergedList;
-
-    if (katFilter === "custom") {
-      list = list.filter((a) => a.isCustom);
-    } else if (katFilter !== "all") {
+    if (katFilter !== "all") {
       list = list.filter((a) => a.kategori === katFilter);
     }
 
@@ -3825,7 +3523,7 @@ function MasterApotekModal({
     }
 
     return list;
-  }, [mergedList, search, katFilter]);
+  }, [search, katFilter]);
 
   const totalPages = Math.ceil(filtered.length / rowsPerPage);
   const pagedData = useMemo(() => {
@@ -3833,84 +3531,11 @@ function MasterApotekModal({
     return filtered.slice(start, start + rowsPerPage);
   }, [filtered, page]);
 
-  const handleCategoryChange = async (
-    item: { namaApotek: string; kodeCustomer: string; namaMerchant: string; keterangan: string; originalKat: string },
-    newKat: "1P" | "2P" | "3P"
-  ) => {
-    const key = item.namaApotek.trim().toLowerCase();
-    setSavingKey(key);
-    try {
-      if (onSaveOverride) {
-        await onSaveOverride({
-          namaApotek: item.namaApotek,
-          kodeCustomer: item.kodeCustomer !== "-" ? item.kodeCustomer : undefined,
-          namaMerchant: item.namaMerchant !== "-" ? item.namaMerchant : undefined,
-          keterangan: item.keterangan,
-          kategori: newKat,
-        });
-        showToast(`✅ Kategori ${item.namaApotek} diubah ke ${newKat} & tersimpan di database.`);
-      }
-    } catch (err) {
-      showToast(`❌ Gagal menyimpan perubahan: ${err instanceof Error ? err.message : "Error"}`);
-    } finally {
-      setSavingKey(null);
-      setEditingKey(null);
-    }
-  };
-
-  const handleResetDefault = async (namaApotek: string) => {
-    const key = namaApotek.trim().toLowerCase();
-    setSavingKey(key);
-    try {
-      if (onRemoveOverride) {
-        await onRemoveOverride(namaApotek);
-        showToast(`↺ Kategori ${namaApotek} dikembalikan ke klasifikasi default.`);
-      }
-    } catch (err) {
-      showToast(`❌ Gagal reset kategori: ${err instanceof Error ? err.message : "Error"}`);
-    } finally {
-      setSavingKey(null);
-    }
-  };
-
-  const handleAddNewApotek = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newNama.trim()) return;
-    setIsSubmitting(true);
-    try {
-      if (onSaveOverride) {
-        await onSaveOverride({
-          namaApotek: newNama.trim(),
-          kodeCustomer: newKode.trim() || "-",
-          namaMerchant: "-",
-          keterangan: newKet.trim() || "Apotek Kustom",
-          kategori: newKat,
-        });
-        showToast(`✅ Apotek "${newNama.trim()}" (${newKat}) berhasil ditambahkan ke database.`);
-        setNewNama("");
-        setNewKode("");
-        setNewKet("");
-        setShowAddModal(false);
-      }
-    } catch (err) {
-      showToast(`❌ Gagal menambahkan apotek: ${err instanceof Error ? err.message : "Error"}`);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs animate-in fade-in duration-150">
-      <div className="bg-white rounded-2xl max-w-5xl w-full p-6 shadow-2xl border border-gray-100 relative flex flex-col max-h-[92vh]">
-        {/* Toast Feedback */}
-        {toastMsg && (
-          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 bg-slate-900 text-white text-xs font-semibold px-4 py-2.5 rounded-xl shadow-xl flex items-center gap-2 animate-in fade-in slide-in-from-top-2 border border-slate-700">
-            <span>{toastMsg}</span>
-          </div>
-        )}
-
+      <div className="bg-white rounded-2xl max-w-4xl w-full p-6 shadow-2xl border border-gray-100 relative flex flex-col max-h-[90vh]">
         {/* Header */}
         <div className="flex items-center justify-between pb-3 border-b border-gray-200 shrink-0">
           <div className="flex items-center gap-3">
@@ -3918,52 +3543,35 @@ function MasterApotekModal({
               🏪
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-base font-bold text-gray-900">Database Master Apotek & Pelanggan</h2>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
-                  Realtime Edit & Database Sync
-                </span>
-              </div>
+              <h2 className="text-base font-bold text-gray-900">Database Master Apotek & Pelanggan</h2>
               <p className="text-xs text-gray-500">
-                Total {mergedList.length.toLocaleString("id-ID")} apotek terdaftar · Ubah klasifikasi 1P / 2P / 3P langsung tersimpan ke database & berlaku untuk semua upload berikutnya.
+                Total {masterApotekList.length.toLocaleString("id-ID")} apotek terdaftar (Acuan Klasifikasi 1P / 2P / 3P)
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setShowAddModal(true)}
-              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg shadow-xs transition-colors flex items-center gap-1.5"
-            >
-              <span>+</span>
-              <span>Tambah Apotek Baru</span>
-            </button>
-            <button
-              onClick={onClose}
-              className="text-gray-400 hover:text-gray-700 w-8 h-8 rounded-full flex items-center justify-center hover:bg-gray-100 transition-colors text-lg"
-              title="Tutup"
-            >
-              ✕
-            </button>
-          </div>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-700 w-8 h-8 rounded-full flex items-center justify-center hover:bg-gray-100 transition-colors text-lg"
+            title="Tutup"
+          >
+            ✕
+          </button>
         </div>
 
         {/* Toolbar & Filters */}
         <div className="py-3 flex flex-wrap items-center justify-between gap-2 shrink-0 border-b border-gray-100">
           <div className="flex items-center gap-1.5 overflow-x-auto">
             <FBtn active={katFilter === "all"} onClick={() => { setKatFilter("all"); setPage(0); }}>
-              Semua ({mergedList.length})
+              Semua ({masterApotekList.length})
             </FBtn>
             <FBtn active={katFilter === "1P"} onClick={() => { setKatFilter("1P"); setPage(0); }} color="blue">
-              🏪 1P Prioritas 1 ({count1P})
+              🏪 1P Prioritas 1 (45)
             </FBtn>
             <FBtn active={katFilter === "2P"} onClick={() => { setKatFilter("2P"); setPage(0); }} color="green">
-              🏪 2P Mitra Merchant ({count2P})
+              🏪 2P Mitra Merchant (252)
             </FBtn>
             <FBtn active={katFilter === "3P"} onClick={() => { setKatFilter("3P"); setPage(0); }} color="purple">
-              🏢 3P Reguler ({count3P})
-            </FBtn>
-            <FBtn active={katFilter === "custom"} onClick={() => { setKatFilter("custom"); setPage(0); }} color="amber">
-              ⭐ Kustom / Diedit ({customCount})
+              🏢 3P Reguler (2.400)
             </FBtn>
           </div>
 
@@ -3973,10 +3581,10 @@ function MasterApotekModal({
             </span>
             <input
               type="text"
-              placeholder="Cari apotek, kode customer, merchant..."
+              placeholder="Cari apotek, kode, merchant, zona..."
               value={search}
               onChange={(e) => { setSearch(e.target.value); setPage(0); }}
-              className="w-full pl-7 pr-7 py-1.5 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white shadow-2xs"
+              className="w-full pl-7 pr-7 py-1 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white shadow-2xs"
             />
             {search && (
               <button
@@ -3995,133 +3603,47 @@ function MasterApotekModal({
             <thead className="bg-gray-50 border-b border-gray-200 sticky top-0 z-10 select-none">
               <tr>
                 <th className="px-2.5 py-2 text-center text-gray-500 w-10">#</th>
-                <th className="px-2.5 py-2 text-left text-gray-500 w-36">Kategori & Edit</th>
+                <th className="px-2.5 py-2 text-left text-gray-500 w-24">Kategori</th>
                 <th className="px-2.5 py-2 text-left text-gray-500 w-28">Kode Customer</th>
                 <th className="px-2.5 py-2 text-left text-gray-500">Nama Apotek</th>
-                <th className="px-2.5 py-2 text-left text-gray-500">Merchant / Platform</th>
-                <th className="px-2.5 py-2 text-left text-gray-500">Keterangan / Status</th>
-                <th className="px-2.5 py-2 text-center text-gray-500 w-20">Aksi</th>
+                <th className="px-2.5 py-2 text-left text-gray-500">Nama Merchant / Platform</th>
+                <th className="px-2.5 py-2 text-left text-gray-500">Zona / Keterangan</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {pagedData.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="text-center py-10 text-gray-400">
-                    Tidak ditemukan apotek yang sesuai kriteria pencarian.
+                  <td colSpan={6} className="text-center py-8 text-gray-400">
+                    Tidak ditemukan apotek yang sesuai pencarian.
                   </td>
                 </tr>
               ) : (
-                pagedData.map((a, idx) => {
-                  const key = a.namaApotek.trim().toLowerCase();
-                  const isEditing = editingKey === key;
-                  const isSaving = savingKey === key;
-
-                  return (
-                    <tr key={key + idx} className={`hover:bg-gray-50 ${a.isCustom ? "bg-amber-50/40" : ""}`}>
-                      <td className="px-2.5 py-2 text-center text-gray-400 font-mono">
-                        {page * rowsPerPage + idx + 1}
-                      </td>
-
-                      {/* Kategori Column with Inline Quick Selector */}
-                      <td className="px-2.5 py-2 whitespace-nowrap">
-                        {isEditing ? (
-                          <div className="flex items-center gap-1">
-                            {(["1P", "2P", "3P"] as const).map((kOption) => (
-                              <button
-                                key={kOption}
-                                disabled={isSaving}
-                                onClick={() => handleCategoryChange(a, kOption)}
-                                className={`px-2 py-0.5 rounded text-[11px] font-bold border transition-all ${
-                                  a.kategori === kOption
-                                    ? kOption === "1P"
-                                      ? "bg-blue-600 text-white border-blue-600"
-                                      : kOption === "2P"
-                                      ? "bg-green-600 text-white border-green-600"
-                                      : "bg-purple-600 text-white border-purple-600"
-                                    : "bg-white text-gray-700 border-gray-300 hover:bg-gray-100"
-                                }`}
-                              >
-                                {kOption}
-                              </button>
-                            ))}
-                            <button
-                              onClick={() => setEditingKey(null)}
-                              className="px-1 text-gray-400 hover:text-gray-600 text-[10px]"
-                              title="Batal"
-                            >
-                              ✕
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-1.5">
-                            <span
-                              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold shadow-2xs ${
-                                a.kategori === "1P"
-                                  ? "bg-blue-100 text-blue-800 border border-blue-200"
-                                  : a.kategori === "2P"
-                                  ? "bg-green-100 text-green-800 border border-green-200"
-                                  : "bg-purple-100 text-purple-800 border border-purple-200"
-                              }`}
-                            >
-                              {a.kategori}
-                              {a.isCustom && <span className="text-[10px]" title="Kategori kustom dari database">⭐</span>}
-                            </span>
-                            <button
-                              onClick={() => setEditingKey(key)}
-                              disabled={isSaving}
-                              className="p-1 rounded text-gray-400 hover:text-emerald-700 hover:bg-emerald-50 transition-colors"
-                              title="Ubah Kategori (1P / 2P / 3P)"
-                            >
-                              ✏️
-                            </button>
-                          </div>
-                        )}
-                      </td>
-
-                      <td className="px-2.5 py-2 font-mono text-gray-700 whitespace-nowrap">
-                        {a.kodeCustomer !== "-" ? a.kodeCustomer : <span className="text-gray-400">-</span>}
-                      </td>
-
-                      <td className="px-2.5 py-2 font-semibold text-gray-900">
-                        <div className="flex items-center gap-1.5">
-                          <span>{a.namaApotek}</span>
-                          {a.isCustom && (
-                            <span className="px-1.5 py-0.2 rounded text-[9px] font-semibold bg-amber-100 text-amber-800 border border-amber-200">
-                              Diedit
-                            </span>
-                          )}
-                        </div>
-                      </td>
-
-                      <td className="px-2.5 py-2 text-gray-600 font-mono text-[11px]">
-                        {a.namaMerchant}
-                      </td>
-
-                      <td className="px-2.5 py-2 text-gray-500">
-                        {a.isCustom && a.originalKat !== "-" ? (
-                          <span className="text-amber-800 font-medium">
-                            Diubah dari default {a.originalKat} ➔ {a.kategori}
-                          </span>
-                        ) : (
-                          a.keterangan
-                        )}
-                      </td>
-
-                      <td className="px-2.5 py-2 text-center whitespace-nowrap">
-                        {a.isCustom && (
-                          <button
-                            onClick={() => handleResetDefault(a.namaApotek)}
-                            disabled={isSaving}
-                            className="px-2 py-0.5 rounded text-[10px] font-semibold text-gray-600 hover:text-red-700 hover:bg-red-50 border border-gray-200 transition-colors"
-                            title="Reset ke kategori bawaan"
-                          >
-                            ↺ Reset
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })
+                pagedData.map((a, idx) => (
+                  <tr key={idx} className="hover:bg-gray-50">
+                    <td className="px-2.5 py-1.5 text-center text-gray-400 font-mono">
+                      {page * rowsPerPage + idx + 1}
+                    </td>
+                    <td className="px-2.5 py-1.5 whitespace-nowrap">
+                      <span
+                        className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${
+                          a.kategori === "1P"
+                            ? "bg-blue-100 text-blue-800"
+                            : a.kategori === "2P"
+                            ? "bg-green-100 text-green-800"
+                            : "bg-purple-100 text-purple-800"
+                        }`}
+                      >
+                        {a.kategori}
+                      </span>
+                    </td>
+                    <td className="px-2.5 py-1.5 font-mono text-gray-700 whitespace-nowrap">
+                      {a.kodeCustomer !== "-" ? a.kodeCustomer : <span className="text-gray-400">-</span>}
+                    </td>
+                    <td className="px-2.5 py-1.5 font-medium text-gray-900">{a.namaApotek}</td>
+                    <td className="px-2.5 py-1.5 text-gray-600 font-mono text-[11px]">{a.namaMerchant}</td>
+                    <td className="px-2.5 py-1.5 text-gray-500">{a.keterangan}</td>
+                  </tr>
+                ))
               )}
             </tbody>
           </table>
@@ -4136,7 +3658,7 @@ function MasterApotekModal({
             <button
               onClick={() => setPage((p) => Math.max(0, p - 1))}
               disabled={page === 0}
-              className="px-2.5 py-1 border border-gray-300 rounded bg-white hover:bg-gray-50 disabled:opacity-30 shadow-2xs font-semibold"
+              className="px-2.5 py-1 border border-gray-300 rounded bg-white hover:bg-gray-50 disabled:opacity-30 shadow-2xs"
             >
               ← Prev
             </button>
@@ -4146,114 +3668,12 @@ function MasterApotekModal({
             <button
               onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
               disabled={page >= totalPages - 1}
-              className="px-2.5 py-1 border border-gray-300 rounded bg-white hover:bg-gray-50 disabled:opacity-30 shadow-2xs font-semibold"
+              className="px-2.5 py-1 border border-gray-300 rounded bg-white hover:bg-gray-50 disabled:opacity-30 shadow-2xs"
             >
               Next →
             </button>
           </div>
         </div>
-
-        {/* Sub-modal: Tambah Apotek Baru */}
-        {showAddModal && (
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-2xs rounded-2xl flex items-center justify-center p-4 z-50">
-            <div className="bg-white rounded-xl max-w-md w-full p-5 shadow-2xl border border-gray-200 animate-in zoom-in-95 duration-100">
-              <div className="flex items-center justify-between pb-3 border-b border-gray-100">
-                <h3 className="text-sm font-bold text-gray-900">➕ Tambah Apotek Baru ke Database</h3>
-                <button
-                  onClick={() => setShowAddModal(false)}
-                  className="text-gray-400 hover:text-gray-700 text-base"
-                >
-                  ✕
-                </button>
-              </div>
-
-              <form onSubmit={handleAddNewApotek} className="space-y-3 mt-3">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">
-                    Nama Apotek / Customer <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Contoh: Apotek Sehat Sentosa"
-                    value={newNama}
-                    onChange={(e) => setNewNama(e.target.value)}
-                    className="w-full px-3 py-1.5 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">
-                    Kode Customer / Ship-To (Opsional)
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Contoh: CA-001234 atau 1234"
-                    value={newKode}
-                    onChange={(e) => setNewKode(e.target.value)}
-                    className="w-full px-3 py-1.5 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">
-                    Kategori Klasifikasi <span className="text-red-500">*</span>
-                  </label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {(["1P", "2P", "3P"] as const).map((k) => (
-                      <button
-                        key={k}
-                        type="button"
-                        onClick={() => setNewKat(k)}
-                        className={`py-1.5 text-xs font-bold rounded-lg border text-center transition-all ${
-                          newKat === k
-                            ? k === "1P"
-                              ? "bg-blue-600 text-white border-blue-600 shadow-xs"
-                              : k === "2P"
-                              ? "bg-green-600 text-white border-green-600 shadow-xs"
-                              : "bg-purple-600 text-white border-purple-600 shadow-xs"
-                            : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
-                        }`}
-                      >
-                        {k === "1P" ? "1P (Prioritas 1)" : k === "2P" ? "2P (Merchant)" : "3P (Reguler)"}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">
-                    Keterangan / Catatan
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Contoh: Apotek cabang baru / Rekomendasi operasional"
-                    value={newKet}
-                    onChange={(e) => setNewKet(e.target.value)}
-                    className="w-full px-3 py-1.5 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none"
-                  />
-                </div>
-
-                <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100">
-                  <button
-                    type="button"
-                    onClick={() => setShowAddModal(false)}
-                    className="px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-100 rounded-lg font-semibold"
-                  >
-                    Batal
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={isSubmitting || !newNama.trim()}
-                    className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-bold rounded-lg shadow-xs transition-colors"
-                  >
-                    {isSubmitting ? "Menyimpan..." : "Simpan ke Database"}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );
