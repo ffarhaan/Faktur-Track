@@ -916,7 +916,7 @@ export default function Home() {
           updatedAt: new Date().toLocaleTimeString("id-ID"),
         };
 
-        // 5. Update Local State Instantly
+        // 5. Update Local State Instantly (< 1 second response)
         const { records: localRecs } = dbRowsToFakturRecords(
           payload as unknown as Array<Record<string, unknown>>
         );
@@ -925,18 +925,6 @@ export default function Home() {
         setPrintedInvoices(mergedPrintedSet);
         setPrintedAtMap(mergedPrintedAtMap);
         setInvoiceProgression(progObj);
-
-        // 6. Save to Firestore
-        await saveFaktursBatch(
-          payload,
-          progObj,
-          {
-            printedKeys: Array.from(mergedPrintedSet),
-            printedAtMap: mergedPrintedAtMap,
-            updatedAt: new Date().toISOString(),
-          },
-          newUnprintedKeys
-        );
 
         setUploadNotification({
           fileName: fileNames.join(", "),
@@ -953,11 +941,27 @@ export default function Home() {
         });
 
         setPage(0);
+        setLoading(false);
         showToast(`✓ Berhasil mengupload ${parsed.length} baris data!`);
+
+        // 6. Save to Firestore in background with high concurrency
+        saveFaktursBatch(
+          payload,
+          progObj,
+          {
+            printedKeys: Array.from(mergedPrintedSet),
+            printedAtMap: mergedPrintedAtMap,
+            updatedAt: new Date().toISOString(),
+          },
+          newUnprintedKeys
+        ).catch((err) => {
+          console.error("Background Firestore save error:", err);
+        }).finally(() => {
+          isUploadingRef.current = false;
+        });
       } catch (err) {
         console.error("Upload error:", err);
         setError(err instanceof Error ? err.message : "Gagal memproses file upload.");
-      } finally {
         isUploadingRef.current = false;
         setLoading(false);
       }

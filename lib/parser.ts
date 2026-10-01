@@ -577,9 +577,20 @@ export async function parseExcelFile(file: File): Promise<FakturRecord[]> {
 
   // 2. Binary Excel format (.xlsx)
   try {
-    const wb = XLSX.read(buffer, { type: "array" });
+    const wb = XLSX.read(buffer, {
+      type: "array",
+      dense: true,
+      cellFormula: false,
+      cellHTML: false,
+      cellText: false,
+      cellStyles: false,
+    });
     const ws = wb.Sheets[wb.SheetNames[0]];
-    const data = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true }) as unknown[][];
+    const data = (ws["!data"]
+      ? (ws["!data"] as Array<Array<{ v: unknown } | undefined>>).map((row) =>
+          row ? row.map((c) => (c ? c.v : undefined)) : []
+        )
+      : XLSX.utils.sheet_to_json(ws, { header: 1, raw: true })) as unknown[][];
 
     // Find XXCUST header
     const headerIdx = data.findIndex(

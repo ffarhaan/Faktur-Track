@@ -190,19 +190,19 @@ export async function getExistingFakturs(): Promise<{
 }
 
 /**
- * Split items into safe chunks (< 500 KB per document)
+ * Split items into safe chunks (< 600 KB per document, max 300 items)
  */
 function createSafeChunks(items: FirestoreFakturDoc[]): FirestoreFakturDoc[][] {
   const chunks: FirestoreFakturDoc[][] = [];
   let currentChunk: FirestoreFakturDoc[] = [];
   let currentEstimatedBytes = 0;
-  const MAX_CHUNK_BYTES = 500 * 1024; // 500 KB limit
+  const MAX_CHUNK_BYTES = 600 * 1024; // 600 KB safe limit
 
   for (const item of items) {
     const itemBytes = JSON.stringify(item).length;
     if (
       currentChunk.length > 0 &&
-      (currentEstimatedBytes + itemBytes > MAX_CHUNK_BYTES || currentChunk.length >= 250)
+      (currentEstimatedBytes + itemBytes > MAX_CHUNK_BYTES || currentChunk.length >= 300)
     ) {
       chunks.push(currentChunk);
       currentChunk = [];
@@ -230,17 +230,24 @@ export async function saveFaktursBatch(
 
   let livePrintedKeys: string[] = [];
   let livePrintedAtMap: Record<string, string> = {};
+  let previousChunkIds: string[] = [];
 
   try {
-    const printSnap = await getDoc(doc(db, APP_DATA_COLLECTION, PRINT_STATE_DOC));
+    const [printSnap, metaSnap] = await Promise.all([
+      getDoc(doc(db, APP_DATA_COLLECTION, PRINT_STATE_DOC)),
+      getDoc(doc(db, APP_DATA_COLLECTION, METADATA_DOC)),
+    ]);
     if (printSnap.exists()) {
       const liveData = printSnap.data() as PrintState;
       livePrintedKeys = (liveData.printedKeys || []).filter((k) => !newUnprintedSet.has(k));
       livePrintedAtMap = { ...(liveData.printedAtMap || {}) };
       newUnprintedSet.forEach((k) => delete livePrintedAtMap[k]);
     }
+    if (metaSnap.exists()) {
+      previousChunkIds = (metaSnap.data().chunkIds as string[]) || [];
+    }
   } catch (err) {
-    console.warn("Could not read live print state:", err);
+    console.warn("Could not read live print state or metadata:", err);
   }
 
   const localPrintedKeys = (existingPrintState?.printedKeys || []).filter((k) => !newUnprintedSet.has(k));
@@ -267,20 +274,12 @@ export async function saveFaktursBatch(
     }
   }
 
-  const liveChunkDocIds = new Set<string>();
-  try {
-    const liveChunksSnap = await getDocs(collection(db, CHUNKS_COLLECTION));
-    liveChunksSnap.forEach((d) => liveChunkDocIds.add(d.id));
-  } catch (err) {
-    console.warn("Could not check live chunks:", err);
-  }
-
   const chunks = createSafeChunks(fakturs);
   const nowIso = new Date().toISOString();
   const chunkIds: string[] = chunks.map((_, idx) => `chunk_${idx}`);
 
-  // Write chunks in concurrent batches of 8
-  const BATCH_CONCURRENCY = 8;
+  // Write chunks in concurrent batches of 16
+  const BATCH_CONCURRENCY = 16;
   for (let i = 0; i < chunks.length; i += BATCH_CONCURRENCY) {
     const slice = chunks.slice(i, i + BATCH_CONCURRENCY);
     await Promise.all(
@@ -300,7 +299,7 @@ export async function saveFaktursBatch(
 
   // Remove orphan chunks
   const newChunkIdSet = new Set(chunkIds);
-  const orphanDocs = Array.from(liveChunkDocIds).filter((id) => !newChunkIdSet.has(id));
+  const orphanDocs = previousChunkIds.filter((id) => !newChunkIdSet.has(id));
   if (orphanDocs.length > 0) {
     await Promise.all(
       orphanDocs.map((id) => deleteDoc(doc(db, CHUNKS_COLLECTION, id)).catch(() => null))
