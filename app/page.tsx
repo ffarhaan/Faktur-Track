@@ -1209,12 +1209,12 @@ export default function Home() {
 
   return (
     <div className={`min-h-screen flex flex-col font-sans transition-colors duration-200 ${
-      isDarkMode ? "bg-slate-950 text-slate-100" : "bg-slate-50 text-slate-800"
+      isDarkMode ? "bg-[#0b1120] text-slate-100" : "bg-slate-50 text-slate-800"
     }`}>
       {/* Toast Notification */}
       {toastMsg && (
         <div className={`fixed top-5 right-5 z-50 px-4 py-3 rounded-xl shadow-2xl flex items-center gap-3 border animate-in fade-in slide-in-from-top-2 duration-200 ${
-          isDarkMode ? "bg-slate-900 text-white border-slate-700" : "bg-slate-900 text-white border-slate-700"
+          isDarkMode ? "bg-[#16223d] text-white border-slate-700 shadow-black/50" : "bg-slate-900 text-white border-slate-700"
         }`}>
           <span className="text-emerald-400 font-bold">✓</span>
           <span className="text-sm font-medium">{toastMsg}</span>
@@ -1225,17 +1225,17 @@ export default function Home() {
       <main className="flex-1 max-w-7xl w-full mx-auto p-2.5 sm:p-4 space-y-2.5">
         {/* Top Header Card */}
         <div className={`border rounded-xl p-2.5 sm:p-3 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-2.5 transition-colors ${
-          isDarkMode ? "bg-slate-900 border-slate-800 text-slate-100" : "bg-white border-slate-200 text-slate-900"
+          isDarkMode ? "bg-[#111c33]/90 border-slate-700/60 text-slate-100 shadow-black/20" : "bg-white border-slate-200 text-slate-900"
         }`}>
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center font-bold shadow-sm shadow-blue-500/20 text-base">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-blue-600 to-indigo-500 text-white flex items-center justify-center font-bold shadow-sm shadow-blue-500/30 text-base">
               🖨️
             </div>
             <div>
               <h1 className={`text-base font-bold flex items-center gap-1.5 ${isDarkMode ? "text-white" : "text-slate-900"}`}>
                 <span>Faktur Tracker</span>
                 <span className={`text-[10px] px-1.5 py-0.2 rounded font-semibold border ${
-                  isDarkMode ? "bg-blue-950 text-blue-300 border-blue-800" : "bg-blue-50 text-blue-700 border-blue-200"
+                  isDarkMode ? "bg-blue-950/80 text-blue-300 border-blue-700/60" : "bg-blue-50 text-blue-700 border-blue-200"
                 }`}>
                   v2.0
                 </span>
@@ -1261,7 +1261,7 @@ export default function Home() {
               className={`cursor-pointer px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 shadow-xs ${
                 dragOver
                   ? "bg-blue-100 text-blue-700 border-2 border-dashed border-blue-500"
-                  : "bg-blue-600 hover:bg-blue-700 text-white shadow-blue-500/20"
+                  : "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-blue-600/30"
               }`}
             >
               <span>📤</span>
@@ -1285,7 +1285,7 @@ export default function Home() {
               disabled={loading}
               className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1 ${
                 isDarkMode
-                  ? "bg-slate-800 hover:bg-slate-700 text-slate-200"
+                  ? "bg-[#182542] hover:bg-[#223359] border border-slate-700/70 text-slate-200"
                   : "bg-slate-100 hover:bg-slate-200 text-slate-700"
               }`}
               title="Refresh Data dari Server"
@@ -1299,7 +1299,7 @@ export default function Home() {
               onClick={() => setIsDarkMode((prev) => !prev)}
               className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1 border ${
                 isDarkMode
-                  ? "bg-slate-800 hover:bg-slate-700 text-amber-300 border-slate-700"
+                  ? "bg-[#182542] hover:bg-[#223359] text-amber-300 border-slate-700/80 shadow-xs shadow-amber-500/10"
                   : "bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200"
               }`}
               title={isDarkMode ? "Ganti ke Mode Terang (Light)" : "Ganti ke Mode Gelap (Dark)"}
@@ -1313,7 +1313,7 @@ export default function Home() {
               onClick={() => setShowApotekModal(true)}
               className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1 ${
                 isDarkMode
-                  ? "bg-slate-800 hover:bg-slate-700 text-slate-200"
+                  ? "bg-[#182542] hover:bg-[#223359] border border-slate-700/70 text-slate-200"
                   : "bg-slate-100 hover:bg-slate-200 text-slate-700"
               }`}
               title="Lihat Database Master Apotek (1P / 2P / 3P)"
@@ -1327,7 +1327,7 @@ export default function Home() {
               onClick={() => setShowProductModal(true)}
               className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1 ${
                 isDarkMode
-                  ? "bg-slate-800 hover:bg-slate-700 text-slate-200"
+                  ? "bg-[#182542] hover:bg-[#223359] border border-slate-700/70 text-slate-200"
                   : "bg-slate-100 hover:bg-slate-200 text-slate-700"
               }`}
               title="Lihat Database Master Produk (Farma / Alkes / Prekursor / OOT / CCP)"
@@ -1341,7 +1341,7 @@ export default function Home() {
               onClick={handleExportExcel}
               className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1 ${
                 isDarkMode
-                  ? "bg-slate-800 hover:bg-slate-700 text-slate-200"
+                  ? "bg-[#182542] hover:bg-[#223359] border border-slate-700/70 text-slate-200"
                   : "bg-slate-100 hover:bg-slate-200 text-slate-700"
               }`}
               title="Ekspor Data ke Excel (Ascending)"
@@ -1355,12 +1355,12 @@ export default function Home() {
               onClick={handleClearAll}
               className={`px-2.5 py-1.5 border rounded-lg text-xs font-semibold transition-colors flex items-center gap-1 ${
                 isDarkMode
-                  ? "bg-rose-950/60 hover:bg-rose-900/60 text-rose-300 border-rose-900"
+                  ? "bg-rose-950/40 hover:bg-rose-900/50 text-rose-300 border-rose-800/60"
                   : "bg-rose-50 hover:bg-rose-100 text-rose-700 border-rose-200"
               }`}
               title="Hapus Semua Data & Reset Database"
             >
-              <span className="text-rose-500">🗑️</span>
+              <span className="text-rose-400">🗑️</span>
               <span className="hidden sm:inline">Reset Data</span>
             </button>
           </div>
@@ -1369,7 +1369,7 @@ export default function Home() {
         {/* Upload Notification Banner */}
         {uploadNotification && (
           <div className={`border rounded-xl p-3 text-xs flex items-start justify-between gap-2 shadow-xs ${
-            isDarkMode ? "bg-blue-950/60 border-blue-800 text-blue-200" : "bg-blue-50 border-blue-200 text-blue-900"
+            isDarkMode ? "bg-gradient-to-r from-blue-950/70 to-indigo-950/70 border-blue-700/60 text-blue-200 shadow-blue-950/20" : "bg-blue-50 border-blue-200 text-blue-900"
           }`}>
             <div className="flex items-start gap-2.5">
               <span className="text-base">📋</span>
@@ -1377,7 +1377,7 @@ export default function Home() {
                 <div className="font-bold flex items-center gap-2">
                   <span>File Berhasil Diunggah: <span className="underline">{uploadNotification.fileName}</span></span>
                   <span className={`text-[10px] px-1.5 py-0.2 rounded font-semibold ${
-                    isDarkMode ? "bg-blue-900 text-blue-200" : "bg-blue-200/80 text-blue-800"
+                    isDarkMode ? "bg-blue-900/80 text-blue-200 border border-blue-700/50" : "bg-blue-200/80 text-blue-800"
                   }`}>{uploadNotification.time}</span>
                 </div>
                 <div className={`flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] ${isDarkMode ? "text-blue-300" : "text-blue-800/90"}`}>
@@ -1403,10 +1403,10 @@ export default function Home() {
         {/* Error Banner */}
         {error && (
           <div className={`border rounded-xl p-2.5 text-xs flex items-center justify-between gap-2 ${
-            isDarkMode ? "bg-rose-950/60 border-rose-900 text-rose-300" : "bg-rose-50 border-rose-200 text-rose-800"
+            isDarkMode ? "bg-rose-950/60 border-rose-800 text-rose-300" : "bg-rose-50 border-rose-200 text-rose-800"
           }`}>
             <div className="flex items-center gap-1.5 font-medium">
-              <span className="text-rose-500">⚠️</span>
+              <span className="text-rose-400">⚠️</span>
               <span>{error}</span>
             </div>
             <button onClick={() => setError(null)} className={isDarkMode ? "text-rose-400 hover:text-white" : "text-rose-400 hover:text-rose-700"}>
@@ -1415,11 +1415,13 @@ export default function Home() {
           </div>
         )}
 
-        {/* 8 Metric KPI Cards Grid - Compact & Responsive 8-Cols */}
+        {/* 8 Metric KPI Cards Grid - Refined Modern Gradients */}
         <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2">
           {/* Card 1: Total SO */}
           <div className={`border rounded-xl p-2 sm:p-2.5 shadow-xs transition-colors flex flex-col justify-between ${
-            isDarkMode ? "bg-slate-900 border-slate-800 text-slate-100" : "bg-white border-slate-200 text-slate-900"
+            isDarkMode
+              ? "bg-gradient-to-br from-blue-950/40 via-[#111c33] to-[#111c33] border-blue-500/25 text-blue-100"
+              : "bg-white border-slate-200 text-slate-900"
           }`}>
             <div className={`flex items-center justify-between text-[11px] ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>
               <span className="font-semibold">Total SO</span>
@@ -1428,7 +1430,7 @@ export default function Home() {
             <div className={`text-base font-extrabold font-mono my-0.5 ${isDarkMode ? "text-white" : "text-slate-900"}`}>
               {new Set(grouped.map((g) => g.so).filter((s) => s && s !== "-")).size}
             </div>
-            <div className={`text-[10px] truncate ${isDarkMode ? "text-slate-500" : "text-slate-400"}`}>
+            <div className={`text-[10px] truncate ${isDarkMode ? "text-slate-400" : "text-slate-400"}`}>
               SO Terdata
             </div>
           </div>
@@ -1436,11 +1438,11 @@ export default function Home() {
           {/* Card 2: Belum Terprint */}
           <div className={`border rounded-xl p-2 sm:p-2.5 shadow-xs transition-colors flex flex-col justify-between ${
             isDarkMode
-              ? "bg-amber-950/30 border-amber-800/60 text-amber-200"
+              ? "bg-gradient-to-br from-amber-950/50 via-[#111c33] to-[#111c33] border-amber-500/40 text-amber-200 shadow-amber-950/20"
               : "bg-white border-amber-200 text-amber-800 bg-gradient-to-br from-amber-50/50 to-white"
           }`}>
-            <div className={`flex items-center justify-between text-[11px] ${isDarkMode ? "text-amber-300" : "text-amber-700"}`}>
-              <span className="font-bold">Belum Terprint</span>
+            <div className={`flex items-center justify-between text-[11px] ${isDarkMode ? "text-amber-300 font-semibold" : "text-amber-700 font-bold"}`}>
+              <span>Belum Terprint</span>
               <span>⏱️</span>
             </div>
             <div className={`text-base font-extrabold font-mono my-0.5 ${isDarkMode ? "text-amber-300" : "text-amber-800"}`}>
@@ -1453,39 +1455,49 @@ export default function Home() {
 
           {/* Card 3: 1P ORA */}
           <div className={`border rounded-xl p-2 sm:p-2.5 shadow-xs transition-colors flex flex-col justify-between ${
-            isDarkMode ? "bg-slate-900 border-slate-800 text-slate-100" : "bg-white border-slate-200 text-slate-900"
+            isDarkMode
+              ? "bg-gradient-to-br from-sky-950/40 via-[#111c33] to-[#111c33] border-sky-500/25 text-sky-100"
+              : "bg-white border-slate-200 text-slate-900"
           }`}>
             <div className={`flex items-center justify-between text-[11px] ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>
               <span className="font-semibold truncate">1P ORA (Max)</span>
-              <span className="text-[9px] bg-blue-100 text-blue-800 px-1 py-0.2 rounded font-bold">ORA</span>
+              <span className={`text-[9px] px-1 py-0.2 rounded font-bold ${
+                isDarkMode ? "bg-sky-950 text-sky-300 border border-sky-700/50" : "bg-blue-100 text-blue-800"
+              }`}>ORA</span>
             </div>
-            <div className={`text-base font-bold font-mono my-0.5 ${isDarkMode ? "text-white" : "text-slate-900"}`}>
+            <div className={`text-base font-bold font-mono my-0.5 ${isDarkMode ? "text-sky-200" : "text-slate-900"}`}>
               {highestInvoices.maxOraStr}
             </div>
-            <div className={`text-[10px] truncate ${isDarkMode ? "text-slate-500" : "text-slate-400"}`} title={invoiceProgression?.rangeOra || ""}>
+            <div className={`text-[10px] truncate ${isDarkMode ? "text-slate-400" : "text-slate-400"}`} title={invoiceProgression?.rangeOra || ""}>
               {invoiceProgression?.rangeOra ? `R: ${invoiceProgression.rangeOra}` : "Belum ada"}
             </div>
           </div>
 
           {/* Card 4: 2P */}
           <div className={`border rounded-xl p-2 sm:p-2.5 shadow-xs transition-colors flex flex-col justify-between ${
-            isDarkMode ? "bg-slate-900 border-slate-800 text-slate-100" : "bg-white border-slate-200 text-slate-900"
+            isDarkMode
+              ? "bg-gradient-to-br from-emerald-950/40 via-[#111c33] to-[#111c33] border-emerald-500/25 text-emerald-100"
+              : "bg-white border-slate-200 text-slate-900"
           }`}>
             <div className={`flex items-center justify-between text-[11px] ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>
               <span className="font-semibold">2P (Max)</span>
-              <span className="text-[9px] bg-emerald-100 text-emerald-800 px-1 py-0.2 rounded font-bold">2P</span>
+              <span className={`text-[9px] px-1 py-0.2 rounded font-bold ${
+                isDarkMode ? "bg-emerald-950 text-emerald-300 border border-emerald-700/50" : "bg-emerald-100 text-emerald-800"
+              }`}>2P</span>
             </div>
-            <div className={`text-base font-bold font-mono my-0.5 ${isDarkMode ? "text-white" : "text-slate-900"}`}>
+            <div className={`text-base font-bold font-mono my-0.5 ${isDarkMode ? "text-emerald-200" : "text-slate-900"}`}>
               {highestInvoices.max2PStr}
             </div>
-            <div className={`text-[10px] truncate ${isDarkMode ? "text-slate-500" : "text-slate-400"}`} title={invoiceProgression?.range2P || ""}>
+            <div className={`text-[10px] truncate ${isDarkMode ? "text-slate-400" : "text-slate-400"}`} title={invoiceProgression?.range2P || ""}>
               {invoiceProgression?.range2P ? `R: ${invoiceProgression.range2P}` : "Belum ada"}
             </div>
           </div>
 
           {/* Card 5: Total Invoice */}
           <div className={`border rounded-xl p-2 sm:p-2.5 shadow-xs transition-colors flex flex-col justify-between ${
-            isDarkMode ? "bg-slate-900 border-slate-800 text-slate-100" : "bg-white border-slate-200 text-slate-900"
+            isDarkMode
+              ? "bg-gradient-to-br from-indigo-950/40 via-[#111c33] to-[#111c33] border-indigo-500/25 text-indigo-100"
+              : "bg-white border-slate-200 text-slate-900"
           }`}>
             <div className={`flex items-center justify-between text-[11px] ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>
               <span className="font-semibold">Total Faktur</span>
@@ -1494,55 +1506,65 @@ export default function Home() {
             <div className={`text-base font-extrabold font-mono my-0.5 ${isDarkMode ? "text-white" : "text-slate-900"}`}>
               {grouped.length}
             </div>
-            <div className={`text-[10px] truncate ${isDarkMode ? "text-slate-500" : "text-slate-400"}`}>
+            <div className={`text-[10px] truncate ${isDarkMode ? "text-slate-400" : "text-slate-400"}`}>
               Semua Faktur
             </div>
           </div>
 
           {/* Card 6: Double Invoice */}
           <div className={`border rounded-xl p-2 sm:p-2.5 shadow-xs transition-colors flex flex-col justify-between ${
-            isDarkMode ? "bg-slate-900 border-slate-800 text-slate-100" : "bg-white border-slate-200 text-slate-900"
+            isDarkMode
+              ? "bg-gradient-to-br from-rose-950/50 via-[#111c33] to-[#111c33] border-rose-500/40 text-rose-200 shadow-rose-950/20"
+              : "bg-white border-slate-200 text-slate-900"
           }`}>
-            <div className={`flex items-center justify-between text-[11px] ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>
-              <span className="font-semibold">Double INV</span>
-              <span className="text-[10px] text-rose-500 font-bold">⚠️</span>
+            <div className={`flex items-center justify-between text-[11px] ${isDarkMode ? "text-rose-300 font-semibold" : "text-slate-500"}`}>
+              <span>Double INV</span>
+              <span className="text-[10px] text-rose-400 font-bold">⚠️</span>
             </div>
-            <div className="text-base font-extrabold text-rose-600 font-mono my-0.5">
+            <div className="text-base font-extrabold text-rose-400 font-mono my-0.5">
               {grouped.filter((g) => g.isDoubleInv).length}
             </div>
-            <div className="text-[10px] truncate text-rose-500">
+            <div className="text-[10px] truncate text-rose-400/90">
               Perlu dicek
             </div>
           </div>
 
           {/* Card 7: 1P DOO */}
           <div className={`border rounded-xl p-2 sm:p-2.5 shadow-xs transition-colors flex flex-col justify-between ${
-            isDarkMode ? "bg-slate-900 border-slate-800 text-slate-100" : "bg-white border-slate-200 text-slate-900"
+            isDarkMode
+              ? "bg-gradient-to-br from-teal-950/40 via-[#111c33] to-[#111c33] border-teal-500/25 text-teal-100"
+              : "bg-white border-slate-200 text-slate-900"
           }`}>
             <div className={`flex items-center justify-between text-[11px] ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>
               <span className="font-semibold truncate">1P DOO (Max)</span>
-              <span className="text-[9px] bg-blue-100 text-blue-800 px-1 py-0.2 rounded font-bold">1P DOO</span>
+              <span className={`text-[9px] px-1 py-0.2 rounded font-bold ${
+                isDarkMode ? "bg-teal-950 text-teal-300 border border-teal-700/50" : "bg-blue-100 text-blue-800"
+              }`}>1P DOO</span>
             </div>
-            <div className={`text-base font-bold font-mono my-0.5 ${isDarkMode ? "text-white" : "text-slate-900"}`}>
+            <div className={`text-base font-bold font-mono my-0.5 ${isDarkMode ? "text-teal-200" : "text-slate-900"}`}>
               {highestInvoices.max1PDooStr}
             </div>
-            <div className={`text-[10px] truncate ${isDarkMode ? "text-slate-500" : "text-slate-400"}`} title={invoiceProgression?.range1PDoo || ""}>
+            <div className={`text-[10px] truncate ${isDarkMode ? "text-slate-400" : "text-slate-400"}`} title={invoiceProgression?.range1PDoo || ""}>
               {invoiceProgression?.range1PDoo ? `R: ${invoiceProgression.range1PDoo}` : "Belum ada"}
             </div>
           </div>
 
           {/* Card 8: 3P */}
           <div className={`border rounded-xl p-2 sm:p-2.5 shadow-xs transition-colors flex flex-col justify-between ${
-            isDarkMode ? "bg-slate-900 border-slate-800 text-slate-100" : "bg-white border-slate-200 text-slate-900"
+            isDarkMode
+              ? "bg-gradient-to-br from-purple-950/40 via-[#111c33] to-[#111c33] border-purple-500/25 text-purple-100"
+              : "bg-white border-slate-200 text-slate-900"
           }`}>
             <div className={`flex items-center justify-between text-[11px] ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>
               <span className="font-semibold">3P (Max)</span>
-              <span className="text-[9px] bg-purple-100 text-purple-800 px-1 py-0.2 rounded font-bold">3P</span>
+              <span className={`text-[9px] px-1 py-0.2 rounded font-bold ${
+                isDarkMode ? "bg-purple-950 text-purple-300 border border-purple-700/50" : "bg-purple-100 text-purple-800"
+              }`}>3P</span>
             </div>
-            <div className={`text-base font-bold font-mono my-0.5 ${isDarkMode ? "text-white" : "text-slate-900"}`}>
+            <div className={`text-base font-bold font-mono my-0.5 ${isDarkMode ? "text-purple-200" : "text-slate-900"}`}>
               {highestInvoices.max3PStr}
             </div>
-            <div className={`text-[10px] truncate ${isDarkMode ? "text-slate-500" : "text-slate-400"}`} title={invoiceProgression?.range3P || ""}>
+            <div className={`text-[10px] truncate ${isDarkMode ? "text-slate-400" : "text-slate-400"}`} title={invoiceProgression?.range3P || ""}>
               {invoiceProgression?.range3P ? `R: ${invoiceProgression.range3P}` : "Belum ada"}
             </div>
           </div>
@@ -1550,17 +1572,17 @@ export default function Home() {
 
         {/* Filter and Search Bar Section */}
         <div className={`border rounded-xl p-2.5 sm:p-3 shadow-xs space-y-2 transition-colors ${
-          isDarkMode ? "bg-slate-900 border-slate-800" : "bg-white border-slate-200"
+          isDarkMode ? "bg-[#111c33]/90 border-slate-700/60 shadow-black/20" : "bg-white border-slate-200"
         }`}>
           {/* Top Row Filters */}
           <div className="flex flex-wrap items-center justify-between gap-2">
             {/* Status Filter Tabs */}
-            <div className={`flex items-center p-0.5 rounded-lg ${isDarkMode ? "bg-slate-800" : "bg-slate-100"}`}>
+            <div className={`flex items-center p-0.5 rounded-lg ${isDarkMode ? "bg-[#0b1220] border border-slate-800" : "bg-slate-100"}`}>
               <button
                 onClick={() => { setFilter("belum"); setPage(0); }}
                 className={`px-2.5 py-1 rounded-md text-xs font-bold transition-all ${
                   filter === "belum"
-                    ? (isDarkMode ? "bg-slate-950 text-white shadow-xs" : "bg-white text-slate-900 shadow-xs")
+                    ? (isDarkMode ? "bg-[#1e2c4a] text-blue-300 shadow-xs border border-blue-500/30" : "bg-white text-slate-900 shadow-xs")
                     : (isDarkMode ? "text-slate-400 hover:text-white" : "text-slate-600 hover:text-slate-900")
                 }`}
               >
@@ -1570,7 +1592,7 @@ export default function Home() {
                 onClick={() => { setFilter("sudah"); setPage(0); }}
                 className={`px-2.5 py-1 rounded-md text-xs font-bold transition-all ${
                   filter === "sudah"
-                    ? (isDarkMode ? "bg-slate-950 text-white shadow-xs" : "bg-white text-slate-900 shadow-xs")
+                    ? (isDarkMode ? "bg-[#1e2c4a] text-blue-300 shadow-xs border border-blue-500/30" : "bg-white text-slate-900 shadow-xs")
                     : (isDarkMode ? "text-slate-400 hover:text-white" : "text-slate-600 hover:text-slate-900")
                 }`}
               >
@@ -1580,7 +1602,7 @@ export default function Home() {
                 onClick={() => { setFilter("all"); setPage(0); }}
                 className={`px-2.5 py-1 rounded-md text-xs font-bold transition-all ${
                   filter === "all"
-                    ? (isDarkMode ? "bg-slate-950 text-white shadow-xs" : "bg-white text-slate-900 shadow-xs")
+                    ? (isDarkMode ? "bg-[#1e2c4a] text-blue-300 shadow-xs border border-blue-500/30" : "bg-white text-slate-900 shadow-xs")
                     : (isDarkMode ? "text-slate-400 hover:text-white" : "text-slate-600 hover:text-slate-900")
                 }`}
               >
@@ -1590,7 +1612,7 @@ export default function Home() {
                 onClick={() => { setFilter("double"); setPage(0); }}
                 className={`px-2.5 py-1 rounded-md text-xs font-bold transition-all ${
                   filter === "double"
-                    ? (isDarkMode ? "bg-rose-950 text-rose-300 shadow-xs" : "bg-white text-rose-700 shadow-xs")
+                    ? (isDarkMode ? "bg-rose-950 text-rose-300 shadow-xs border border-rose-800" : "bg-white text-rose-700 shadow-xs")
                     : (isDarkMode ? "text-rose-400 hover:text-rose-300" : "text-rose-600 hover:text-rose-800")
                 }`}
               >
@@ -1602,7 +1624,7 @@ export default function Home() {
             {unprintedCountInFiltered > 0 && (
               <button
                 onClick={handleMarkAllPrinted}
-                className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition-colors flex items-center gap-1 shadow-xs"
+                className="px-3 py-1 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-lg text-xs font-bold transition-colors flex items-center gap-1 shadow-xs shadow-emerald-900/30"
               >
                 <span>✓</span>
                 <span>Tandai Semua Selesai ({unprintedCountInFiltered})</span>
@@ -1623,9 +1645,9 @@ export default function Home() {
                 placeholder="Cari SO / Invoice / Obat... ('/' atau 'f')"
                 value={search}
                 onChange={(e) => { setSearch(e.target.value); setPage(0); }}
-                className={`w-full pl-7 pr-2.5 py-1 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors ${
+                className={`w-full pl-7 pr-2.5 py-1 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-colors ${
                   isDarkMode
-                    ? "bg-slate-800/80 border-slate-700 text-slate-100 placeholder:text-slate-500"
+                    ? "bg-[#0b1220] border border-slate-700/80 text-slate-100 placeholder:text-slate-500"
                     : "bg-slate-50 border-slate-200 text-slate-800 focus:bg-white"
                 }`}
               />
@@ -1637,7 +1659,7 @@ export default function Home() {
               onChange={(e) => { setKatFilter(e.target.value as KatFilter); setPage(0); }}
               className={`w-full px-2.5 py-1 rounded-lg text-xs font-medium focus:outline-none focus:border-blue-500 transition-colors ${
                 isDarkMode
-                  ? "bg-slate-800/80 border border-slate-700 text-slate-200"
+                  ? "bg-[#0b1220] border border-slate-700/80 text-slate-200"
                   : "bg-slate-50 border border-slate-200 text-slate-700"
               }`}
             >
@@ -1653,7 +1675,7 @@ export default function Home() {
               onChange={(e) => { setJenisFilter(e.target.value as JenisFilter); setPage(0); }}
               className={`w-full px-2.5 py-1 rounded-lg text-xs font-medium focus:outline-none focus:border-blue-500 transition-colors ${
                 isDarkMode
-                  ? "bg-slate-800/80 border border-slate-700 text-slate-200"
+                  ? "bg-[#0b1220] border border-slate-700/80 text-slate-200"
                   : "bg-slate-50 border border-slate-200 text-slate-700"
               }`}
             >
@@ -1668,7 +1690,7 @@ export default function Home() {
               onChange={(e) => { setKlasFilter(e.target.value as KlasFilter); setPage(0); }}
               className={`w-full px-2.5 py-1 rounded-lg text-xs font-medium focus:outline-none focus:border-blue-500 transition-colors ${
                 isDarkMode
-                  ? "bg-slate-800/80 border border-slate-700 text-slate-200"
+                  ? "bg-[#0b1220] border border-slate-700/80 text-slate-200"
                   : "bg-slate-50 border border-slate-200 text-slate-700"
               }`}
             >
@@ -1686,7 +1708,7 @@ export default function Home() {
               onChange={(e) => { setDateFilter(e.target.value); setPage(0); }}
               className={`w-full px-2.5 py-1 rounded-lg text-xs font-medium focus:outline-none focus:border-blue-500 transition-colors ${
                 isDarkMode
-                  ? "bg-slate-800/80 border border-slate-700 text-slate-200"
+                  ? "bg-[#0b1220] border border-slate-700/80 text-slate-200"
                   : "bg-slate-50 border border-slate-200 text-slate-700"
               }`}
             >
@@ -1700,14 +1722,14 @@ export default function Home() {
 
         {/* Faktur Table Card */}
         <div className={`border rounded-xl shadow-xs overflow-hidden transition-colors ${
-          isDarkMode ? "bg-slate-900 border-slate-800" : "bg-white border-slate-200"
+          isDarkMode ? "bg-[#111c33]/90 border-slate-700/60 shadow-black/20" : "bg-white border-slate-200"
         }`}>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
                 <tr className={`border-b font-semibold transition-colors ${
                   isDarkMode
-                    ? "bg-slate-800/90 border-slate-700/80 text-slate-300"
+                    ? "bg-[#16223d] border-slate-700/80 text-slate-300"
                     : "bg-slate-100/80 border-slate-200 text-slate-600"
                 }`}>
                   <th className="px-2.5 py-1.5 w-7 text-center">#</th>
@@ -1723,19 +1745,19 @@ export default function Home() {
                   <th className="px-2.5 py-1.5 text-right">Total Harga</th>
                 </tr>
               </thead>
-              <tbody className={`divide-y ${isDarkMode ? "divide-slate-800/60" : "divide-slate-100"}`}>
+              <tbody className={`divide-y ${isDarkMode ? "divide-slate-800/80" : "divide-slate-100"}`}>
                 {loading && filtered.length === 0 ? (
                   <tr>
-                    <td colSpan={11} className={`text-center py-8 ${isDarkMode ? "text-slate-500" : "text-slate-400"}`}>
+                    <td colSpan={11} className={`text-center py-8 ${isDarkMode ? "text-slate-400" : "text-slate-400"}`}>
                       <div className="flex flex-col items-center gap-1.5">
-                        <span className="text-xl animate-spin">🔄</span>
+                        <span className="text-xl animate-spin text-blue-400">🔄</span>
                         <span className="text-xs font-medium">Memuat data faktur...</span>
                       </div>
                     </td>
                   </tr>
                 ) : filtered.length === 0 ? (
                   <tr>
-                    <td colSpan={11} className={`text-center py-8 ${isDarkMode ? "text-slate-500" : "text-slate-400"}`}>
+                    <td colSpan={11} className={`text-center py-8 ${isDarkMode ? "text-slate-400" : "text-slate-400"}`}>
                       <div className="flex flex-col items-center gap-1.5">
                         <span className="text-2xl">📄</span>
                         <span className="text-xs font-medium">Tidak ada faktur yang sesuai filter.</span>
@@ -1749,7 +1771,7 @@ export default function Home() {
                     const getCellCls = (colIdx: number) =>
                       isRowSelected && selectedColIdx === colIdx
                         ? (isDarkMode
-                            ? "ring-2 ring-blue-500 ring-inset bg-blue-900/80 text-white font-semibold"
+                            ? "ring-2 ring-blue-400 ring-inset bg-blue-900/70 text-white font-semibold"
                             : "ring-2 ring-blue-600 ring-inset bg-blue-100/90 font-semibold")
                         : "";
 
@@ -1768,19 +1790,19 @@ export default function Home() {
                           className={`cursor-pointer transition-colors ${
                             isRowSelected
                               ? (isDarkMode
-                                  ? "bg-blue-950/70 border-l-4 border-l-blue-500 shadow-xs"
+                                  ? "bg-[#1d3567] border-l-4 border-l-blue-400 text-white shadow-xs"
                                   : "bg-blue-50/90 border-l-4 border-l-blue-600 shadow-xs")
                               : g.isDoubleInv
-                              ? (isDarkMode ? "bg-rose-950/40 hover:bg-rose-900/40" : "bg-rose-50/70 hover:bg-rose-100/70")
+                              ? (isDarkMode ? "bg-rose-950/35 hover:bg-rose-900/50" : "bg-rose-50/70 hover:bg-rose-100/70")
                               : g.allPrinted
-                              ? (isDarkMode ? "bg-emerald-950/30 hover:bg-emerald-900/30" : "bg-emerald-50/40 hover:bg-emerald-100/50")
-                              : (isDarkMode ? "hover:bg-slate-800/60" : "hover:bg-slate-50")
+                              ? (isDarkMode ? "bg-emerald-950/30 hover:bg-emerald-900/40" : "bg-emerald-50/40 hover:bg-emerald-100/50")
+                              : (isDarkMode ? "hover:bg-[#182644]/70" : "hover:bg-slate-50")
                           }`}
                         >
                           {/* Col 0: Expand */}
                           <td
                             className={`px-2.5 py-1.5 text-center text-[10px] ${
-                              isDarkMode ? "text-slate-500" : "text-slate-400"
+                              isDarkMode ? "text-slate-400" : "text-slate-400"
                             } ${getCellCls(0)}`}
                             onClick={(e) => {
                               e.stopPropagation();
@@ -1806,7 +1828,7 @@ export default function Home() {
                                 g.allPrinted
                                   ? "bg-emerald-600 text-white hover:bg-orange-500"
                                   : isDarkMode
-                                  ? "bg-slate-800 text-slate-400 hover:bg-emerald-600 hover:text-white"
+                                  ? "bg-[#182542] text-slate-400 border border-slate-700/80 hover:bg-emerald-600 hover:text-white"
                                   : "bg-slate-200 text-slate-600 hover:bg-emerald-500 hover:text-white"
                               }`}
                               title={g.allPrinted ? "Klik untuk UNPRINT" : "Klik untuk TANDAI PRINT"}
@@ -1828,7 +1850,7 @@ export default function Home() {
                             <div className="flex items-center gap-1">
                               <span>{g.so}</span>
                               {g.isDoubleInv && (
-                                <span className="text-rose-500 font-bold" title="Double Invoice Detected">⚠</span>
+                                <span className="text-rose-400 font-bold" title="Double Invoice Detected">⚠</span>
                               )}
                             </div>
                           </td>
@@ -1836,7 +1858,7 @@ export default function Home() {
                           {/* Col 3: No Invoice */}
                           <td
                             className={`px-2.5 py-1.5 font-mono font-bold whitespace-nowrap ${
-                              isDarkMode ? "text-blue-400" : "text-blue-700"
+                              isDarkMode ? "text-sky-400" : "text-blue-700"
                             } ${getCellCls(3)}`}
                             onClick={(e) => {
                               e.stopPropagation();
@@ -1857,14 +1879,14 @@ export default function Home() {
                             <span
                               className={`inline-block px-1.5 py-0.2 rounded text-[9px] font-bold border ${
                                 g.kategoriProduk === "ALKES"
-                                  ? (isDarkMode ? "bg-teal-950/60 text-teal-300 border-teal-800" : "bg-teal-50 text-teal-800 border-teal-200")
+                                  ? (isDarkMode ? "bg-teal-950/80 text-teal-300 border-teal-700/60" : "bg-teal-50 text-teal-800 border-teal-200")
                                   : g.kategoriProduk === "CCP"
-                                  ? (isDarkMode ? "bg-sky-950/60 text-sky-300 border-sky-800" : "bg-sky-50 text-sky-800 border-sky-200")
+                                  ? (isDarkMode ? "bg-sky-950/80 text-sky-300 border-sky-700/60" : "bg-sky-50 text-sky-800 border-sky-200")
                                   : g.kategoriProduk === "PREKURSOR"
-                                  ? (isDarkMode ? "bg-amber-950/60 text-amber-300 border-amber-800" : "bg-amber-50 text-amber-900 border-amber-200")
+                                  ? (isDarkMode ? "bg-amber-950/80 text-amber-300 border-amber-700/60" : "bg-amber-50 text-amber-900 border-amber-200")
                                   : g.kategoriProduk === "OOT"
-                                  ? (isDarkMode ? "bg-purple-950/60 text-purple-300 border-purple-800" : "bg-purple-50 text-purple-900 border-purple-200")
-                                  : (isDarkMode ? "bg-indigo-950/60 text-indigo-300 border-indigo-800" : "bg-indigo-50 text-indigo-700 border-indigo-200")
+                                  ? (isDarkMode ? "bg-purple-950/80 text-purple-300 border-purple-700/60" : "bg-purple-50 text-purple-900 border-purple-200")
+                                  : (isDarkMode ? "bg-indigo-950/80 text-indigo-300 border-indigo-700/60" : "bg-indigo-50 text-indigo-700 border-indigo-200")
                               }`}
                             >
                               {g.kategoriProduk}
@@ -1881,8 +1903,8 @@ export default function Home() {
                           >
                             <span className={`inline-block px-1.5 py-0.2 rounded text-[9px] font-bold ${
                               g.jenisTransaksi === "ORA"
-                                ? (isDarkMode ? "bg-blue-950/80 text-blue-300 border border-blue-800" : "bg-blue-100 text-blue-800")
-                                : (isDarkMode ? "bg-emerald-950/80 text-emerald-300 border border-emerald-800" : "bg-emerald-100 text-emerald-800")
+                                ? (isDarkMode ? "bg-blue-950/90 text-blue-300 border border-blue-700/60" : "bg-blue-100 text-blue-800")
+                                : (isDarkMode ? "bg-emerald-950/90 text-emerald-300 border border-emerald-700/60" : "bg-emerald-100 text-emerald-800")
                             }`}>
                               {g.jenisTransaksi}
                             </span>
@@ -1891,7 +1913,7 @@ export default function Home() {
                           {/* Col 6: Pelanggan */}
                           <td
                             className={`px-2.5 py-1.5 max-w-xs truncate font-medium ${
-                              isDarkMode ? "text-slate-300" : "text-slate-700"
+                              isDarkMode ? "text-slate-200" : "text-slate-700"
                             } ${getCellCls(6)}`}
                             onClick={(e) => {
                               e.stopPropagation();
@@ -1930,10 +1952,10 @@ export default function Home() {
                               className={`cursor-pointer px-1.5 py-0.2 rounded text-[10px] font-bold border transition-colors ${
                                 isDarkMode
                                   ? g.kategori === "1P"
-                                    ? "bg-blue-950 text-blue-300 border-blue-800"
+                                    ? "bg-[#182a4d] text-blue-300 border-blue-600/60"
                                     : g.kategori === "2P"
-                                    ? "bg-emerald-950 text-emerald-300 border-emerald-800"
-                                    : "bg-purple-950 text-purple-300 border-purple-800"
+                                    ? "bg-[#143329] text-emerald-300 border-emerald-600/60"
+                                    : "bg-[#2f1b47] text-purple-300 border-purple-600/60"
                                   : g.kategori === "1P"
                                   ? "bg-blue-100 text-blue-700 border-transparent hover:border-slate-300"
                                   : g.kategori === "2P"
@@ -1959,7 +1981,7 @@ export default function Home() {
                             {g.allPrinted && g.printedAt ? (
                               <span className={`inline-flex items-center gap-1 px-1.5 py-0.2 rounded border ${
                                 isDarkMode
-                                  ? "text-emerald-300 bg-emerald-950/80 border-emerald-800"
+                                  ? "text-emerald-300 bg-emerald-950/90 border-emerald-700/60"
                                   : "text-emerald-800 bg-emerald-50 border-emerald-200"
                               }`}>
                                 ⏱ {formatPrintTime(g.printedAt)}
@@ -1972,7 +1994,7 @@ export default function Home() {
                           {/* Col 10: Total Harga */}
                           <td
                             className={`px-2.5 py-1.5 text-right font-medium whitespace-nowrap ${
-                              isDarkMode ? "text-slate-200" : "text-slate-900"
+                              isDarkMode ? "text-slate-100" : "text-slate-900"
                             } ${getCellCls(10)}`}
                             onClick={(e) => {
                               e.stopPropagation();
@@ -1985,10 +2007,10 @@ export default function Home() {
 
                         {/* Expanded Detail Rows */}
                         {isExpanded && (
-                          <tr className={isDarkMode ? "bg-slate-950/60 border-b border-slate-800" : "bg-slate-50/80 border-b border-slate-200"}>
-                            <td colSpan={11} className="p-4">
+                          <tr className={isDarkMode ? "bg-[#080d19] border-b border-slate-800" : "bg-slate-50/80 border-b border-slate-200"}>
+                            <td colSpan={11} className="p-3">
                               <div className={`border rounded-xl p-3 shadow-xs space-y-3 ${
-                                isDarkMode ? "bg-slate-900 border-slate-800 text-slate-200" : "bg-white border-slate-200 text-slate-800"
+                                isDarkMode ? "bg-[#0e1628] border-slate-700/70 text-slate-200 shadow-black/40" : "bg-white border-slate-200 text-slate-800"
                               }`}>
                                 <div className={`flex flex-wrap items-center justify-between gap-2 pb-2 border-b text-xs ${
                                   isDarkMode ? "border-slate-800 text-slate-300" : "border-slate-100 text-slate-600"
@@ -1998,7 +2020,7 @@ export default function Home() {
                                       Rincian Obat (Invoice: {g.invoiceNumber})
                                     </span> · SO: <span className={`font-mono ${isDarkMode ? "text-slate-200" : "text-slate-900"}`}>{g.so}</span> · Pelanggan: <span className={`font-semibold ${isDarkMode ? "text-white" : "text-slate-900"}`}>{g.customerName}</span>
                                     {g.allPrinted && g.printedAt && (
-                                      <span className="ml-3 inline-flex items-center gap-1 font-semibold text-emerald-500">
+                                      <span className="ml-3 inline-flex items-center gap-1 font-semibold text-emerald-400">
                                         <span>⏱ Selesai Print:</span>
                                         <span className="font-mono">{formatPrintTime(g.printedAt)}</span>
                                       </span>
@@ -2011,7 +2033,7 @@ export default function Home() {
                                     }}
                                     className={`px-3 py-1 rounded-lg text-xs font-bold transition-colors ${
                                       g.allPrinted
-                                        ? (isDarkMode ? "bg-orange-950 text-orange-300 hover:bg-orange-900" : "bg-orange-100 text-orange-800 hover:bg-orange-200")
+                                        ? (isDarkMode ? "bg-orange-950/80 text-orange-300 border border-orange-800 hover:bg-orange-900" : "bg-orange-100 text-orange-800 hover:bg-orange-200")
                                         : "bg-emerald-600 text-white hover:bg-emerald-700"
                                     }`}
                                   >
@@ -2022,7 +2044,7 @@ export default function Home() {
                                 <table className="w-full text-xs text-left">
                                   <thead>
                                     <tr className={`border-b font-semibold ${
-                                      isDarkMode ? "text-slate-400 border-slate-800" : "text-slate-500 border-slate-100"
+                                      isDarkMode ? "text-slate-400 border-slate-700/80" : "text-slate-500 border-slate-100"
                                     }`}>
                                       <th className="py-1.5 px-2">Item Code</th>
                                       <th className="py-1.5 px-2">Kat</th>
@@ -2033,13 +2055,13 @@ export default function Home() {
                                       <th className="py-1.5 px-2 text-right">Total Harga</th>
                                     </tr>
                                   </thead>
-                                  <tbody className={`divide-y ${isDarkMode ? "divide-slate-850" : "divide-slate-100"}`}>
+                                  <tbody className={`divide-y ${isDarkMode ? "divide-slate-800/60" : "divide-slate-100"}`}>
                                     {g.items.map((it, idx) => (
-                                      <tr key={idx} className={isDarkMode ? "hover:bg-slate-850" : "hover:bg-slate-50"}>
+                                      <tr key={idx} className={isDarkMode ? "hover:bg-[#141e33]" : "hover:bg-slate-50"}>
                                         <td className={`py-1.5 px-2 font-mono ${isDarkMode ? "text-slate-400" : "text-slate-600"}`}>{it.itemCode}</td>
                                         <td className="py-1.5 px-2">
                                           <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded ${
-                                            isDarkMode ? "bg-slate-800 text-slate-300" : "bg-slate-100 text-slate-700"
+                                            isDarkMode ? "bg-[#182542] text-slate-300 border border-slate-700/60" : "bg-slate-100 text-slate-700"
                                           }`}>
                                             {it.kategoriProduk || "FARMA"}
                                           </span>
@@ -2067,9 +2089,9 @@ export default function Home() {
 
           {/* Pagination Footer */}
           {totalPages > 1 && (
-            <div className={`p-3 border-t flex items-center justify-between text-xs transition-colors ${
+            <div className={`p-2.5 border-t flex items-center justify-between text-xs transition-colors ${
               isDarkMode
-                ? "bg-slate-900/90 border-slate-800 text-slate-400"
+                ? "bg-[#111c33] border-slate-700/80 text-slate-400"
                 : "bg-slate-50 border-slate-200 text-slate-600"
             }`}>
               <span>
@@ -2081,7 +2103,7 @@ export default function Home() {
                   disabled={page === 0}
                   className={`px-3 py-1 border rounded-lg font-semibold disabled:opacity-40 transition-colors ${
                     isDarkMode
-                      ? "bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-750"
+                      ? "bg-[#182542] border-slate-700 text-slate-200 hover:bg-[#223359]"
                       : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50"
                   }`}
                 >
@@ -2092,7 +2114,7 @@ export default function Home() {
                   disabled={page >= totalPages - 1}
                   className={`px-3 py-1 border rounded-lg font-semibold disabled:opacity-40 transition-colors ${
                     isDarkMode
-                      ? "bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-750"
+                      ? "bg-[#182542] border-slate-700 text-slate-200 hover:bg-[#223359]"
                       : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50"
                   }`}
                 >

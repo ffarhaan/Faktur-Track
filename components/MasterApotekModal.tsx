@@ -74,21 +74,23 @@ export default function MasterApotekModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-xs animate-in fade-in duration-150">
-      <div className={`border rounded-2xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden ${
-        isDarkMode ? "bg-slate-900 border-slate-800 text-slate-100" : "bg-white border-slate-200 text-slate-800"
+      <div className={`border rounded-2xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden transition-colors ${
+        isDarkMode ? "bg-[#0e1628] border-slate-700/80 text-slate-100 shadow-black/60" : "bg-white border-slate-200 text-slate-800"
       }`}>
         {/* Modal Header */}
         <div className={`px-5 py-4 border-b flex items-center justify-between ${
-          isDarkMode ? "bg-slate-900 border-slate-800" : "bg-slate-50 border-slate-200"
+          isDarkMode ? "bg-[#142038] border-slate-700/80" : "bg-slate-50 border-slate-200"
         }`}>
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center font-bold text-base shadow-sm">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 text-white flex items-center justify-center font-bold text-base shadow-sm">
               🏢
             </div>
             <div>
               <h2 className={`text-base font-bold flex items-center gap-2 ${isDarkMode ? "text-white" : "text-slate-900"}`}>
-                Master Apotek
-                <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 font-semibold">
+                <span>Master Apotek</span>
+                <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${
+                  isDarkMode ? "bg-blue-950 text-blue-300 border border-blue-700/50" : "bg-blue-100 text-blue-800"
+                }`}>
                   {filtered.length.toLocaleString("id-ID")} Apotek
                 </span>
               </h2>
@@ -100,7 +102,7 @@ export default function MasterApotekModal({
           <button
             onClick={onClose}
             className={`w-8 h-8 rounded-lg flex items-center justify-center text-lg font-bold transition-colors ${
-              isDarkMode ? "text-slate-400 hover:text-white hover:bg-slate-800" : "text-slate-400 hover:text-slate-700 hover:bg-slate-200/60"
+              isDarkMode ? "text-slate-400 hover:text-white hover:bg-[#1b2b4b]" : "text-slate-400 hover:text-slate-700 hover:bg-slate-200/60"
             }`}
           >
             ✕
@@ -109,7 +111,7 @@ export default function MasterApotekModal({
 
         {/* Modal Filter & Search Bar */}
         <div className={`p-4 border-b grid grid-cols-1 sm:grid-cols-3 gap-3 ${
-          isDarkMode ? "bg-slate-900 border-slate-800" : "bg-white border-slate-100"
+          isDarkMode ? "bg-[#0b1220] border-slate-800" : "bg-white border-slate-100"
         }`}>
           <div className="sm:col-span-2 relative">
             <span className="absolute left-3 top-2.5 text-xs text-slate-400">🔍</span>
@@ -121,13 +123,13 @@ export default function MasterApotekModal({
                 setSearch(e.target.value);
                 setPage(0);
               }}
-              className={`w-full pl-8 pr-3 py-1.5 border rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 ${
-                isDarkMode ? "bg-slate-800 border-slate-700 text-white placeholder-slate-500" : "bg-slate-50 border-slate-200 text-slate-800"
+              className={`w-full pl-8 pr-3 py-1.5 border rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${
+                isDarkMode ? "bg-[#142038] border-slate-700 text-white placeholder-slate-500" : "bg-slate-50 border-slate-200 text-slate-800"
               }`}
             />
           </div>
 
-          <div className={`flex items-center gap-1 p-1 rounded-xl ${isDarkMode ? "bg-slate-800" : "bg-slate-100"}`}>
+          <div className={`flex items-center gap-1 p-1 rounded-xl ${isDarkMode ? "bg-[#142038] border border-slate-700/80" : "bg-slate-100"}`}>
             {(["all", "1P", "2P", "3P"] as const).map((k) => (
               <button
                 key={k}
@@ -137,7 +139,7 @@ export default function MasterApotekModal({
                 }}
                 className={`flex-1 py-1 rounded-lg text-xs font-bold transition-all ${
                   katFilter === k
-                    ? (isDarkMode ? "bg-slate-700 text-white shadow-xs" : "bg-white text-slate-900 shadow-xs")
+                    ? (isDarkMode ? "bg-[#1d3567] text-blue-300 shadow-xs border border-blue-500/40" : "bg-white text-slate-900 shadow-xs")
                     : (isDarkMode ? "text-slate-400 hover:text-white" : "text-slate-600 hover:text-slate-900")
                 }`}
               >
@@ -152,7 +154,7 @@ export default function MasterApotekModal({
           <table className="w-full text-left text-xs border-collapse">
             <thead>
               <tr className={`font-semibold border-b sticky top-0 z-10 ${
-                isDarkMode ? "bg-slate-800 text-slate-300 border-slate-700" : "bg-slate-100 text-slate-600 border-slate-200"
+                isDarkMode ? "bg-[#16223d] text-slate-300 border-slate-700" : "bg-slate-100 text-slate-600 border-slate-200"
               }`}>
                 <th className="py-2 px-3 w-12 text-center">#</th>
                 <th className="py-2 px-3">Kode Customer / Merchant</th>
@@ -161,7 +163,7 @@ export default function MasterApotekModal({
                 <th className="py-2 px-3">Keterangan</th>
               </tr>
             </thead>
-            <tbody className={`divide-y ${isDarkMode ? "divide-slate-800" : "divide-slate-100"}`}>
+            <tbody className={`divide-y ${isDarkMode ? "divide-slate-800/80" : "divide-slate-100"}`}>
               {pageData.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="text-center py-8 text-slate-400">
@@ -170,7 +172,7 @@ export default function MasterApotekModal({
                 </tr>
               ) : (
                 pageData.map((item, idx) => (
-                  <tr key={idx} className={`transition-colors ${isDarkMode ? "hover:bg-slate-800/60" : "hover:bg-slate-50"}`}>
+                  <tr key={idx} className={`transition-colors ${isDarkMode ? "hover:bg-[#142038]/70" : "hover:bg-slate-50"}`}>
                     <td className="py-2 px-3 text-center text-slate-400 font-mono">
                       {page * ITEMS_PER_PAGE + idx + 1}
                     </td>
@@ -187,10 +189,10 @@ export default function MasterApotekModal({
                       <span
                         className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${
                           item.kategori === "1P"
-                            ? "bg-blue-100 text-blue-700"
+                            ? (isDarkMode ? "bg-[#182a4d] text-blue-300 border border-blue-600/60" : "bg-blue-100 text-blue-700")
                             : item.kategori === "2P"
-                            ? "bg-emerald-100 text-emerald-700"
-                            : "bg-purple-100 text-purple-700"
+                            ? (isDarkMode ? "bg-[#143329] text-emerald-300 border border-emerald-600/60" : "bg-emerald-100 text-emerald-700")
+                            : (isDarkMode ? "bg-[#2f1b47] text-purple-300 border border-purple-600/60" : "bg-purple-100 text-purple-700")
                         }`}
                       >
                         {item.kategori}
@@ -209,7 +211,7 @@ export default function MasterApotekModal({
         {/* Modal Pagination Footer */}
         {totalPages > 1 && (
           <div className={`px-5 py-3 border-t flex items-center justify-between text-xs ${
-            isDarkMode ? "bg-slate-900 border-slate-800 text-slate-400" : "bg-slate-50 border-slate-200 text-slate-600"
+            isDarkMode ? "bg-[#142038] border-slate-700/80 text-slate-400" : "bg-slate-50 border-slate-200 text-slate-600"
           }`}>
             <span>
               Halaman <strong>{page + 1}</strong> dari <strong>{totalPages}</strong>
@@ -219,7 +221,7 @@ export default function MasterApotekModal({
                 onClick={() => setPage((p) => Math.max(0, p - 1))}
                 disabled={page === 0}
                 className={`px-3 py-1 border rounded-lg font-semibold disabled:opacity-40 ${
-                  isDarkMode ? "bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-700" : "bg-white border-slate-200 hover:bg-slate-50"
+                  isDarkMode ? "bg-[#1b2b4b] border-slate-700 text-slate-200 hover:bg-[#253961]" : "bg-white border-slate-200 hover:bg-slate-50"
                 }`}
               >
                 Sebelumnya
@@ -228,7 +230,7 @@ export default function MasterApotekModal({
                 onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
                 disabled={page >= totalPages - 1}
                 className={`px-3 py-1 border rounded-lg font-semibold disabled:opacity-40 ${
-                  isDarkMode ? "bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-700" : "bg-white border-slate-200 hover:bg-slate-50"
+                  isDarkMode ? "bg-[#1b2b4b] border-slate-700 text-slate-200 hover:bg-[#253961]" : "bg-white border-slate-200 hover:bg-slate-50"
                 }`}
               >
                 Berikutnya
