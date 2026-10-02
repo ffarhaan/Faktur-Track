@@ -195,6 +195,8 @@ export function isOraCustomer(customerName?: string): boolean {
   return (
     upperCust.includes("HELIOS") ||
     upperCust.startsWith("HAK") ||
+    upperCust.startsWith("IHC") ||
+    upperCust.includes("CA-900001") ||
     upperCust === "1001"
   );
 }
@@ -222,6 +224,8 @@ export function categorize(
     rawJenis === "ORA" ||
     upper.includes("HELIOS") ||
     upper.startsWith("HAK") ||
+    upper.startsWith("IHC") ||
+    upper.includes("CA-900001") ||
     upper === "1001" ||
     upper.includes("HALOMEDIKA") ||
     upper.includes("MEDIKA PRIMA") ||
@@ -327,6 +331,7 @@ function parseXXCUST(data: unknown[][], headerIdx: number): FakturRecord[] {
   const idx = {
     jenisTransaksi: getCol("jenis transaksi", "jenis", "transaction type"),
     customerName: getCol("nama pelanggan", "customer name", "pelanggan", "customer"),
+    customerCode: getCol("kode pelanggan", "customer code", "kode cust", "cust code"),
     invoiceNumber: getCol("no invoice ar", "ar number", "ar no", "no ar", "invoice number", "no invoice"),
     orderDate: getCol("order date", "tanggal order", "date", "accounting date"),
     orderNumber: getCol("order number", "order no", "no order", "no so", "so number"),
@@ -351,7 +356,8 @@ function parseXXCUST(data: unknown[][], headerIdx: number): FakturRecord[] {
     if (!orderNumber && !invoiceNumber) continue;
 
     const customerName = val(idx.customerName);
-    const isOra = isOraCustomer(customerName);
+    const customerCode = val(idx.customerCode);
+    const isOra = isOraCustomer(customerName) || isOraCustomer(customerCode) || customerCode === "CA-900001";
     const jenisTransaksi: "ORA" | "DOO" = isOra ? "ORA" : "DOO";
     const kategori = categorize(jenisTransaksi, customerName, jenisTransaksi);
     const invoiceKey = isOra ? `${invoiceNumber}-1P` : invoiceNumber;

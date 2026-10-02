@@ -852,7 +852,7 @@ export default function Home() {
 
         // 3. Merge incoming records
         for (const r of parsed) {
-          const isOra = isOraCustomer(r.customerName);
+          const isOra = r.jenisTransaksi === "ORA" || isOraCustomer(r.customerName);
           const cleanInv = String(r.invoiceNumber || "").trim().replace(/-1P$/i, "");
           const num = parseInvNum(cleanInv);
           if (!cleanInv || cleanInv === "-" || cleanInv === "0") continue;
@@ -984,7 +984,7 @@ export default function Home() {
         let min3P = Infinity; let max3P = -1; let max3PStr = "-"; let min3PStr = "-";
 
         for (const r of parsed) {
-          const isOra = isOraCustomer(r.customerName);
+          const isOra = r.jenisTransaksi === "ORA" || isOraCustomer(r.customerName);
           const cleanInv = String(r.invoiceNumber || "").trim().replace(/-1P$/i, "");
           const num = parseInvNum(cleanInv);
           const kat = isOra ? "1P" : (r.kategori || categorize("DOO", r.customerName));

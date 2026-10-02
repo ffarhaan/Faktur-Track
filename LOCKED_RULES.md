@@ -9,7 +9,7 @@ Dokumen ini adalah acuan baku dan permanen untuk seluruh pengembangan, pemelihar
 
 #### A. Isolasi Mutlak DOO vs ORA (Strict Key Isolation)
 1. **Identifikasi Jenis Transaksi**:
-   - `isOraCustomer(customerName)`: Mengembalikan `true` HANYA JIKA nama pelanggan mengandung `HELIOS`, diawali `HAK`, atau bernilai kode `1001`. Pelanggan lain (Apotek Halomedika, Medika Prima, SBS, Pasti Hemat, K24, Kimia Farma, dll.) adalah **DOO** (`false`).
+   - `isOraCustomer(customerName)`: Mengembalikan `true` JIKA nama pelanggan mengandung `HELIOS`, diawali `HAK`, diawali `IHC`, bernilai kode `1001`, atau kode pelanggan `CA-900001` (seluruh entitas di bawah konsorsium Helios/ORA). Pelanggan lain (Apotek Halomedika, Medika Prima, SBS, Pasti Hemat, K24, Kimia Farma, dll.) adalah **DOO** (`false`).
 2. **Kunci Faktur (Invoice Key)**:
    - Faktur ORA: Wajib menggunakan suffix `${cleanInv}-1P` (contoh: `14040-1P`).
    - Faktur DOO: Wajib menggunakan nomor invoice murni `${cleanInv}` (contoh: `14040`).
