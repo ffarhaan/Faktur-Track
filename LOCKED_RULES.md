@@ -29,9 +29,13 @@ Dokumen ini adalah acuan baku dan permanen untuk seluruh pengembangan, pemelihar
    - Seluruh entitas konsorsium Helios/ORA (termasuk awalan `HAK`, awalan `IHC`, `HELIOS`, kode `1001`, dan akun `CA-900001`) secara mutlak dipetakan ke key ORA `${cleanInv}-1P`.
    - Nama pelanggan umum (`PT Helios Alchemist Kesehatan`) otomatis disempurnakan menjadi nama cabang/apotek spesifiknya (contoh: `IHC ADM Plant 5`, `IHC ADM Part Center`, `HAK Gejayan`), No SO terisi dari kolom `Order Number`, dan status cetak 100% terkunci permanen.
 
-#### B. Jaminan Status Faktur Baru (New Invoices Unprinted Guarantee)
+#### B. Jaminan Status Faktur Baru & Retensi Faktur Belum Dicetak (Unprinted Guarantee)
 - Setiap kali file diupload, faktur baru yang memiliki nomor lebih besar dari nomor maksimum sebelumnya (`num > prevMaxNum`) atau belum pernah terdaftar di database **WAJIB berstatus Belum Dicetak (`status_cetak: false`, `printed_at: null`)**.
-- Faktur lama yang sudah pernah ditandai selesai dicetak di database Firestore tetap mempertahankan status cetaknya (`status_cetak: true`) beserta jam cetaknya (`printed_at`).
+- **Retensi Mutlak Faktur Belum Dicetak (Anti-Accidental Print)**: Faktur yang saat ini sedang menunggu dicetak (`status_cetak: false`) **DILARANG BERUBAH MENJADI SUDAH TERCETAK** ketika ada file baru (seperti file `XXCUST` atau `export`) yang hanya memuat sebagian transaksi. Seluruh daftar faktur yang belum dicetak wajib tetap diawetkan statusnya sampai pengguna secara fisik menandai cetak.
+- **Tugas Utama Upload XXCUST**:
+  1. Mencari No Invoice dan No SO baru (khususnya ORA baru) dan mendaftarkannya ke sistem.
+  2. Melengkapi No SO resmi dan rincian obat/item untuk faktur yang sudah ada.
+  3. Dilarang mereset atau mengutak-atik status cetak faktur apa pun yang sudah ada di database.
 
 #### C. Logika Done Print & Realtime Multi-Device Sync
 - **Kecepatan & Keandalan**:
