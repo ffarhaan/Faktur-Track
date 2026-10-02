@@ -89,7 +89,7 @@ function dbRowsToFakturRecords(rows: Array<Record<string, unknown>>): {
     const items = (extra.items as Array<Record<string, unknown>>) || [];
     const cust = String(extra.nama_pelanggan || r.customer_name || "");
     const date = String(extra.accounting_date || extra.order_date || r.order_date || "");
-    const isOra = isOraCustomer(cust);
+    const isOra = r.jenis_transaksi === "ORA" || isOraCustomer(cust);
     const invKey = isOra ? `${cleanInv}-1P` : cleanInv;
     const cleanJenis: "DOO" | "ORA" = isOra ? "ORA" : "DOO";
     const kategori = (r.kategori as "1P" | "2P" | "3P") || categorize(cleanJenis, cust, cleanJenis);
@@ -780,7 +780,8 @@ export default function Home() {
           const cleanInv = rawInv.replace(/-1P$/i, "");
           const extra = (row.extra as Record<string, unknown>) || {};
           const cust = String(extra.nama_pelanggan || row.customer_name || "");
-          const isOra = isOraCustomer(cust);
+          const isOra = row.jenis_transaksi === "ORA" || isOraCustomer(cust);
+          const targetKey = isOra ? `${cleanInv}-1P` : cleanInv;
           const num = parseInvNum(cleanInv);
           const kat = isOra ? "1P" : categorize("DOO", cust);
 
@@ -810,16 +811,11 @@ export default function Home() {
 
           const isDocPrinted = Boolean(
             row.status_cetak ||
-            livePrintedKeys.has(rawInv) ||
-            livePrintedKeys.has(cleanInv) ||
-            livePrintedKeys.has(`${cleanInv}-1P`)
+            livePrintedKeys.has(targetKey)
           );
-          const docPrintedAt =
-            livePrintedAtMap[rawInv] ||
-            livePrintedAtMap[cleanInv] ||
-            livePrintedAtMap[`${cleanInv}-1P`] ||
-            (row.printed_at as string) ||
-            null;
+          const docPrintedAt = isDocPrinted
+            ? (livePrintedAtMap[targetKey] || (row.printed_at as string) || null)
+            : null;
 
           const statusInfo = {
             status_cetak: isDocPrinted,
@@ -828,28 +824,20 @@ export default function Home() {
             extra,
           };
 
-          existingStatusMap.set(rawInv, statusInfo);
-          existingStatusMap.set(cleanInv, statusInfo);
-          existingStatusMap.set(`${cleanInv}-1P`, statusInfo);
+          existingStatusMap.set(targetKey, statusInfo);
         });
 
         // 2. Pre-populate invMap with existing records
         const invMap = new Map<string, FirestoreFakturDoc>();
         existingDBDocs.forEach((doc) => {
           const k = doc.id || doc.no_faktur;
-          const cleanK = k.replace(/-1P$/i, "");
           const isDocPrinted = Boolean(
             doc.status_cetak ||
-            livePrintedKeys.has(k) ||
-            livePrintedKeys.has(cleanK) ||
-            livePrintedKeys.has(`${cleanK}-1P`)
+            livePrintedKeys.has(k)
           );
-          const docPAt =
-            livePrintedAtMap[k] ||
-            livePrintedAtMap[cleanK] ||
-            livePrintedAtMap[`${cleanK}-1P`] ||
-            doc.printed_at ||
-            null;
+          const docPAt = isDocPrinted
+            ? (livePrintedAtMap[k] || doc.printed_at || null)
+            : null;
 
           invMap.set(k, {
             ...doc,
@@ -870,7 +858,7 @@ export default function Home() {
           if (!cleanInv || cleanInv === "-" || cleanInv === "0") continue;
 
           const targetKey = isOra ? `${cleanInv}-1P` : cleanInv;
-          const prevInfo = existingStatusMap.get(targetKey) || existingStatusMap.get(cleanInv);
+          const prevInfo = existingStatusMap.get(targetKey);
 
           let isPrinted = false;
           let printedAt: string | null = null;
@@ -879,12 +867,10 @@ export default function Home() {
             // Already in database: preserve existing user print status!
             isPrinted = Boolean(
               prevInfo.status_cetak ||
-              mergedPrintedSet.has(targetKey) ||
-              mergedPrintedSet.has(cleanInv) ||
-              mergedPrintedSet.has(`${cleanInv}-1P`)
+              mergedPrintedSet.has(targetKey)
             );
             printedAt = isPrinted
-              ? (mergedPrintedAtMap[targetKey] || mergedPrintedAtMap[cleanInv] || mergedPrintedAtMap[`${cleanInv}-1P`] || prevInfo.printed_at || new Date().toISOString())
+              ? (mergedPrintedAtMap[targetKey] || prevInfo.printed_at || new Date().toISOString())
               : null;
 
             if (isPrinted) {

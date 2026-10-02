@@ -76,12 +76,12 @@ export function subscribeToFakturs(
     for (const d of allDocs) {
       const key = d.id || d.no_faktur;
       if (!key) continue;
-      const cleanKey = key.replace(/-1P$/i, "");
-      const isPrinted = printedSet.has(key) || printedSet.has(cleanKey) || printedSet.has(`${cleanKey}-1P`);
+      const isPrinted = printedSet.has(key);
       d.status_cetak = isPrinted;
-      d.printed_at = pMap[key] || pMap[cleanKey] || pMap[`${cleanKey}-1P`] || null;
+      d.printed_at = isPrinted ? (pMap[key] || null) : null;
 
       // Apply customer/invoice category override if available
+      const cleanKey = key.replace(/-1P$/i, "");
       const cust = String(d.customer_name || d.extra?.nama_pelanggan || "").trim();
       const normCust = cust ? normalize(cust) : "";
       const overrideKat = currentCategoryOverrides[normCust] || currentCategoryOverrides[cust] || currentCategoryOverrides[cleanKey];
@@ -219,12 +219,12 @@ export async function getExistingFakturs(): Promise<{
     for (const d of docs) {
       const key = d.id || d.no_faktur;
       if (!key) continue;
-      const cleanKey = key.replace(/-1P$/i, "");
-      const isPrinted = printedSet.has(key) || printedSet.has(cleanKey) || printedSet.has(`${cleanKey}-1P`);
+      const isPrinted = printedSet.has(key);
       d.status_cetak = isPrinted;
-      d.printed_at = pMap[key] || pMap[cleanKey] || pMap[`${cleanKey}-1P`] || null;
+      d.printed_at = isPrinted ? (pMap[key] || null) : null;
 
       // Apply customer/invoice category override if available
+      const cleanKey = key.replace(/-1P$/i, "");
       const cust = String(d.customer_name || d.extra?.nama_pelanggan || "").trim();
       const normCust = cust ? normalize(cust) : "";
       const overrideKat = categoryOverrides[normCust] || categoryOverrides[cust] || categoryOverrides[cleanKey];
