@@ -21,6 +21,9 @@ Dokumen ini adalah acuan baku dan permanen untuk seluruh pengembangan, pemelihar
    - Menandai cetak pada DOO `14040` (key: `14040`) HANYA mengubah dan membaca key `14040`.
    - Menandai cetak pada ORA `14040` (key: `14040-1P`) HANYA mengubah dan membaca key `14040-1P`.
    - DILARANG KERAS melakukan fallback atau cross-matching status cetak antar key DOO dan ORA (misal `cleanKey` vs `cleanKey-1P`). Keduanya 100% independen untuk seluruh invoice sekarang dan seterusnya.
+5. **Deteksi Faktur ORA Baru dari File XXCUST**:
+   - Jika file `XXCUST` diunggah dan memuat faktur ORA baru yang belum ada di `export.xls`, faktur tersebut langsung didaftarkan dengan key `${cleanInv}-1P`, No SO terisi, status `Belum Terprint`, dan tidak akan bertabrakan dengan DOO.
+   - Jika faktur ORA sudah ada dari `export.xls`, file `XXCUST` melengkapi No SO dan rincian item tanpa mengubah status cetak yang sudah ada.
 
 #### B. Jaminan Status Faktur Baru (New Invoices Unprinted Guarantee)
 - Setiap kali file diupload, faktur baru yang memiliki nomor lebih besar dari nomor maksimum sebelumnya (`num > prevMaxNum`) atau belum pernah terdaftar di database **WAJIB berstatus Belum Dicetak (`status_cetak: false`, `printed_at: null`)**.
