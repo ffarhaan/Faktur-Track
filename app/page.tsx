@@ -863,22 +863,17 @@ export default function Home() {
           let isPrinted = false;
           let printedAt: string | null = null;
 
-          if (prevInfo !== undefined) {
-            // Already in database: preserve existing user print status!
-            isPrinted = Boolean(
-              prevInfo.status_cetak ||
-              mergedPrintedSet.has(targetKey)
-            );
-            printedAt = isPrinted
-              ? (mergedPrintedAtMap[targetKey] || prevInfo.printed_at || new Date().toISOString())
-              : null;
-
-            if (isPrinted) {
-              mergedPrintedSet.add(targetKey);
-              if (printedAt) mergedPrintedAtMap[targetKey] = printedAt;
-            } else {
-              newUnprintedKeysSet.add(targetKey);
-            }
+          if (mergedPrintedSet.has(targetKey) || (prevInfo && prevInfo.status_cetak)) {
+            // Permanently preserve printed status (Anti-Reappearance Guaranteed)
+            isPrinted = true;
+            printedAt = mergedPrintedAtMap[targetKey] || (prevInfo && prevInfo.printed_at) || new Date().toISOString();
+            mergedPrintedSet.add(targetKey);
+            mergedPrintedAtMap[targetKey] = printedAt;
+          } else if (prevInfo !== undefined) {
+            // Already in database and unprinted: keep unprinted
+            isPrinted = false;
+            printedAt = null;
+            newUnprintedKeysSet.add(targetKey);
           } else {
             // Brand new invoice
             const isHistorical = num > 0 && (
@@ -893,8 +888,6 @@ export default function Home() {
               isPrinted = false;
               printedAt = null;
               newUnprintedKeysSet.add(targetKey);
-              mergedPrintedSet.delete(targetKey);
-              delete mergedPrintedAtMap[targetKey];
             }
           }
 

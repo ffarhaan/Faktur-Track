@@ -289,9 +289,8 @@ export async function saveFaktursBatch(
     ]);
     if (printSnap.exists()) {
       const liveData = printSnap.data() as PrintState;
-      livePrintedKeys = (liveData.printedKeys || []).filter((k) => !newUnprintedSet.has(k));
+      livePrintedKeys = liveData.printedKeys || [];
       livePrintedAtMap = { ...(liveData.printedAtMap || {}) };
-      newUnprintedSet.forEach((k) => delete livePrintedAtMap[k]);
     }
     if (metaSnap.exists()) {
       previousChunkIds = (metaSnap.data().chunkIds as string[]) || [];
@@ -300,7 +299,7 @@ export async function saveFaktursBatch(
     console.warn("Could not read live print state or metadata:", err);
   }
 
-  const localPrintedKeys = (existingPrintState?.printedKeys || []).filter((k) => !newUnprintedSet.has(k));
+  const localPrintedKeys = existingPrintState?.printedKeys || [];
   const unifiedPrintedSet = new Set<string>([
     ...livePrintedKeys,
     ...localPrintedKeys,
@@ -309,17 +308,16 @@ export async function saveFaktursBatch(
     ...livePrintedAtMap,
     ...(existingPrintState?.printedAtMap || {}),
   };
-  newUnprintedSet.forEach((k) => delete unifiedPrintedAtMap[k]);
 
   for (const item of fakturs) {
     const key = item.id || item.no_faktur;
     if (key) {
-      if (newUnprintedSet.has(key)) {
-        item.status_cetak = false;
-        item.printed_at = null;
-      } else if (unifiedPrintedSet.has(key)) {
+      if (unifiedPrintedSet.has(key)) {
         item.status_cetak = true;
         item.printed_at = unifiedPrintedAtMap[key] || item.printed_at || new Date().toISOString();
+      } else {
+        item.status_cetak = false;
+        item.printed_at = null;
       }
     }
   }
