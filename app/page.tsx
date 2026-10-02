@@ -846,7 +846,7 @@ export default function Home() {
           });
         });
 
-        const newUnprintedKeys: string[] = [];
+        const newUnprintedKeysSet = new Set<string>();
         const mergedPrintedSet = new Set(livePrintedKeys);
         const mergedPrintedAtMap = { ...livePrintedAtMap };
 
@@ -877,7 +877,7 @@ export default function Home() {
               mergedPrintedSet.add(targetKey);
               if (printedAt) mergedPrintedAtMap[targetKey] = printedAt;
             } else {
-              newUnprintedKeys.push(targetKey);
+              newUnprintedKeysSet.add(targetKey);
             }
           } else {
             // Brand new invoice
@@ -892,7 +892,7 @@ export default function Home() {
             } else {
               isPrinted = false;
               printedAt = null;
-              newUnprintedKeys.push(targetKey);
+              newUnprintedKeysSet.add(targetKey);
               mergedPrintedSet.delete(targetKey);
               delete mergedPrintedAtMap[targetKey];
             }
@@ -980,6 +980,7 @@ export default function Home() {
           }
         }
 
+        const newUnprintedKeys = Array.from(newUnprintedKeysSet);
         const payload = Array.from(invMap.values());
 
         // 4. Calculate Progression Ranges
