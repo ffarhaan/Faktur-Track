@@ -24,6 +24,10 @@ Dokumen ini adalah acuan baku dan permanen untuk seluruh pengembangan, pemelihar
 5. **Deteksi Faktur ORA Baru dari File XXCUST**:
    - Jika file `XXCUST` diunggah dan memuat faktur ORA baru yang belum ada di `export.xls`, faktur tersebut langsung didaftarkan dengan key `${cleanInv}-1P`, No SO terisi, status `Belum Terprint`, dan tidak akan bertabrakan dengan DOO.
    - Jika faktur ORA sudah ada dari `export.xls`, file `XXCUST` melengkapi No SO dan rincian item tanpa mengubah status cetak yang sudah ada.
+6. **Pembacaan Lengkap & Pemetaan Otomatis File XXCUST (LOCKED)**:
+   - File `XXCUST` dibaca lengkap dari kolom `No Invoice AR`, `Order Number`, `Nama Pelanggan`, `Kode Pelanggan`, serta rincian item produk/lot.
+   - Seluruh entitas konsorsium Helios/ORA (termasuk awalan `HAK`, awalan `IHC`, `HELIOS`, kode `1001`, dan akun `CA-900001`) secara mutlak dipetakan ke key ORA `${cleanInv}-1P`.
+   - Nama pelanggan umum (`PT Helios Alchemist Kesehatan`) otomatis disempurnakan menjadi nama cabang/apotek spesifiknya (contoh: `IHC ADM Plant 5`, `IHC ADM Part Center`, `HAK Gejayan`), No SO terisi dari kolom `Order Number`, dan status cetak 100% terkunci permanen.
 
 #### B. Jaminan Status Faktur Baru (New Invoices Unprinted Guarantee)
 - Setiap kali file diupload, faktur baru yang memiliki nomor lebih besar dari nomor maksimum sebelumnya (`num > prevMaxNum`) atau belum pernah terdaftar di database **WAJIB berstatus Belum Dicetak (`status_cetak: false`, `printed_at: null`)**.
