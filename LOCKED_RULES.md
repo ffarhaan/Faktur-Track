@@ -17,8 +17,10 @@ Dokumen ini adalah acuan baku dan permanen untuk seluruh pengembangan, pemelihar
 3. **Pemisahan Sales Order (No SO)**:
    - **DOO SO**: Berasal langsung dari kolom `Reference` file export DOO (`export.xls`). Nilai ini di-LOCK dan TIDAK BOLEH ditimpa oleh file ORA ataupun XXCUST.
    - **ORA SO**: Di export HTML bernilai internal (`-`). Nilai No SO resminya diisi saat file `XXCUST` diupload dengan mencocokkan `No Invoice AR` ke `${cleanInv}-1P`.
-4. **Independensi Status Cetak**:
-   - Menandai cetak pada DOO `14040` tidak akan mencentang ORA `14040-1P`, begitu juga sebaliknya.
+4. **Independensi Status Cetak & Strict Key Isolation (PERMANEN / LOCKED)**:
+   - Menandai cetak pada DOO `14040` (key: `14040`) HANYA mengubah dan membaca key `14040`.
+   - Menandai cetak pada ORA `14040` (key: `14040-1P`) HANYA mengubah dan membaca key `14040-1P`.
+   - DILARANG KERAS melakukan fallback atau cross-matching status cetak antar key DOO dan ORA (misal `cleanKey` vs `cleanKey-1P`). Keduanya 100% independen untuk seluruh invoice sekarang dan seterusnya.
 
 #### B. Jaminan Status Faktur Baru (New Invoices Unprinted Guarantee)
 - Setiap kali file diupload, faktur baru yang memiliki nomor lebih besar dari nomor maksimum sebelumnya (`num > prevMaxNum`) atau belum pernah terdaftar di database **WAJIB berstatus Belum Dicetak (`status_cetak: false`, `printed_at: null`)**.
