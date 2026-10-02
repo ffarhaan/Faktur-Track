@@ -847,6 +847,12 @@ export default function Home() {
         });
 
         const newUnprintedKeysSet = new Set<string>();
+        // Preserve all existing unprinted invoices from database
+        invMap.forEach((doc, k) => {
+          if (!doc.status_cetak) {
+            newUnprintedKeysSet.add(k);
+          }
+        });
         const mergedPrintedSet = new Set(livePrintedKeys);
         const mergedPrintedAtMap = { ...livePrintedAtMap };
 

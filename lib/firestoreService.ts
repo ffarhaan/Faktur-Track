@@ -304,6 +304,11 @@ export async function saveFaktursBatch(
     ...livePrintedKeys,
     ...localPrintedKeys,
   ]);
+  // Invoices specifically flagged as unprinted by the upload must NEVER be marked printed
+  for (const k of newUnprintedSet) {
+    unifiedPrintedSet.delete(k);
+  }
+
   const unifiedPrintedAtMap: Record<string, string> = {
     ...livePrintedAtMap,
     ...(existingPrintState?.printedAtMap || {}),

@@ -384,6 +384,7 @@ function parseXXCUST(data: unknown[][], headerIdx: number): FakturRecord[] {
       kategoriProduk,
       klasifikasiObat,
       isDoubleInv: false,
+      sourceFile: "XXCUST",
       rowIndex: i,
     });
   }
@@ -488,6 +489,7 @@ function parseHTMLTable(html: string): FakturRecord[] {
       totalHarga: Number(texts[colMap["amount"] ?? 11]?.replace(/[^0-9.-]/g, "") || 0),
       kategori,
       isDoubleInv: false,
+      sourceFile: "EXPORT",
       rowIndex: i,
     });
   }
@@ -556,6 +558,7 @@ function parseExportArray(data: unknown[][], headerIdx: number): FakturRecord[] 
       totalHarga,
       kategori,
       isDoubleInv: false,
+      sourceFile: "EXPORT",
       rowIndex: i,
     });
   }

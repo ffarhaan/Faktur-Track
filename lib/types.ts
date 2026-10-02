@@ -15,6 +15,7 @@ export interface FakturRecord {
   kategoriProduk?: string;
   klasifikasiObat?: "Prekursor" | "OOT";
   isDoubleInv: boolean;
+  sourceFile?: string;
   rowIndex?: number;
 }
 
