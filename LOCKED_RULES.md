@@ -27,7 +27,12 @@ Dokumen ini adalah acuan baku dan permanen untuk seluruh pengembangan, pemelihar
 6. **Pembacaan Lengkap & Pemetaan Otomatis File XXCUST (LOCKED)**:
    - File `XXCUST` dibaca lengkap dari kolom `No Invoice AR`, `Order Number`, `Nama Pelanggan`, `Kode Pelanggan`, serta rincian item produk/lot.
    - Seluruh entitas konsorsium Helios/ORA (termasuk awalan `HAK`, awalan `IHC`, `HELIOS`, kode `1001`, dan akun `CA-900001`) secara mutlak dipetakan ke key ORA `${cleanInv}-1P`.
-   - Nama pelanggan umum (`PT Helios Alchemist Kesehatan`) otomatis disempurnakan menjadi nama cabang/apotek spesifiknya (contoh: `IHC ADM Plant 5`, `IHC ADM Part Center`, `HAK Gejayan`), No SO terisi dari kolom `Order Number`, dan status cetak 100% terkunci permanen.
+   - Nama pelanggan umum (`PT Helios Alchemist Kesehatan` atau variasinya) secara otomatis dan case-insensitive disempurnakan menjadi nama cabang/apotek spesifiknya (contoh: `HAK Tirta Raya`, `HAK Kemuning`, `HAK Bungur Mlg`, `IHC SRI Suryaraya`), No SO terisi dari kolom `Order Number`, dan status cetak 100% terkunci permanen.
+7. **Prinsip Non-Destructive Overwrite (Perlindungan Data Lengkap / Anti-Downgrade - LOCKED)**:
+   - Mengunggah file baru (misal file export berkala) setelah file XXCUST **DILARANG MERUSAK DATA YANG LEBIH LENGKAP**:
+     - No SO yang sudah terisi (misal `696000`) TIDAK BOLEH ditimpa oleh tanda strip (`-`) dari file export.
+     - Nama cabang apotek yang sudah terisi spesifik (misal `HAK Tirta Raya`) TIDAK BOLEH ditimpa kembali oleh nama induk generic (`PT Helios Alchemist Kesehatan`).
+     - List barang (`items`) yang sudah terisi dari XXCUST TIDAK BOLEH dihapus atau dikosongkan oleh file export yang tidak memiliki rincian barang.
 
 #### B. Jaminan Status Faktur Baru & Retensi Faktur Belum Dicetak (Unprinted Guarantee)
 - Setiap kali file diupload, faktur baru yang memiliki nomor lebih besar dari nomor maksimum sebelumnya (`num > prevMaxNum`) atau belum pernah terdaftar di database **WAJIB berstatus Belum Dicetak (`status_cetak: false`, `printed_at: null`)**.
