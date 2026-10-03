@@ -948,13 +948,23 @@ export default function Home() {
             entry.no_sales_order = r.orderNumber;
           }
 
-          const currentCust = String(entry.customer_name || "");
-          const incomingCust = String(r.customerName || "");
+          const currentCust = String(entry.customer_name || "").trim();
+          const incomingCust = String(r.customerName || "").trim();
+          const upperCurrent = currentCust.toUpperCase();
+          const upperIncoming = incomingCust.toUpperCase();
           if (
-            (currentCust.includes("HELIOS") || currentCust === "1001" || currentCust === "-") &&
-            incomingCust && !incomingCust.includes("HELIOS") && incomingCust !== "1001"
+            (upperCurrent.includes("HELIOS") || currentCust === "1001" || currentCust === "-" || !currentCust) &&
+            incomingCust && !upperIncoming.includes("HELIOS") && incomingCust !== "1001"
           ) {
             entry.customer_name = incomingCust;
+            if (!entry.extra) entry.extra = {};
+            entry.extra.nama_pelanggan = incomingCust;
+          } else if (
+            (!entry.customer_name || entry.customer_name === "-" || entry.customer_name === "1001") &&
+            incomingCust
+          ) {
+            entry.customer_name = incomingCust;
+            if (!entry.extra) entry.extra = {};
             entry.extra.nama_pelanggan = incomingCust;
           }
 
