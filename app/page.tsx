@@ -201,6 +201,7 @@ export default function Home() {
   const categoryOverridesRef = useRef<Record<string, "1P" | "2P" | "3P">>({});
   const searchInputRef = useRef<HTMLInputElement>(null);
   const isUploadingRef = useRef(false);
+  const currentFakturDocsRef = useRef<FirestoreFakturDoc[]>([]);
 
   useEffect(() => {
     categoryOverridesRef.current = categoryOverrides;
@@ -290,11 +291,13 @@ export default function Home() {
         }
 
         if (docs.length > 0) {
+          currentFakturDocsRef.current = docs;
           const { records: recs } = dbRowsToFakturRecords(
             docs as unknown as Array<Record<string, unknown>>
           );
           setRecords(recs);
         } else {
+          currentFakturDocsRef.current = [];
           setRecords([]);
           setPrintedInvoices(new Set());
           setPrintedAtMap({});
@@ -711,6 +714,10 @@ export default function Home() {
 
       if (files.length === 0) return;
 
+      if (isUploadingRef.current) {
+        showToast("⚠️ Sedang memproses dan menyimpan file sebelumnya. Mohon tunggu beberapa detik...");
+        return;
+      }
       isUploadingRef.current = true;
       setLoading(true);
       setError(null);
@@ -727,6 +734,7 @@ export default function Home() {
 
         if (parsed.length === 0) {
           setError("File berhasil dibaca tetapi tidak memiliki baris data transaksi.");
+          isUploadingRef.current = false;
           setLoading(false);
           return;
         }
@@ -747,7 +755,19 @@ export default function Home() {
           console.warn("Could not fetch remote DB:", err);
         }
 
-        const existingDB = existingDBDocs as unknown as Array<Record<string, unknown>>;
+        // Unify with current in-memory documents to guarantee zero data loss between fast consecutive uploads
+        const combinedExistingMap = new Map<string, FirestoreFakturDoc>();
+        currentFakturDocsRef.current.forEach((d) => {
+          const k = d.id || d.no_faktur;
+          if (k) combinedExistingMap.set(k, d);
+        });
+        existingDBDocs.forEach((d) => {
+          const k = d.id || d.no_faktur;
+          if (k) combinedExistingMap.set(k, d);
+        });
+        const existingDBDocsUnified = Array.from(combinedExistingMap.values());
+
+        const existingDB = existingDBDocsUnified as unknown as Array<Record<string, unknown>>;
         
         // Authoritative live printed keys from both Firestore print_state and active state
         const livePrintedKeys = new Set<string>([
@@ -829,7 +849,7 @@ export default function Home() {
 
         // 2. Pre-populate invMap with existing records
         const invMap = new Map<string, FirestoreFakturDoc>();
-        existingDBDocs.forEach((doc) => {
+        existingDBDocsUnified.forEach((doc) => {
           const k = doc.id || doc.no_faktur;
           const isDocPrinted = Boolean(
             doc.status_cetak ||
@@ -1123,6 +1143,7 @@ export default function Home() {
           payload as unknown as Array<Record<string, unknown>>
         );
 
+        currentFakturDocsRef.current = payload;
         setRecords(localRecs);
         setPrintedInvoices(mergedPrintedSet);
         setPrintedAtMap(mergedPrintedAtMap);
@@ -1143,14 +1164,8 @@ export default function Home() {
           uploaderId: deviceIdRef.current,
         };
 
-        setUploadNotification(notifPayload);
-
-        setPage(0);
-        setLoading(false);
-        showToast(`✓ Berhasil mengupload ${parsed.length} baris data!`);
-
-        // 6. Save to Firestore in background with high concurrency and multi-device broadcast
-        saveFaktursBatch(
+        // 6. Save to Firestore and AWAIT completion so consecutive uploads cannot collide or overwrite with stale data
+        await saveFaktursBatch(
           payload,
           progObj,
           {
@@ -1160,11 +1175,13 @@ export default function Home() {
           },
           newUnprintedKeys,
           notifPayload
-        ).catch((err) => {
-          console.error("Background Firestore save error:", err);
-        }).finally(() => {
-          isUploadingRef.current = false;
-        });
+        );
+
+        setUploadNotification(notifPayload);
+        setPage(0);
+        setLoading(false);
+        isUploadingRef.current = false;
+        showToast(`✓ Berhasil mengupload ${parsed.length} baris data!`);
       } catch (err) {
         console.error("Upload error:", err);
         setError(err instanceof Error ? err.message : "Gagal memproses file upload.");
