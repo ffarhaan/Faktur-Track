@@ -15,6 +15,7 @@ export interface FakturRecord {
   kategoriProduk?: string;
   klasifikasiObat?: "Prekursor" | "OOT";
   isDoubleInv: boolean;
+  isRetur?: boolean;
   sourceFile?: string;
   rowIndex?: number;
 }
@@ -98,6 +99,7 @@ export interface FakturGroup {
   hasAlkes: boolean;
   hasFarma: boolean;
   isDoubleInv: boolean;
+  isRetur?: boolean;
   totalHarga: number;
   totalItems: number;
   allPrinted: boolean;

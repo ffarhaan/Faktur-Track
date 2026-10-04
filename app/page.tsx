@@ -23,7 +23,7 @@ import {
 import MasterApotekModal from "@/components/MasterApotekModal";
 import MasterProductModal from "@/components/MasterProductModal";
 
-type Filter = "belum" | "sudah" | "all" | "double";
+type Filter = "belum" | "sudah" | "all" | "double" | "retur";
 type KatFilter = "all" | "1P" | "2P" | "3P";
 type JenisFilter = "all" | "ORA" | "DOO";
 type KlasFilter = "all" | "prekursor" | "oot" | "ccp" | "alkes" | "farma";
@@ -126,6 +126,7 @@ function dbRowsToFakturRecords(rows: Array<Record<string, unknown>>): {
           kategoriProduk: katProd,
           klasifikasiObat: klasObat,
           isDoubleInv: false,
+          isRetur: (typeof it.total_harga === "number" ? it.total_harga : parseFloat(String(it.total_harga || 0)) || 0) < 0 || itemDesc.toUpperCase().includes("RETUR") || cleanInv.toUpperCase().includes("RETUR") || String(extra.jenis_transaksi || "").toUpperCase().includes("RETUR"),
           rowIndex: idx,
         });
       }
@@ -148,6 +149,7 @@ function dbRowsToFakturRecords(rows: Array<Record<string, unknown>>): {
         totalHarga: docAmount,
         kategori,
         isDoubleInv: false,
+        isRetur: docAmount < 0 || cleanInv.toUpperCase().includes("RETUR") || String(extra.jenis_transaksi || "").toUpperCase().includes("RETUR"),
         rowIndex: 0,
       });
     }
@@ -401,6 +403,7 @@ export default function Home() {
           hasAlkes: false,
           hasFarma: false,
           isDoubleInv: false,
+          isRetur: false,
           totalHarga: 0,
           totalItems: 0,
           allPrinted: isPrinted,
@@ -414,6 +417,7 @@ export default function Home() {
       g.totalItems += 1;
 
       if (r.isDoubleInv) g.isDoubleInv = true;
+      if (r.isRetur || r.totalHarga < 0) g.isRetur = true;
 
       const kat = (r.kategoriProduk || getProductCategory(r.itemCode, r.itemDescription) || "FARMA").toUpperCase();
       if (kat === "PREKURSOR" || r.klasifikasiObat === "Prekursor") g.hasPrekursor = true;
@@ -427,6 +431,10 @@ export default function Home() {
       else if (g.hasOOT) g.kategoriProduk = "OOT";
       else if (g.hasAlkes) g.kategoriProduk = "ALKES";
       else g.kategoriProduk = "FARMA";
+    }
+
+    for (const g of map.values()) {
+      if (g.totalHarga < 0) g.isRetur = true;
     }
 
     return Array.from(map.values()).sort((a, b) => {
@@ -492,6 +500,7 @@ export default function Home() {
           g.invoiceNumber.toLowerCase().includes(s) ||
           g.customerName.toLowerCase().includes(s) ||
           (g.kategoriProduk && g.kategoriProduk.toLowerCase().includes(s)) ||
+          (g.isRetur && "retur".includes(s)) ||
           g.items.some(
             (i) =>
               i.itemDescription.toLowerCase().includes(s) ||
@@ -508,6 +517,8 @@ export default function Home() {
       result = result.filter((g) => g.allPrinted);
     } else if (filter === "double") {
       result = result.filter((g) => g.isDoubleInv);
+    } else if (filter === "retur") {
+      result = result.filter((g) => g.isRetur);
     }
 
     if (dateFilter !== "all") {
@@ -1670,6 +1681,16 @@ export default function Home() {
               >
                 Double INV ({grouped.filter((g) => g.isDoubleInv).length})
               </button>
+              <button
+                onClick={() => { setFilter("retur"); setPage(0); }}
+                className={`px-2.5 py-1 rounded-md text-xs font-bold transition-all ${
+                  filter === "retur"
+                    ? (isDarkMode ? "bg-amber-950 text-amber-300 shadow-xs border border-amber-800" : "bg-white text-amber-700 shadow-xs")
+                    : (isDarkMode ? "text-amber-400 hover:text-amber-300" : "text-amber-600 hover:text-amber-800")
+                }`}
+              >
+                Retur ({grouped.filter((g) => g.isRetur).length})
+              </button>
             </div>
 
             {/* Batch Done Print Button */}
@@ -1917,7 +1938,21 @@ export default function Home() {
                               onSelectCell(3);
                             }}
                           >
-                            {g.invoiceNumber}
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span>{g.invoiceNumber}</span>
+                              {g.isRetur && (
+                                <span
+                                  className={`px-1.5 py-0.2 rounded text-[9px] font-extrabold uppercase border ${
+                                    isDarkMode
+                                      ? "bg-rose-950/90 text-rose-300 border-rose-600/70"
+                                      : "bg-rose-100 text-rose-700 border-rose-300"
+                                  }`}
+                                  title="Faktur Retur / Credit Memo (Nilai Minus)"
+                                >
+                                  RETUR
+                                </span>
+                              )}
+                            </div>
                           </td>
 
                           {/* Col 4: Kat Produk */}
@@ -2046,7 +2081,11 @@ export default function Home() {
                           {/* Col 10: Total Harga */}
                           <td
                             className={`px-2.5 py-1.5 text-right font-medium whitespace-nowrap ${
-                              isDarkMode ? "text-slate-100" : "text-slate-900"
+                              g.isRetur || g.totalHarga < 0
+                                ? "text-rose-500 font-bold"
+                                : isDarkMode
+                                ? "text-slate-100"
+                                : "text-slate-900"
                             } ${getCellCls(10)}`}
                             onClick={(e) => {
                               e.stopPropagation();
@@ -2070,7 +2109,16 @@ export default function Home() {
                                   <div>
                                     <span className={`font-semibold ${isDarkMode ? "text-white" : "text-slate-900"}`}>
                                       Rincian Obat (Invoice: {g.invoiceNumber})
-                                    </span> · SO: <span className={`font-mono ${isDarkMode ? "text-slate-200" : "text-slate-900"}`}>{g.so}</span> · Pelanggan: <span className={`font-semibold ${isDarkMode ? "text-white" : "text-slate-900"}`}>{g.customerName}</span>
+                                    </span>
+                                    {g.isRetur && (
+                                      <span className={`ml-2 px-1.5 py-0.5 rounded text-[10px] font-extrabold uppercase border ${
+                                        isDarkMode
+                                          ? "bg-rose-950 text-rose-300 border-rose-700/60"
+                                          : "bg-rose-100 text-rose-700 border-rose-300"
+                                      }`}>
+                                        RETUR / CREDIT MEMO
+                                      </span>
+                                    )} · SO: <span className={`font-mono ${isDarkMode ? "text-slate-200" : "text-slate-900"}`}>{g.so}</span> · Pelanggan: <span className={`font-semibold ${isDarkMode ? "text-white" : "text-slate-900"}`}>{g.customerName}</span>
                                     {g.allPrinted && g.printedAt && (
                                       <span className="ml-3 inline-flex items-center gap-1 font-semibold text-emerald-400">
                                         <span>⏱ Selesai Print:</span>
@@ -2122,7 +2170,13 @@ export default function Home() {
                                         <td className={`py-1.5 px-2 text-right font-mono font-semibold ${isDarkMode ? "text-white" : "text-slate-900"}`}>{it.qty}</td>
                                         <td className={`py-1.5 px-2 ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>{it.uom}</td>
                                         <td className={`py-1.5 px-2 font-mono ${isDarkMode ? "text-slate-400" : "text-slate-600"}`}>{it.lotNumber}</td>
-                                        <td className={`py-1.5 px-2 text-right font-medium ${isDarkMode ? "text-slate-200" : "text-slate-900"}`}>{formatRupiah(it.totalHarga)}</td>
+                                        <td className={`py-1.5 px-2 text-right font-medium ${
+                                          it.totalHarga < 0
+                                            ? "text-rose-500 font-bold"
+                                            : isDarkMode
+                                            ? "text-slate-200"
+                                            : "text-slate-900"
+                                        }`}>{formatRupiah(it.totalHarga)}</td>
                                       </tr>
                                     ))}
                                   </tbody>
