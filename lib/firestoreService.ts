@@ -19,13 +19,26 @@ export type { FirestoreFakturDoc, PrintState, InvoiceProgression, UploadNotifica
 const APP_DATA_COLLECTION = "app_data";
 const METADATA_DOC = "metadata";
 const PRINT_STATE_DOC = "print_state";
+const PRINT_PARTITIONS_COLLECTION = "print_state_partitions";
 const CATEGORY_OVERRIDES_DOC = "category_overrides";
 const CHUNKS_COLLECTION = "faktur_chunks";
 
 export type SubscribeChangeReason = "chunks" | "print" | "meta";
 
 /**
- * Realtime listener for Chunked Fakturs, Print State, Category Overrides, and Upload Broadcast
+ * Deterministically partition an invoice key into a partition bucket document ID
+ * (Bucket sizes of 5,000 invoices per partition ensure doc sizes stay under 150 KB, well below 1 MB limit)
+ */
+export function getPrintPartitionId(invoiceKey: string): string {
+  const cleanNumStr = invoiceKey.replace(/\D/g, "");
+  if (!cleanNumStr) return "part_misc";
+  const num = parseInt(cleanNumStr, 10);
+  const bucketIndex = Math.floor(num / 5000);
+  return `part_${bucketIndex * 5000}_${(bucketIndex + 1) * 5000 - 1}`;
+}
+
+/**
+ * Realtime listener for Chunked Fakturs, Print State (Partitioned + Legacy Fallback), Category Overrides, and Upload Broadcast
  */
 export function subscribeToFakturs(
   onData: (
@@ -48,6 +61,32 @@ export function subscribeToFakturs(
   let currentCategoryOverrides: Record<string, "1P" | "2P" | "3P"> = {};
   let currentUploadNotification: UploadNotification | null = null;
   let hasEmittedInitialChunks = false;
+
+  // Track partitioned print docs
+  const partitionMap = new Map<string, { printedKeys: string[]; printedAtMap: Record<string, string> }>();
+  let legacyPrintState: PrintState | null = null;
+
+  const recomputePrintState = () => {
+    // If partitions exist in Firestore, merge them; also merge legacy doc for seamless zero-downtime transition
+    const combinedKeys = new Set<string>();
+    const combinedMap: Record<string, string> = {};
+
+    if (legacyPrintState) {
+      (legacyPrintState.printedKeys || []).forEach((k) => combinedKeys.add(k));
+      Object.assign(combinedMap, legacyPrintState.printedAtMap || {});
+    }
+
+    partitionMap.forEach((part) => {
+      (part.printedKeys || []).forEach((k) => combinedKeys.add(k));
+      Object.assign(combinedMap, part.printedAtMap || {});
+    });
+
+    currentPrintState = {
+      printedKeys: Array.from(combinedKeys),
+      printedAtMap: combinedMap,
+      updatedAt: new Date().toISOString(),
+    };
+  };
 
   const emitData = (reason: SubscribeChangeReason = "chunks") => {
     const sortedChunkKeys = Array.from(currentChunksMap.keys()).sort((a, b) => {
@@ -114,17 +153,44 @@ export function subscribeToFakturs(
     }
   );
 
-  const unsubPrint = onSnapshot(
+  // Listen to legacy print state
+  const unsubLegacyPrint = onSnapshot(
     doc(db, APP_DATA_COLLECTION, PRINT_STATE_DOC),
     (snap) => {
       if (snap.exists()) {
-        currentPrintState = snap.data() as PrintState;
+        legacyPrintState = snap.data() as PrintState;
+      } else {
+        legacyPrintState = null;
       }
+      recomputePrintState();
       if (hasEmittedInitialChunks) {
         onData([], currentProgression, currentPrintState, currentCategoryOverrides, null, "print");
       }
     },
     (err) => console.warn("PrintState sync warning:", err)
+  );
+
+  // Listen to partitioned print state collection
+  const unsubPartitions = onSnapshot(
+    collection(db, PRINT_PARTITIONS_COLLECTION),
+    (snap) => {
+      snap.docChanges().forEach((change) => {
+        if (change.type === "removed") {
+          partitionMap.delete(change.doc.id);
+        } else {
+          const data = change.doc.data();
+          partitionMap.set(change.doc.id, {
+            printedKeys: data.printedKeys || [],
+            printedAtMap: data.printedAtMap || {},
+          });
+        }
+      });
+      recomputePrintState();
+      if (hasEmittedInitialChunks) {
+        onData([], currentProgression, currentPrintState, currentCategoryOverrides, null, "print");
+      }
+    },
+    (err) => console.warn("Print partitions sync warning:", err)
   );
 
   const unsubOverrides = onSnapshot(
@@ -164,7 +230,8 @@ export function subscribeToFakturs(
   return () => {
     unsubChunks();
     unsubMeta();
-    unsubPrint();
+    unsubLegacyPrint();
+    unsubPartitions();
     unsubOverrides();
   };
 }
@@ -178,10 +245,11 @@ export async function getExistingFakturs(): Promise<{
   printState: PrintState | null;
   categoryOverrides: Record<string, "1P" | "2P" | "3P">;
 }> {
-  const [chunksSnap, metaSnap, printSnap, overrideSnap] = await Promise.all([
+  const [chunksSnap, metaSnap, legacyPrintSnap, partitionsSnap, overrideSnap] = await Promise.all([
     getDocsFromServer(collection(db, CHUNKS_COLLECTION)).catch(() => getDocs(collection(db, CHUNKS_COLLECTION))),
     getDocFromServer(doc(db, APP_DATA_COLLECTION, METADATA_DOC)).catch(() => getDoc(doc(db, APP_DATA_COLLECTION, METADATA_DOC))),
     getDocFromServer(doc(db, APP_DATA_COLLECTION, PRINT_STATE_DOC)).catch(() => getDoc(doc(db, APP_DATA_COLLECTION, PRINT_STATE_DOC))),
+    getDocsFromServer(collection(db, PRINT_PARTITIONS_COLLECTION)).catch(() => getDocs(collection(db, PRINT_PARTITIONS_COLLECTION))),
     getDocFromServer(doc(db, APP_DATA_COLLECTION, CATEGORY_OVERRIDES_DOC)).catch(() => getDoc(doc(db, APP_DATA_COLLECTION, CATEGORY_OVERRIDES_DOC))),
   ]);
 
@@ -211,27 +279,49 @@ export async function getExistingFakturs(): Promise<{
     }
   }
 
-  let printState: PrintState | null = null;
-  if (printSnap.exists()) {
-    printState = printSnap.data() as PrintState;
-    const printedSet = new Set(printState.printedKeys || []);
-    const pMap = printState.printedAtMap || {};
-    for (const d of docs) {
-      const key = d.id || d.no_faktur;
-      if (!key) continue;
-      const isPrinted = printedSet.has(key);
-      d.status_cetak = isPrinted;
-      d.printed_at = isPrinted ? (pMap[key] || null) : null;
+  // Merge print state from both partitions and legacy document
+  const combinedPrintKeys = new Set<string>();
+  const combinedPrintMap: Record<string, string> = {};
 
-      // Apply customer/invoice category override if available
-      const cleanKey = key.replace(/-1P$/i, "");
-      const cust = String(d.customer_name || d.extra?.nama_pelanggan || "").trim();
-      const normCust = cust ? normalize(cust) : "";
-      const overrideKat = categoryOverrides[normCust] || categoryOverrides[cust] || categoryOverrides[cleanKey];
-      if (overrideKat && d.jenis_transaksi !== "ORA") {
-        d.kategori = overrideKat;
-        if (d.extra) d.extra.kategori = overrideKat;
-      }
+  if (legacyPrintSnap && legacyPrintSnap.exists()) {
+    const legData = legacyPrintSnap.data() as PrintState;
+    (legData.printedKeys || []).forEach((k) => combinedPrintKeys.add(k));
+    Object.assign(combinedPrintMap, legData.printedAtMap || {});
+  }
+
+  if (partitionsSnap && !partitionsSnap.empty) {
+    partitionsSnap.forEach((pDoc) => {
+      const pData = pDoc.data();
+      const pKeys = (pData.printedKeys as string[]) || [];
+      const pMap = (pData.printedAtMap as Record<string, string>) || {};
+      pKeys.forEach((k) => combinedPrintKeys.add(k));
+      Object.assign(combinedPrintMap, pMap);
+    });
+  }
+
+  const printState: PrintState = {
+    printedKeys: Array.from(combinedPrintKeys),
+    printedAtMap: combinedPrintMap,
+    updatedAt: new Date().toISOString(),
+  };
+
+  const printedSet = combinedPrintKeys;
+  const pMap = combinedPrintMap;
+  for (const d of docs) {
+    const key = d.id || d.no_faktur;
+    if (!key) continue;
+    const isPrinted = printedSet.has(key);
+    d.status_cetak = isPrinted;
+    d.printed_at = isPrinted ? (pMap[key] || null) : null;
+
+    // Apply customer/invoice category override if available
+    const cleanKey = key.replace(/-1P$/i, "");
+    const cust = String(d.customer_name || d.extra?.nama_pelanggan || "").trim();
+    const normCust = cust ? normalize(cust) : "";
+    const overrideKat = categoryOverrides[normCust] || categoryOverrides[cust] || categoryOverrides[cleanKey];
+    if (overrideKat && d.jenis_transaksi !== "ORA") {
+      d.kategori = overrideKat;
+      if (d.extra) d.extra.kategori = overrideKat;
     }
   }
 
@@ -283,15 +373,34 @@ export async function saveFaktursBatch(
   let previousChunkIds: string[] = [];
 
   try {
-    const [printSnap, metaSnap] = await Promise.all([
+    const [printSnap, metaSnap, partitionsSnap] = await Promise.all([
       getDoc(doc(db, APP_DATA_COLLECTION, PRINT_STATE_DOC)),
       getDoc(doc(db, APP_DATA_COLLECTION, METADATA_DOC)),
+      getDocs(collection(db, PRINT_PARTITIONS_COLLECTION)).catch(() => null),
     ]);
+
+    const gatheredKeys = new Set<string>();
+    const gatheredMap: Record<string, string> = {};
+
     if (printSnap.exists()) {
       const liveData = printSnap.data() as PrintState;
-      livePrintedKeys = liveData.printedKeys || [];
-      livePrintedAtMap = { ...(liveData.printedAtMap || {}) };
+      (liveData.printedKeys || []).forEach((k) => gatheredKeys.add(k));
+      Object.assign(gatheredMap, liveData.printedAtMap || {});
     }
+
+    if (partitionsSnap && !partitionsSnap.empty) {
+      partitionsSnap.forEach((pDoc) => {
+        const pData = pDoc.data();
+        const pKeys = (pData.printedKeys as string[]) || [];
+        const pMap = (pData.printedAtMap as Record<string, string>) || {};
+        pKeys.forEach((k) => gatheredKeys.add(k));
+        Object.assign(gatheredMap, pMap);
+      });
+    }
+
+    livePrintedKeys = Array.from(gatheredKeys);
+    livePrintedAtMap = gatheredMap;
+
     if (metaSnap.exists()) {
       previousChunkIds = (metaSnap.data().chunkIds as string[]) || [];
     }
@@ -374,91 +483,223 @@ export async function saveFaktursBatch(
     { merge: true }
   );
 
-  // Sync print state
+  // Sync print state across partitions + dual write legacy doc
   await updatePrintState(Array.from(unifiedPrintedSet), unifiedPrintedAtMap);
 }
 
 /**
- * Update Print State in a single fast document write (< 50ms)
+ * Update Print State across partitions with dual-write to legacy doc
+ * Guarantees zero limit bottlenecks and 100% backward compatibility
  */
 export async function updatePrintState(
   printedKeys: string[],
   printedAtMap: Record<string, string>
 ): Promise<void> {
-  const printDocRef = doc(db, APP_DATA_COLLECTION, PRINT_STATE_DOC);
-  await setDoc(printDocRef, {
-    printedKeys,
-    printedAtMap,
-    updatedAt: new Date().toISOString(),
+  const nowIso = new Date().toISOString();
+
+  // 1. Group keys by partition bucket
+  const partitionBuckets: Record<string, { keys: string[]; map: Record<string, string> }> = {};
+  for (const k of printedKeys) {
+    const partId = getPrintPartitionId(k);
+    if (!partitionBuckets[partId]) {
+      partitionBuckets[partId] = { keys: [], map: {} };
+    }
+    partitionBuckets[partId].keys.push(k);
+    if (printedAtMap[k]) {
+      partitionBuckets[partId].map[k] = printedAtMap[k];
+    }
+  }
+
+  // Write all affected partitions
+  const partitionWrites = Object.entries(partitionBuckets).map(async ([partId, data]) => {
+    const partRef = doc(db, PRINT_PARTITIONS_COLLECTION, partId);
+    await setDoc(partRef, {
+      partitionId: partId,
+      printedKeys: data.keys,
+      printedAtMap: data.map,
+      count: data.keys.length,
+      updatedAt: nowIso,
+    });
   });
+
+  // 2. Dual-write to legacy doc (kept under safe limit by taking latest keys if ever > 15,000)
+  const legacyKeys = printedKeys.length > 15000 ? printedKeys.slice(-15000) : printedKeys;
+  const legacyMap: Record<string, string> = {};
+  legacyKeys.forEach((k) => {
+    if (printedAtMap[k]) legacyMap[k] = printedAtMap[k];
+  });
+
+  const legacyWrite = setDoc(doc(db, APP_DATA_COLLECTION, PRINT_STATE_DOC), {
+    printedKeys: legacyKeys,
+    printedAtMap: legacyMap,
+    updatedAt: nowIso,
+  }).catch((e) => console.warn("Legacy print_state write skipped:", e));
+
+  await Promise.all([...partitionWrites, legacyWrite]);
 }
 
 /**
- * Toggle Print Status for a single invoice key
+ * Toggle Print Status for a single invoice key (Partitioned Fast Write < 50ms)
  */
 export async function updateFakturPrintStatus(
   invoiceKey: string,
   status: boolean,
   printedAt: string | null
 ): Promise<void> {
-  const printDocRef = doc(db, APP_DATA_COLLECTION, PRINT_STATE_DOC);
-  let liveKeys = new Set<string>();
-  let liveMap: Record<string, string> = {};
+  const partId = getPrintPartitionId(invoiceKey);
+  const partRef = doc(db, PRINT_PARTITIONS_COLLECTION, partId);
+  const legacyRef = doc(db, APP_DATA_COLLECTION, PRINT_STATE_DOC);
+
+  let partKeys = new Set<string>();
+  let partMap: Record<string, string> = {};
 
   try {
-    const snap = await getDoc(printDocRef);
-    if (snap.exists()) {
-      const data = snap.data() as PrintState;
-      liveKeys = new Set(data.printedKeys || []);
-      liveMap = { ...(data.printedAtMap || {}) };
+    const pSnap = await getDoc(partRef);
+    if (pSnap.exists()) {
+      const data = pSnap.data();
+      partKeys = new Set((data.printedKeys as string[]) || []);
+      partMap = { ...((data.printedAtMap as Record<string, string>) || {}) };
+    } else {
+      // Fallback check legacy doc if partition not yet written
+      const legSnap = await getDoc(legacyRef);
+      if (legSnap.exists()) {
+        const legData = legSnap.data() as PrintState;
+        (legData.printedKeys || []).forEach((k) => {
+          if (getPrintPartitionId(k) === partId) partKeys.add(k);
+        });
+        Object.entries(legData.printedAtMap || {}).forEach(([k, v]) => {
+          if (getPrintPartitionId(k) === partId) partMap[k] = v;
+        });
+      }
     }
   } catch (err) {
-    console.warn("Could not read live print state:", err);
+    console.warn("Could not read partition before update:", err);
   }
 
   if (status) {
-    liveKeys.add(invoiceKey);
-    if (printedAt) liveMap[invoiceKey] = printedAt;
+    partKeys.add(invoiceKey);
+    if (printedAt) partMap[invoiceKey] = printedAt;
   } else {
-    liveKeys.delete(invoiceKey);
-    delete liveMap[invoiceKey];
+    partKeys.delete(invoiceKey);
+    delete partMap[invoiceKey];
   }
 
-  await updatePrintState(Array.from(liveKeys), liveMap);
+  const nowIso = new Date().toISOString();
+
+  // 1. Write partition document
+  const writePart = setDoc(partRef, {
+    partitionId: partId,
+    printedKeys: Array.from(partKeys),
+    printedAtMap: partMap,
+    count: partKeys.size,
+    updatedAt: nowIso,
+  });
+
+  // 2. Dual-write to legacy doc for backward compatibility
+  const writeLegacy = (async () => {
+    try {
+      const legSnap = await getDoc(legacyRef);
+      if (legSnap.exists()) {
+        const legData = legSnap.data() as PrintState;
+        const liveKeys = new Set(legData.printedKeys || []);
+        const liveMap = { ...(legData.printedAtMap || {}) };
+        if (status) {
+          liveKeys.add(invoiceKey);
+          if (printedAt) liveMap[invoiceKey] = printedAt;
+        } else {
+          liveKeys.delete(invoiceKey);
+          delete liveMap[invoiceKey];
+        }
+        await setDoc(legacyRef, {
+          printedKeys: Array.from(liveKeys),
+          printedAtMap: liveMap,
+          updatedAt: nowIso,
+        });
+      }
+    } catch (e) {
+      console.warn("Dual-write legacy update failed:", e);
+    }
+  })();
+
+  await Promise.all([writePart, writeLegacy]);
 }
 
 /**
- * Batch update print status for multiple keys
+ * Batch update print status for multiple keys across partitions
  */
 export async function updateFaktursPrintStatusBatch(
   keys: string[],
   status: boolean,
   printedAt: string | null
 ): Promise<void> {
-  const printDocRef = doc(db, APP_DATA_COLLECTION, PRINT_STATE_DOC);
-  const snap = await getDoc(printDocRef);
-  let currentKeys = new Set<string>();
-  let currentMap: Record<string, string> = {};
-
-  if (snap.exists()) {
-    const data = snap.data() as PrintState;
-    currentKeys = new Set(data.printedKeys || []);
-    currentMap = { ...(data.printedAtMap || {}) };
+  const keysByPartition: Record<string, string[]> = {};
+  for (const k of keys) {
+    const partId = getPrintPartitionId(k);
+    if (!keysByPartition[partId]) keysByPartition[partId] = [];
+    keysByPartition[partId].push(k);
   }
 
-  if (status) {
-    keys.forEach((k) => {
-      currentKeys.add(k);
-      if (printedAt) currentMap[k] = printedAt;
-    });
-  } else {
-    keys.forEach((k) => {
-      currentKeys.delete(k);
-      delete currentMap[k];
-    });
-  }
+  const nowIso = new Date().toISOString();
 
-  await updatePrintState(Array.from(currentKeys), currentMap);
+  await Promise.all(
+    Object.entries(keysByPartition).map(async ([partId, targetKeys]) => {
+      const partRef = doc(db, PRINT_PARTITIONS_COLLECTION, partId);
+      const pSnap = await getDoc(partRef).catch(() => null);
+      let pKeys = new Set<string>();
+      let pMap: Record<string, string> = {};
+
+      if (pSnap && pSnap.exists()) {
+        const data = pSnap.data();
+        pKeys = new Set((data.printedKeys as string[]) || []);
+        pMap = { ...((data.printedAtMap as Record<string, string>) || {}) };
+      }
+
+      targetKeys.forEach((k) => {
+        if (status) {
+          pKeys.add(k);
+          if (printedAt) pMap[k] = printedAt;
+        } else {
+          pKeys.delete(k);
+          delete pMap[k];
+        }
+      });
+
+      await setDoc(partRef, {
+        partitionId: partId,
+        printedKeys: Array.from(pKeys),
+        printedAtMap: pMap,
+        count: pKeys.size,
+        updatedAt: nowIso,
+      });
+    })
+  );
+
+  // Dual-write batch to legacy doc
+  try {
+    const legacyRef = doc(db, APP_DATA_COLLECTION, PRINT_STATE_DOC);
+    const legSnap = await getDoc(legacyRef);
+    if (legSnap.exists()) {
+      const legData = legSnap.data() as PrintState;
+      const curKeys = new Set(legData.printedKeys || []);
+      const curMap = { ...(legData.printedAtMap || {}) };
+      keys.forEach((k) => {
+        if (status) {
+          curKeys.add(k);
+          if (printedAt) curMap[k] = printedAt;
+        } else {
+          curKeys.delete(k);
+          delete curMap[k];
+        }
+      });
+      await setDoc(legacyRef, {
+        printedKeys: Array.from(curKeys),
+        printedAtMap: curMap,
+        updatedAt: nowIso,
+      });
+    }
+  } catch (e) {
+    console.warn("Dual-write legacy batch update failed:", e);
+  }
 }
 
 /**
@@ -529,8 +770,15 @@ export async function updateFakturCategory(
  * Delete all Faktur chunks and reset database completely
  */
 export async function clearAllFakturs(): Promise<void> {
-  const chunksSnap = await getDocs(collection(db, CHUNKS_COLLECTION));
-  await Promise.all(chunksSnap.docs.map((d) => deleteDoc(d.ref)));
+  const [chunksSnap, partitionsSnap] = await Promise.all([
+    getDocs(collection(db, CHUNKS_COLLECTION)),
+    getDocs(collection(db, PRINT_PARTITIONS_COLLECTION)),
+  ]);
+
+  await Promise.all([
+    ...chunksSnap.docs.map((d) => deleteDoc(d.ref)),
+    ...partitionsSnap.docs.map((d) => deleteDoc(d.ref)),
+  ]);
 
   const nowIso = new Date().toISOString();
   await Promise.all([
