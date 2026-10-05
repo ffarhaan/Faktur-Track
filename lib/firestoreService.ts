@@ -37,7 +37,9 @@ let globalCategoryOverrides: Record<string, "1P" | "2P" | "3P"> = {};
  * (Bucket sizes of 5,000 invoices per partition ensure doc sizes stay under 150 KB, well below 1 MB limit)
  */
 export function getPrintPartitionId(invoiceKey: string): string {
-  const cleanNumStr = invoiceKey.replace(/\D/g, "");
+  // Strip suffix like -1P, -2P, -3P BEFORE removing non-digits
+  // so that "18033-1P" correctly maps to "18033" (bucket 15000_19999) and NOT "180331" (bucket 180000_184999)!
+  const cleanNumStr = invoiceKey.replace(/-[0-9]P$/i, "").replace(/\D/g, "");
   if (!cleanNumStr) return "part_misc";
   const num = parseInt(cleanNumStr, 10);
   const bucketIndex = Math.floor(num / 5000);
@@ -46,8 +48,8 @@ export function getPrintPartitionId(invoiceKey: string): string {
 
 /**
  * Universal print key variant resolver: registers both bare key and -1P suffix
- * for any ORA transaction (or historical bare keys < 25000), guaranteeing that
- * neither ORA nor bare variants will ever be missed across partitions or uploads.
+ * for any transaction, guaranteeing that neither ORA nor bare variants will ever
+ * be missed across partitions or uploads.
  */
 function registerPrintKeyVariants(
   k: string,
@@ -64,12 +66,9 @@ function registerPrintKeyVariants(
     keysSet.add(bare);
     if (pAt && !atMap[bare]) atMap[bare] = pAt;
   } else {
-    const num = parseInt(k.replace(/\D/g, ""), 10);
-    if (num < 25000) {
-      const oraK = `${k}-1P`;
-      keysSet.add(oraK);
-      if (pAt && !atMap[oraK]) atMap[oraK] = pAt;
-    }
+    const oraK = `${k}-1P`;
+    keysSet.add(oraK);
+    if (pAt && !atMap[oraK]) atMap[oraK] = pAt;
   }
 }
 
