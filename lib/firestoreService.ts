@@ -678,7 +678,12 @@ export async function saveFaktursBatch(
     if (key) {
       const cleanKey = key.replace(/-1P$/i, "");
       const isOra = item.jenis_transaksi === "ORA" || key.endsWith("-1P");
-      const isPrinted = Boolean(
+
+      const isExplicitlyNewUnprinted = newUnprintedSet.has(key) ||
+        newUnprintedSet.has(cleanKey) ||
+        (isOra && newUnprintedSet.has(`${cleanKey}-1P`));
+
+      const isPrinted = !isExplicitlyNewUnprinted && Boolean(
         item.status_cetak ||
         unifiedPrintedSet.has(key) ||
         unifiedPrintedSet.has(cleanKey) ||
@@ -696,6 +701,11 @@ export async function saveFaktursBatch(
       } else {
         item.status_cetak = false;
         item.printed_at = null;
+        if (isExplicitlyNewUnprinted) {
+          unifiedPrintedSet.delete(key);
+          unifiedPrintedSet.delete(cleanKey);
+          if (isOra) unifiedPrintedSet.delete(`${cleanKey}-1P`);
+        }
       }
     }
   }

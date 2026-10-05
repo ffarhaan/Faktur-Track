@@ -1031,58 +1031,57 @@ export default function Home() {
           const prevInfo = existingStatusMap.get(targetKey) || (isOra ? existingStatusMap.get(cleanInv) : undefined);
           const existingEntry = invMap.get(targetKey) || (isOra ? invMap.get(cleanInv) : undefined);
 
+          // Determine if this invoice already exists in the database
+          const isExistingInDB = existingEntry !== undefined || prevInfo !== undefined;
+
           let isPrinted = false;
           let printedAt: string | null = null;
 
-          const isAlreadyPrinted = Boolean(
-            (existingEntry && existingEntry.status_cetak) ||
-            mergedPrintedSet.has(targetKey) ||
-            (isOra && (mergedPrintedSet.has(cleanInv) || mergedPrintedSet.has(`${cleanInv}-1P`))) ||
-            (prevInfo && prevInfo.status_cetak)
-          );
-
-          if (isAlreadyPrinted) {
-            // Permanently preserve printed status (Anti-Reappearance Guaranteed)
-            isPrinted = true;
-            printedAt = (existingEntry && existingEntry.printed_at) ||
-              mergedPrintedAtMap[targetKey] ||
-              (isOra ? mergedPrintedAtMap[cleanInv] || mergedPrintedAtMap[`${cleanInv}-1P`] : null) ||
-              (prevInfo && prevInfo.printed_at) ||
-              new Date().toISOString();
-            mergedPrintedSet.add(targetKey);
-            if (isOra) {
-              mergedPrintedSet.add(cleanInv);
-              mergedPrintedSet.add(`${cleanInv}-1P`);
-            }
-            mergedPrintedAtMap[targetKey] = printedAt;
-            newUnprintedKeysSet.delete(targetKey);
-            if (isOra) {
-              newUnprintedKeysSet.delete(cleanInv);
-              newUnprintedKeysSet.delete(`${cleanInv}-1P`);
-            }
-          } else if (prevInfo !== undefined || existingEntry !== undefined) {
-            // Already in database and unprinted: keep unprinted
-            isPrinted = false;
-            printedAt = null;
-            newUnprintedKeysSet.add(targetKey);
-          } else {
-            // Brand new invoice
-            const isHistorical = num > 0 && (
-              (isOra && prevOraNum > 0 && num <= prevOraNum) ||
-              (!isOra && prevDooNum > 0 && num <= prevDooNum)
+          if (isExistingInDB) {
+            // Already in database: check if it was marked printed
+            const wasPrinted = Boolean(
+              (existingEntry && existingEntry.status_cetak) ||
+              mergedPrintedSet.has(targetKey) ||
+              (isOra && (mergedPrintedSet.has(cleanInv) || mergedPrintedSet.has(`${cleanInv}-1P`))) ||
+              (prevInfo && prevInfo.status_cetak)
             );
-            if (isHistorical) {
+
+            if (wasPrinted) {
+              // Permanently preserve printed status (Anti-Reappearance Guaranteed)
               isPrinted = true;
-              printedAt = null;
+              printedAt = (existingEntry && existingEntry.printed_at) ||
+                mergedPrintedAtMap[targetKey] ||
+                (isOra ? mergedPrintedAtMap[cleanInv] || mergedPrintedAtMap[`${cleanInv}-1P`] : null) ||
+                (prevInfo && prevInfo.printed_at) ||
+                new Date().toISOString();
               mergedPrintedSet.add(targetKey);
               if (isOra) {
                 mergedPrintedSet.add(cleanInv);
                 mergedPrintedSet.add(`${cleanInv}-1P`);
               }
+              mergedPrintedAtMap[targetKey] = printedAt;
+              newUnprintedKeysSet.delete(targetKey);
+              if (isOra) {
+                newUnprintedKeysSet.delete(cleanInv);
+                newUnprintedKeysSet.delete(`${cleanInv}-1P`);
+              }
             } else {
+              // Already in database but unprinted: keep unprinted
               isPrinted = false;
               printedAt = null;
               newUnprintedKeysSet.add(targetKey);
+            }
+          } else {
+            // BRAND NEW INVOICE NOT YET IN DATABASE:
+            // WAJIB masuk ke "Belum Terprint" (Unprinted Guarantee)
+            isPrinted = false;
+            printedAt = null;
+            newUnprintedKeysSet.add(targetKey);
+            // Ensure clean state: purge any accidental partition key for this brand new invoice
+            mergedPrintedSet.delete(targetKey);
+            if (isOra) {
+              mergedPrintedSet.delete(cleanInv);
+              mergedPrintedSet.delete(`${cleanInv}-1P`);
             }
           }
 
