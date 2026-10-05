@@ -14,6 +14,7 @@ import { FakturRecord, FirestoreFakturDoc, InvoiceProgression, FakturGroup, Uplo
 import {
   subscribeToFakturs,
   getExistingFakturs,
+  getLivePrintState,
   saveFaktursBatch,
   updateFakturPrintStatus,
   updateFaktursPrintStatusBatch,
@@ -205,6 +206,9 @@ export default function Home() {
   const [selectedColIdx, setSelectedColIdx] = useState(3); // Default to No Invoice column
   const [categoryOverrides, setCategoryOverrides] = useState<Record<string, "1P" | "2P" | "3P">>({});
   const categoryOverridesRef = useRef<Record<string, "1P" | "2P" | "3P">>({});
+  const printedInvoicesRef = useRef<Set<string>>(new Set());
+  const printedAtMapRef = useRef<Record<string, string>>({});
+  const invoiceProgressionRef = useRef<InvoiceProgression | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const isUploadingRef = useRef(false);
   const currentFakturDocsRef = useRef<FirestoreFakturDoc[]>([]);
@@ -212,6 +216,18 @@ export default function Home() {
   useEffect(() => {
     categoryOverridesRef.current = categoryOverrides;
   }, [categoryOverrides]);
+
+  useEffect(() => {
+    printedInvoicesRef.current = printedInvoices;
+  }, [printedInvoices]);
+
+  useEffect(() => {
+    printedAtMapRef.current = printedAtMap;
+  }, [printedAtMap]);
+
+  useEffect(() => {
+    invoiceProgressionRef.current = invoiceProgression;
+  }, [invoiceProgression]);
 
   const showToast = (msg: string) => {
     setToastMsg(msg);
@@ -281,6 +297,8 @@ export default function Home() {
         if (printState && (printState.printedKeys?.length || 0) > 0) {
           const pSet = new Set(printState.printedKeys);
           const pMap = printState.printedAtMap || {};
+          printedInvoicesRef.current = pSet;
+          printedAtMapRef.current = pMap;
           setPrintedInvoices(pSet);
           setPrintedAtMap(pMap);
         }
@@ -310,17 +328,24 @@ export default function Home() {
               ...(printState?.printedKeys || []),
               ...Array.from(docPrintedSet),
             ]);
+            printedInvoicesRef.current = next;
             return next;
           });
 
-          setPrintedAtMap((prev) => ({
-            ...prev,
-            ...(printState?.printedAtMap || {}),
-            ...docPrintedAtMap,
-          }));
+          setPrintedAtMap((prev) => {
+            const next = {
+              ...prev,
+              ...(printState?.printedAtMap || {}),
+              ...docPrintedAtMap,
+            };
+            printedAtMapRef.current = next;
+            return next;
+          });
         } else if (reason === "chunks") {
           currentFakturDocsRef.current = [];
           setRecords([]);
+          printedInvoicesRef.current = new Set();
+          printedAtMapRef.current = {};
           setPrintedInvoices(new Set());
           setPrintedAtMap({});
         }
@@ -379,6 +404,7 @@ export default function Home() {
         const next = new Set(prev);
         if (willBePrinted) next.add(targetKey);
         else next.delete(targetKey);
+        printedInvoicesRef.current = next;
         return next;
       });
 
@@ -386,6 +412,7 @@ export default function Home() {
         const next = { ...prev };
         if (willBePrinted) next[targetKey] = nowIso;
         else delete next[targetKey];
+        printedAtMapRef.current = next;
         return next;
       });
 
@@ -603,6 +630,7 @@ export default function Home() {
     setPrintedInvoices((prev) => {
       const next = new Set(prev);
       targetKeys.forEach((k) => next.add(k));
+      printedInvoicesRef.current = next;
       return next;
     });
 
@@ -611,6 +639,7 @@ export default function Home() {
       targetKeys.forEach((k) => {
         next[k] = nowIso;
       });
+      printedAtMapRef.current = next;
       return next;
     });
 
@@ -804,20 +833,31 @@ export default function Home() {
 
         const importedAt = new Date().toISOString();
 
-        // 1. Leverage live in-memory state or fetch from Firestore if empty (< 100ms instead of 4-8s network delay)
-        let existingDBDocs: FirestoreFakturDoc[] = currentFakturDocsRef.current || [];
-        let loadedProgression: InvoiceProgression | null = invoiceProgression;
-        let loadedPrintState: { printedKeys: string[]; printedAtMap: Record<string, string> } | null = {
-          printedKeys: Array.from(printedInvoices),
-          printedAtMap: printedAtMap,
+        // 1. Authoritative live printed keys from memory caches, firestoreService, and refs
+        const livePrint = getLivePrintState();
+        const livePrintedKeys = new Set<string>([
+          ...livePrint.printedKeys,
+          ...Array.from(printedInvoicesRef.current),
+        ]);
+        const livePrintedAtMap: Record<string, string> = {
+          ...livePrint.printedAtMap,
+          ...printedAtMapRef.current,
         };
+        let loadedProgression: InvoiceProgression | null = invoiceProgressionRef.current;
+        let existingDBDocs: FirestoreFakturDoc[] = currentFakturDocsRef.current || [];
 
-        if (existingDBDocs.length === 0) {
+        // If either existing docs or print state is empty, fetch remote DB to guarantee zero data loss
+        if (existingDBDocs.length === 0 || livePrintedKeys.size === 0) {
           try {
             const res = await getExistingFakturs();
-            existingDBDocs = res.docs;
-            loadedProgression = res.progression;
-            loadedPrintState = res.printState;
+            if (existingDBDocs.length === 0) {
+              existingDBDocs = res.docs;
+              if (!loadedProgression) loadedProgression = res.progression;
+            }
+            if (res.printState) {
+              (res.printState.printedKeys || []).forEach((k) => livePrintedKeys.add(k));
+              Object.assign(livePrintedAtMap, res.printState.printedAtMap || {});
+            }
           } catch (err) {
             console.warn("Could not fetch remote DB:", err);
           }
@@ -836,16 +876,6 @@ export default function Home() {
         const existingDBDocsUnified = Array.from(combinedExistingMap.values());
 
         const existingDB = existingDBDocsUnified as unknown as Array<Record<string, unknown>>;
-        
-        // Authoritative live printed keys from both Firestore print_state and active state
-        const livePrintedKeys = new Set<string>([
-          ...(loadedPrintState?.printedKeys || []),
-          ...Array.from(printedInvoices),
-        ]);
-        const livePrintedAtMap: Record<string, string> = {
-          ...(loadedPrintState?.printedAtMap || {}),
-          ...printedAtMap,
-        };
 
         const existingStatusMap = new Map<
           string,
@@ -901,6 +931,12 @@ export default function Home() {
             row.status_cetak ||
             livePrintedKeys.has(targetKey)
           );
+          if (isDocPrinted) {
+            livePrintedKeys.add(targetKey);
+            if (!livePrintedAtMap[targetKey]) {
+              livePrintedAtMap[targetKey] = (row.printed_at as string) || new Date().toISOString();
+            }
+          }
           const docPrintedAt = isDocPrinted
             ? (livePrintedAtMap[targetKey] || (row.printed_at as string) || null)
             : null;
@@ -921,11 +957,13 @@ export default function Home() {
           const k = doc.id || doc.no_faktur;
           const isDocPrinted = Boolean(
             doc.status_cetak ||
-            livePrintedKeys.has(k) ||
-            printedInvoices.has(k)
+            livePrintedKeys.has(k)
           );
+          if (isDocPrinted) {
+            livePrintedKeys.add(k);
+          }
           const docPAt = isDocPrinted
-            ? (livePrintedAtMap[k] || printedAtMap[k] || doc.printed_at || null)
+            ? (livePrintedAtMap[k] || doc.printed_at || null)
             : null;
 
           invMap.set(k, {
@@ -935,19 +973,13 @@ export default function Home() {
           });
         });
 
-        const mergedPrintedSet = new Set<string>([
-          ...livePrintedKeys,
-          ...Array.from(printedInvoices),
-        ]);
-        const mergedPrintedAtMap: Record<string, string> = {
-          ...livePrintedAtMap,
-          ...printedAtMap,
-        };
+        const mergedPrintedSet = livePrintedKeys;
+        const mergedPrintedAtMap = livePrintedAtMap;
 
         const newUnprintedKeysSet = new Set<string>();
         // Preserve all existing unprinted invoices from database ONLY if not printed!
         invMap.forEach((doc, k) => {
-          if (!doc.status_cetak && !mergedPrintedSet.has(k) && !printedInvoices.has(k)) {
+          if (!doc.status_cetak && !mergedPrintedSet.has(k)) {
             newUnprintedKeysSet.add(k);
           }
         });
@@ -965,10 +997,10 @@ export default function Home() {
           let isPrinted = false;
           let printedAt: string | null = null;
 
-          if (mergedPrintedSet.has(targetKey) || printedInvoices.has(targetKey) || (prevInfo && prevInfo.status_cetak)) {
+          if (mergedPrintedSet.has(targetKey) || (prevInfo && prevInfo.status_cetak)) {
             // Permanently preserve printed status (Anti-Reappearance Guaranteed)
             isPrinted = true;
-            printedAt = mergedPrintedAtMap[targetKey] || (prevInfo && prevInfo.printed_at) || printedAtMap[targetKey] || new Date().toISOString();
+            printedAt = mergedPrintedAtMap[targetKey] || (prevInfo && prevInfo.printed_at) || new Date().toISOString();
             mergedPrintedSet.add(targetKey);
             mergedPrintedAtMap[targetKey] = printedAt;
             newUnprintedKeysSet.delete(targetKey);
@@ -1220,10 +1252,16 @@ export default function Home() {
           payload as unknown as Array<Record<string, unknown>>
         );
 
+        const finalPrintedSet = new Set<string>(mergedPrintedSet);
+        const finalPrintedAtMap = { ...mergedPrintedAtMap };
+
+        printedInvoicesRef.current = finalPrintedSet;
+        printedAtMapRef.current = finalPrintedAtMap;
+
         currentFakturDocsRef.current = payload;
         setRecords(localRecs);
-        setPrintedInvoices(mergedPrintedSet);
-        setPrintedAtMap(mergedPrintedAtMap);
+        setPrintedInvoices(finalPrintedSet);
+        setPrintedAtMap(finalPrintedAtMap);
         const notifPayload: UploadNotification = {
           fileName: fileNames.join(", "),
           prevOra,
@@ -1240,6 +1278,7 @@ export default function Home() {
         };
 
         setInvoiceProgression(progObj);
+        invoiceProgressionRef.current = progObj;
         setUploadNotification(notifPayload);
         setPage(0);
         setLoading(false);
@@ -1249,8 +1288,8 @@ export default function Home() {
           payload,
           progObj,
           {
-            printedKeys: Array.from(mergedPrintedSet),
-            printedAtMap: mergedPrintedAtMap,
+            printedKeys: Array.from(finalPrintedSet),
+            printedAtMap: finalPrintedAtMap,
             updatedAt: new Date().toISOString(),
           },
           newUnprintedKeys,

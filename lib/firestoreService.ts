@@ -45,6 +45,46 @@ export function getPrintPartitionId(invoiceKey: string): string {
 }
 
 /**
+ * Synchronously get all currently known printed keys and printedAtMap from module-level caches
+ */
+export function getLivePrintState(): {
+  printedKeys: string[];
+  printedAtMap: Record<string, string>;
+} {
+  const gatheredKeys = new Set<string>();
+  const gatheredMap: Record<string, string> = {};
+
+  if (globalPartitionMap.size > 0) {
+    globalPartitionMap.forEach((p) => {
+      (p.printedKeys || []).forEach((k) => gatheredKeys.add(k));
+      Object.assign(gatheredMap, p.printedAtMap || {});
+    });
+  }
+  if (globalLegacyPrintState) {
+    (globalLegacyPrintState.printedKeys || []).forEach((k) => gatheredKeys.add(k));
+    Object.assign(gatheredMap, globalLegacyPrintState.printedAtMap || {});
+  }
+
+  globalChunksMap.forEach((items) => {
+    items.forEach((item) => {
+      const k = item.id || item.no_faktur;
+      if (k && item.status_cetak) {
+        gatheredKeys.add(k);
+        if (item.printed_at && !gatheredMap[k]) {
+          gatheredMap[k] = item.printed_at;
+        }
+      }
+    });
+  });
+
+  return {
+    printedKeys: Array.from(gatheredKeys),
+    printedAtMap: gatheredMap,
+  };
+}
+
+
+/**
  * Realtime listener for Chunked Fakturs, Print State (Partitioned + Legacy Fallback), Category Overrides, and Upload Broadcast
  */
 export function subscribeToFakturs(
@@ -520,17 +560,13 @@ export async function saveFaktursBatch(
   }
 
   const localPrintedKeys = existingPrintState?.printedKeys || [];
+  // Strict Anti-Reappearance Guarantee: Once an invoice is printed in live DB or local state,
+  // uploading files MUST NEVER un-print it or delete it from the printed set!
   const unifiedPrintedSet = new Set<string>([
     ...livePrintedKeys,
     ...localPrintedKeys,
   ]);
-  // Invoices specifically flagged as unprinted by the upload must NEVER un-print already printed invoices
-  const explicitPrintedSet = new Set(localPrintedKeys);
-  for (const k of newUnprintedSet) {
-    if (!explicitPrintedSet.has(k)) {
-      unifiedPrintedSet.delete(k);
-    }
-  }
+
 
   const unifiedPrintedAtMap: Record<string, string> = {
     ...livePrintedAtMap,
