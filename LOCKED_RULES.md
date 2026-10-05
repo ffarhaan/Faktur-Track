@@ -34,13 +34,18 @@ Dokumen ini adalah acuan baku dan permanen untuk seluruh pengembangan, pemelihar
      - Nama cabang apotek yang sudah terisi spesifik (misal `HAK Tirta Raya`) TIDAK BOLEH ditimpa kembali oleh nama induk generic (`PT Helios Alchemist Kesehatan`).
      - List barang (`items`) yang sudah terisi dari XXCUST TIDAK BOLEH dihapus atau dikosongkan oleh file export yang tidak memiliki rincian barang.
 
-#### B. Jaminan Status Faktur Baru & Retensi Faktur Belum Dicetak (Unprinted Guarantee)
-- Setiap kali file diupload, faktur baru yang memiliki nomor lebih besar dari nomor maksimum sebelumnya (`num > prevMaxNum`) atau belum pernah terdaftar di database **WAJIB berstatus Belum Dicetak (`status_cetak: false`, `printed_at: null`)**.
-- **Retensi Mutlak Faktur Belum Dicetak (Anti-Accidental Print)**: Faktur yang saat ini sedang menunggu dicetak (`status_cetak: false`) **DILARANG BERUBAH MENJADI SUDAH TERCETAK** ketika ada file baru (seperti file `XXCUST` atau `export`) yang hanya memuat sebagian transaksi. Seluruh daftar faktur yang belum dicetak wajib tetap diawetkan statusnya sampai pengguna secara fisik menandai cetak.
-- **Tugas Utama Upload XXCUST**:
-  1. Mencari No Invoice dan No SO baru (khususnya ORA baru) dan mendaftarkannya ke sistem.
-  2. Melengkapi No SO resmi dan rincian obat/item untuk faktur yang sudah ada.
-  3. Dilarang mereset atau mengutak-atik status cetak faktur apa pun yang sudah ada di database.
+#### B. Jaminan Status Faktur Baru & Retensi Faktur Belum Dicetak (Unprinted Guarantee - LOCKED TOTAL)
+1. **Aturan Mutlak Faktur Baru**:
+   - Seluruh faktur baru yang **belum pernah terdaftar di database** (`existingEntry === undefined` & `prevInfo === undefined`) **WAJIB 100% berstatus Belum Dicetak (`status_cetak: false`, `printed_at: null`)** dan langsung dimasukkan ke `newUnprintedKeysSet` untuk ditampilkan di tab **"Belum Terprint"**.
+   - **LARANGAN MUTLAK LOGIKA `isHistorical` (`num <= prevMaxNum`)**: DILARANG KERAS mengasumsikan faktur baru sebagai "sudah tercetak" hanya karena nomor invoicenya lebih kecil atau sama dengan nomor invoice yang sudah ada di database. Setiap faktur baru wajib diverifikasi fisik oleh operator sampai tombol Done Print diklik.
+2. **Retensi Mutlak Faktur Belum Dicetak (Anti-Accidental Print)**:
+   - Faktur yang saat ini sedang menunggu dicetak (`status_cetak: false`) **DILARANG BERUBAH MENJADI SUDAH TERCETAK** ketika ada file baru (seperti file `XXCUST` atau `export`) yang hanya memuat sebagian transaksi. Seluruh daftar faktur yang belum dicetak wajib tetap diawetkan statusnya sampai pengguna secara fisik menandai cetak.
+3. **Pemisahan Partisi Suffix -1P (`getPrintPartitionId`)**:
+   - Penentuan partisi wajib membuang suffix `-1P` (`replace(/-[0-9]P$/i, '')`) sebelum mengambil digit angka. Faktur ORA `18034-1P` wajib dipetakan ke partisi aslinya (`part_15000_19999`), dilarang melompat ke partisi sepuluh kali lipat (`part_180000_184999`).
+4. **Tugas Utama Upload XXCUST**:
+   - Mencari No Invoice dan No SO baru (khususnya ORA baru) dan mendaftarkannya ke sistem dengan status Belum Terprint.
+   - Melengkapi No SO resmi dan rincian obat/item untuk faktur yang sudah ada.
+   - Dilarang mereset atau mengutak-atik status cetak faktur apa pun yang sudah ada di database.
 
 #### C. Logika Done Print & Realtime Multi-Device Sync
 - **Kecepatan & Keandalan**:
