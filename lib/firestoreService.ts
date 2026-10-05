@@ -529,9 +529,12 @@ export async function saveFaktursBatch(
     ...livePrintedKeys,
     ...localPrintedKeys,
   ]);
-  // Invoices specifically flagged as unprinted by the upload must NEVER be marked printed
+  // Invoices specifically flagged as unprinted by the upload must NEVER un-print already printed invoices
+  const explicitPrintedSet = new Set(localPrintedKeys);
   for (const k of newUnprintedSet) {
-    unifiedPrintedSet.delete(k);
+    if (!explicitPrintedSet.has(k)) {
+      unifiedPrintedSet.delete(k);
+    }
   }
 
   const unifiedPrintedAtMap: Record<string, string> = {
@@ -754,6 +757,12 @@ export async function updateFakturPrintStatus(
 
   const nowIso = new Date().toISOString();
 
+  // Immediately update in-memory cache
+  globalPartitionMap.set(partId, {
+    printedKeys: Array.from(partKeys),
+    printedAtMap: partMap,
+  });
+
   // 1. Write partition document
   const writePart = setDoc(partRef, {
     partitionId: partId,
@@ -783,6 +792,11 @@ export async function updateFakturPrintStatus(
           printedAtMap: liveMap,
           updatedAt: nowIso,
         });
+        globalLegacyPrintState = {
+          printedKeys: Array.from(liveKeys),
+          printedAtMap: liveMap,
+          updatedAt: nowIso,
+        };
       }
     } catch (e) {
       console.warn("Dual-write legacy update failed:", e);
@@ -839,6 +853,12 @@ export async function updateFaktursPrintStatusBatch(
         count: pKeys.size,
         updatedAt: nowIso,
       });
+
+      // Immediately update in-memory cache
+      globalPartitionMap.set(partId, {
+        printedKeys: Array.from(pKeys),
+        printedAtMap: pMap,
+      });
     })
   );
 
@@ -864,6 +884,11 @@ export async function updateFaktursPrintStatusBatch(
         printedAtMap: curMap,
         updatedAt: nowIso,
       });
+      globalLegacyPrintState = {
+        printedKeys: Array.from(curKeys),
+        printedAtMap: curMap,
+        updatedAt: nowIso,
+      };
     }
   } catch (e) {
     console.warn("Dual-write legacy batch update failed:", e);

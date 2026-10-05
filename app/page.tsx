@@ -364,6 +364,16 @@ export default function Home() {
         return next;
       });
 
+      if (currentFakturDocsRef.current) {
+        currentFakturDocsRef.current.forEach((d) => {
+          const k = d.id || d.no_faktur;
+          if (k === targetKey) {
+            d.status_cetak = willBePrinted;
+            d.printed_at = willBePrinted ? nowIso : null;
+          }
+        });
+      }
+
       // 2. Firestore Sync
       try {
         await updateFakturPrintStatus(targetKey, willBePrinted, willBePrinted ? nowIso : null);
@@ -572,6 +582,17 @@ export default function Home() {
       });
       return next;
     });
+
+    const targetSet = new Set(targetKeys);
+    if (currentFakturDocsRef.current) {
+      currentFakturDocsRef.current.forEach((d) => {
+        const k = d.id || d.no_faktur;
+        if (k && targetSet.has(k)) {
+          d.status_cetak = true;
+          d.printed_at = nowIso;
+        }
+      });
+    }
 
     try {
       setLoading(true);
@@ -869,10 +890,11 @@ export default function Home() {
           const k = doc.id || doc.no_faktur;
           const isDocPrinted = Boolean(
             doc.status_cetak ||
-            livePrintedKeys.has(k)
+            livePrintedKeys.has(k) ||
+            printedInvoices.has(k)
           );
           const docPAt = isDocPrinted
-            ? (livePrintedAtMap[k] || doc.printed_at || null)
+            ? (livePrintedAtMap[k] || printedAtMap[k] || doc.printed_at || null)
             : null;
 
           invMap.set(k, {
@@ -882,15 +904,22 @@ export default function Home() {
           });
         });
 
+        const mergedPrintedSet = new Set<string>([
+          ...livePrintedKeys,
+          ...Array.from(printedInvoices),
+        ]);
+        const mergedPrintedAtMap: Record<string, string> = {
+          ...livePrintedAtMap,
+          ...printedAtMap,
+        };
+
         const newUnprintedKeysSet = new Set<string>();
-        // Preserve all existing unprinted invoices from database
+        // Preserve all existing unprinted invoices from database ONLY if not printed!
         invMap.forEach((doc, k) => {
-          if (!doc.status_cetak) {
+          if (!doc.status_cetak && !mergedPrintedSet.has(k) && !printedInvoices.has(k)) {
             newUnprintedKeysSet.add(k);
           }
         });
-        const mergedPrintedSet = new Set(livePrintedKeys);
-        const mergedPrintedAtMap = { ...livePrintedAtMap };
 
         // 3. Merge incoming records
         for (const r of parsed) {
@@ -905,12 +934,13 @@ export default function Home() {
           let isPrinted = false;
           let printedAt: string | null = null;
 
-          if (mergedPrintedSet.has(targetKey) || (prevInfo && prevInfo.status_cetak)) {
+          if (mergedPrintedSet.has(targetKey) || printedInvoices.has(targetKey) || (prevInfo && prevInfo.status_cetak)) {
             // Permanently preserve printed status (Anti-Reappearance Guaranteed)
             isPrinted = true;
-            printedAt = mergedPrintedAtMap[targetKey] || (prevInfo && prevInfo.printed_at) || new Date().toISOString();
+            printedAt = mergedPrintedAtMap[targetKey] || (prevInfo && prevInfo.printed_at) || printedAtMap[targetKey] || new Date().toISOString();
             mergedPrintedSet.add(targetKey);
             mergedPrintedAtMap[targetKey] = printedAt;
+            newUnprintedKeysSet.delete(targetKey);
           } else if (prevInfo !== undefined) {
             // Already in database and unprinted: keep unprinted
             isPrinted = false;
