@@ -19,7 +19,6 @@ import {
   updateFakturPrintStatus,
   updateFaktursPrintStatusBatch,
   updateFakturCategory,
-  clearAllFakturs,
 } from "@/lib/firestoreService";
 import MasterApotekModal from "@/components/MasterApotekModal";
 import MasterProductModal from "@/components/MasterProductModal";
@@ -1310,30 +1309,6 @@ export default function Home() {
     []
   );
 
-  // Clear / Reset All Data
-  const handleClearAll = async () => {
-    if (!confirm("⚠️ YAKIN INGIN MENGHAPUS SEMUA DATA?\n\nSemua data faktur dan riwayat status cetak di database cloud akan direset seperti semula.")) {
-      return;
-    }
-
-    setLoading(true);
-    try {
-      await clearAllFakturs();
-      setRecords([]);
-      setPrintedInvoices(new Set());
-      setPrintedAtMap({});
-      setInvoiceProgression(null);
-      setUploadNotification(null);
-      setExpandedInvoices(new Set());
-      setPage(0);
-      showToast("✓ Seluruh data berhasil direset.");
-    } catch (err) {
-      console.error("Clear error:", err);
-      alert("Gagal mereset data di database.");
-    } finally {
-      setLoading(false);
-    }
-  };
 
   // Export to Excel (Ascending order)
   const handleExportExcel = () => {
@@ -1518,20 +1493,6 @@ export default function Home() {
             >
               <span>📥</span>
               <span className="hidden sm:inline">Ekspor Excel</span>
-            </button>
-
-            {/* Reset / Hapus Semua Data Button */}
-            <button
-              onClick={handleClearAll}
-              className={`px-2.5 py-1.5 border rounded-lg text-xs font-semibold transition-colors flex items-center gap-1 ${
-                isDarkMode
-                  ? "bg-rose-950/40 hover:bg-rose-900/50 text-rose-300 border-rose-800/60"
-                  : "bg-rose-50 hover:bg-rose-100 text-rose-700 border-rose-200"
-              }`}
-              title="Hapus Semua Data & Reset Database"
-            >
-              <span className="text-rose-400">🗑️</span>
-              <span className="hidden sm:inline">Reset Data</span>
             </button>
           </div>
         </div>
