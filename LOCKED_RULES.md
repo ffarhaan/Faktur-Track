@@ -50,11 +50,18 @@ Dokumen ini adalah acuan baku dan permanen untuk seluruh pengembangan, pemelihar
   - Pada tab **"Belum Terprint"**, saat halaman direfresh atau difilter ulang, faktur yang sudah selesai dicetak **otomatis disaring keluar / tidak ditampilkan lagi** di daftar belum terprint.
   - Faktur tersebut tetap dapat dilihat di tab **"Sudah Terprint"**, tab **"Semua"**, atau melalui kotak pencarian global.
 
-#### D. Jaminan Anti-Muncul Kembali (Anti-Reappearance & Permanent Print Retention)
-- **Faktur yang Sudah Selesai Dicetak DILARANG KERAS Muncul Kembali di Daftar Belum Terprint**:
-  - Sekali suatu faktur ditandai `Done Print` (`✓`), status tersebut bersifat permanen di database `app_data/print_state`.
-  - Mengupload ulang file export yang sama, file kumulatif, ataupun file format lain **TIDAK BOLEH mereset atau mengembalikan faktur yang sudah dicetak ke status Belum Terprint**.
-  - Faktur hanya bisa kembali ke status Belum Terprint jika user secara manual mengklik tombol **"Unprint / Batalkan Print"** pada faktur tersebut.
+#### D. Jaminan Anti-Muncul Kembali (Anti-Reappearance & Permanent Print Retention - LOCKED MUTLAK)
+1. **Faktur yang Sudah Selesai Dicetak DILARANG KERAS Muncul Kembali di Daftar Belum Terprint**:
+   - Sekali suatu faktur ditandai `Done Print` (`✓`), status tersebut bersifat permanen di database `print_state_partitions` dan memori lokal.
+   - Mengupload ulang file export yang sama, file kumulatif, file sebagian, ataupun file format lain **TIDAK BOLEH mereset atau mengembalikan faktur yang sudah dicetak ke status Belum Terprint**.
+   - Faktur hanya bisa kembali ke status Belum Terprint jika user secara manual dan eksplisit mengklik tombol **"Unprint / Batalkan Print"** pada faktur tersebut.
+2. **Pencegahan Stale Closure via Mutable Reference (`useRef` + `getLivePrintState`)**:
+   - Handler upload (`handleUpload`) DILARANG KERAS hanya membaca state closure React yang rentan kosong/usang. Wajib selalu membaca referensi mutabel real-time `printedInvoicesRef.current`, `printedAtMapRef.current`, dan fungsi cache memori `getLivePrintState()`.
+   - Setiap perubahan status cetak (baik per baris via spasi/tombol, *Batch Done Print*, maupun sinkronisasi Firestore) WAJIB memperbarui `printedInvoicesRef.current` detik itu juga secara sinkron.
+3. **Larangan Mutlak Loop Penghapusan di `saveFaktursBatch` (Zero-Unprint on Upload)**:
+   - Di dalam fungsi `saveFaktursBatch`, operasi penghapusan status cetak (`unifiedPrintedSet.delete(k)`) **DILARANG KERAS / DIHARAMKAN SECARA TOTAL**.
+   - Kumpulan status cetak gabungan (`unifiedPrintedSet`) WAJIB selalu bersifat kumulatif (`Set([...livePrintedKeys, ...localPrintedKeys])`). Tidak ada mekanisme upload apa pun yang diizinkan membatalkan atau mencabut status cetak yang sudah ada di database.
+
 
 #### E. Kategorisasi Prioritas & Penyimpanan Kustom Apotek (Category Overrides Retention)
 1. **Default Kategori**:
