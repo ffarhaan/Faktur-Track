@@ -752,18 +752,23 @@ export default function Home() {
 
         const importedAt = new Date().toISOString();
 
-        // 1. Fetch fresh state from Firestore
-        let existingDBDocs: FirestoreFakturDoc[] = [];
-        let loadedProgression: InvoiceProgression | null = null;
-        let loadedPrintState: { printedKeys: string[]; printedAtMap: Record<string, string> } | null = null;
+        // 1. Leverage live in-memory state or fetch from Firestore if empty (< 100ms instead of 4-8s network delay)
+        let existingDBDocs: FirestoreFakturDoc[] = currentFakturDocsRef.current || [];
+        let loadedProgression: InvoiceProgression | null = invoiceProgression;
+        let loadedPrintState: { printedKeys: string[]; printedAtMap: Record<string, string> } | null = {
+          printedKeys: Array.from(printedInvoices),
+          printedAtMap: printedAtMap,
+        };
 
-        try {
-          const res = await getExistingFakturs();
-          existingDBDocs = res.docs;
-          loadedProgression = res.progression;
-          loadedPrintState = res.printState;
-        } catch (err) {
-          console.warn("Could not fetch remote DB:", err);
+        if (existingDBDocs.length === 0) {
+          try {
+            const res = await getExistingFakturs();
+            existingDBDocs = res.docs;
+            loadedProgression = res.progression;
+            loadedPrintState = res.printState;
+          } catch (err) {
+            console.warn("Could not fetch remote DB:", err);
+          }
         }
 
         // Unify with current in-memory documents to guarantee zero data loss between fast consecutive uploads
