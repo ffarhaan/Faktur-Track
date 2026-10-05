@@ -233,64 +233,6 @@ export default function Home() {
     setTimeout(() => setToastMsg(null), 3500);
   };
 
-  // Auto-reload on new build / version deployment
-  useEffect(() => {
-    let localVersion = process.env.NEXT_PUBLIC_BUILD_TIME || "";
-    let isChecking = false;
-
-    const checkVersion = async () => {
-      if (isChecking || isUploadingRef.current) return;
-      isChecking = true;
-      try {
-        const res = await fetch(`/api/version?_t=${Date.now()}`, {
-          cache: "no-store",
-          headers: { Pragma: "no-cache", "Cache-Control": "no-cache" },
-        });
-        if (res.ok) {
-          const data = await res.json();
-          if (data && data.version && data.version !== "dev") {
-            if (!localVersion) {
-              localVersion = data.version;
-            } else if (data.version !== localVersion) {
-              console.log("[Auto-Update] New build version detected:", data.version, "current:", localVersion);
-              showToast("🚀 Versi baru terdeteksi! Memperbarui aplikasi otomatis...");
-              setTimeout(() => {
-                if (!isUploadingRef.current) {
-                  window.location.reload();
-                }
-              }, 1200);
-            }
-          }
-        }
-      } catch (e) {
-        // network silent ignore
-      } finally {
-        isChecking = false;
-      }
-    };
-
-    // 1. Initial check after 3 seconds
-    const initialTimer = setTimeout(checkVersion, 3000);
-
-    // 2. Poll every 15 seconds
-    const interval = setInterval(checkVersion, 15000);
-
-    // 3. Instant check when user focuses the tab or switches back
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
-        checkVersion();
-      }
-    };
-    window.addEventListener("focus", checkVersion);
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-
-    return () => {
-      clearTimeout(initialTimer);
-      clearInterval(interval);
-      window.removeEventListener("focus", checkVersion);
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-    };
-  }, []);
 
   const handleUpdateCategory = useCallback(
     async (invoiceKey: string, newKat: "1P" | "2P" | "3P", customerName?: string) => {
