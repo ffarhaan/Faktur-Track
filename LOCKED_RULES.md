@@ -71,6 +71,18 @@ Dokumen ini adalah acuan baku dan permanen untuk seluruh pengembangan, pemelihar
 - Navigasi tabel penuh: `↓`/`j`, `↑`/`k` (baris), `→`/`l`, `←`/`h` (kolom/sel).
 - Aksi instan: `Space` (toggle print), `Enter` (buka detail obat), `Ctrl+C` / `Cmd+C` / `c` (salin No Invoice / No SO / Pelanggan / Total pada sel aktif ke clipboard), `/` atau `f` (fokus search).
 
+#### G. Dual Source of Truth Status Cetak & Jaminan Anti-Flash (Anti-Glitch / Anti-Race Condition - LOCKED)
+1. **Dual-Check Evaluasi Status Cetak di UI**:
+   - Atribut `status_cetak: boolean` dan `printed_at: string | null` WAJIB ditanamkan langsung pada setiap objek `FakturRecord`.
+   - Logika penentuan status cetak di UI (`grouped`, tabel, dan counter) WAJIB menggunakan evaluasi ganda:
+     `allPrinted: printedInvoices.has(key) || Boolean(r.status_cetak)`
+   - DILARANG KERAS mengecek hanya salah satu sumber saja. Pengecekan ganda ini memastikan status cetak 100% konsisten seketika (zero-latency) dan mencegah angka belum terprint melonjak/berkedip sesaat (seperti kedipan ~9.357) saat partisi data Firestore sedang dimuat.
+2. **Auto-Rescue Status Cetak Dokumen**:
+   - Setiap kali chunk faktur dimuat (`emitData("chunks")` di `firestoreService.ts`), seluruh record yang memiliki `status_cetak: true` wajib secara otomatis digabungkan (*auto-rescue*) ke dalam set cetak di memori (`currentPrintState`).
+3. **Optimistic Instant Upload (< 100ms UI Response)**:
+   - Saat pengguna mengunggah file (Export / XXCUST), UI wajib langsung menampilkan perubahan dan membuka blokir loading secara instan (< 100ms) setelah file selesai diparsing.
+   - Penyimpanan ke Firestore (`saveFaktursBatch`) berjalan di latar belakang (*background persistence*) tanpa menahan UI pengguna.
+
 ---
 
 ### 2. ARSITEKTUR DATABASE & ZERO LOCALSTORAGE
@@ -78,15 +90,16 @@ Dokumen ini adalah acuan baku dan permanen untuk seluruh pengembangan, pemelihar
 - **DILARANG MENGGUNAKAN `localStorage`** untuk menyimpan records, progression, ataupun status cetak, agar sinkronisasi 100% konsisten multi-device.
 - **Skema Koleksi Firestore**:
   1. `app_data/metadata`: Menyimpan `invoiceProgression`, `totalInvoices`, `totalChunks`, `chunkIds`, `updatedAt`.
-  2. `app_data/print_state`: Menyimpan `printedKeys: string[]` dan `printedAtMap: Record<string, string>`. Toggle cetak hanya menulis dokumen tunggal ini.
+  2. `app_data/print_state_part_{idx}`: Status cetak dipecah per partisi (1.000 key per partisi) untuk menjamin kapasitas puluhan ribu faktur tanpa melanggar batas 1 MB per dokumen Firestore.
   3. `app_data/category_overrides`: Menyimpan pemetaan nama apotek / invoice ke kategori kustom (`1P`, `2P`, `3P`).
-  4. `faktur_chunks/chunk_{idx}`: Menyimpan data faktur yang dipecah per chunk (<500 KB per chunk).
+  4. `faktur_chunks/chunk_{idx}`: Menyimpan data faktur yang dipecah per chunk (<500 KB per chunk). Masing-masing item di chunk menyertakan `status_cetak` dan `printed_at` sebagai cadangan redundan permanen.
 - **Fitur Reset Data**:
-  - Menghapus seluruh dokumen di `faktur_chunks` dan mereset `metadata` serta `print_state` kembali ke kondisi kosong awal.
+  - Menghapus seluruh dokumen di `faktur_chunks` dan mereset `metadata` serta seluruh partisi `print_state_part_*` kembali ke kondisi kosong awal.
 
 ---
 
 ### 3. KLAUSUL INTEGRITAS MUTLAK (INVIOLABILITY CLAUSE)
 
 > **DILARANG MERUBAH LOGIKA DASAR PADA PERMINTAAN FITUR BARU APAPUN:**
-> Setiap penambahan fitur, perubahan tampilan, atau optimasi di masa mendatang **WAJIB** tunduk pada dokumen `LOCKED_RULES.md` ini dan **TIDAK BOLEH** merusak atau mengubah logika isolasi DOO vs ORA, anti-reappearance faktur tercetak, real-time sync Firestore, penyimpanan kustom kategori apotek, dan arsitektur non-localStorage.
+> Setiap penambahan fitur, perubahan tampilan, atau optimasi di masa mendatang **WAJIB** tunduk pada dokumen `LOCKED_RULES.md` ini dan **TIDAK BOLEH** merusak atau mengubah logika isolasi DOO vs ORA, anti-reappearance faktur tercetak, real-time sync Firestore, dual source of truth status cetak, jaminan anti-flash, penyimpanan kustom kategori apotek, dan arsitektur non-localStorage.
+
