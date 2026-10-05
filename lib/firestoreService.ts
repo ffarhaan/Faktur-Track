@@ -45,6 +45,35 @@ export function getPrintPartitionId(invoiceKey: string): string {
 }
 
 /**
+ * Universal print key variant resolver: registers both bare key and -1P suffix
+ * for any ORA transaction (or historical bare keys < 25000), guaranteeing that
+ * neither ORA nor bare variants will ever be missed across partitions or uploads.
+ */
+function registerPrintKeyVariants(
+  k: string,
+  pAt: string | undefined,
+  keysSet: Set<string>,
+  atMap: Record<string, string>
+) {
+  if (!k) return;
+  keysSet.add(k);
+  if (pAt && !atMap[k]) atMap[k] = pAt;
+
+  if (k.endsWith("-1P")) {
+    const bare = k.replace(/-1P$/i, "");
+    keysSet.add(bare);
+    if (pAt && !atMap[bare]) atMap[bare] = pAt;
+  } else {
+    const num = parseInt(k.replace(/\D/g, ""), 10);
+    if (num < 25000) {
+      const oraK = `${k}-1P`;
+      keysSet.add(oraK);
+      if (pAt && !atMap[oraK]) atMap[oraK] = pAt;
+    }
+  }
+}
+
+/**
  * Synchronously get all currently known printed keys and printedAtMap from module-level caches
  */
 export function getLivePrintState(): {
@@ -56,23 +85,22 @@ export function getLivePrintState(): {
 
   if (globalPartitionMap.size > 0) {
     globalPartitionMap.forEach((p) => {
-      (p.printedKeys || []).forEach((k) => gatheredKeys.add(k));
-      Object.assign(gatheredMap, p.printedAtMap || {});
+      const pMap = p.printedAtMap || {};
+      (p.printedKeys || []).forEach((k) => registerPrintKeyVariants(k, pMap[k], gatheredKeys, gatheredMap));
+      Object.assign(gatheredMap, pMap);
     });
   }
   if (globalLegacyPrintState) {
-    (globalLegacyPrintState.printedKeys || []).forEach((k) => gatheredKeys.add(k));
-    Object.assign(gatheredMap, globalLegacyPrintState.printedAtMap || {});
+    const lMap = globalLegacyPrintState.printedAtMap || {};
+    (globalLegacyPrintState.printedKeys || []).forEach((k) => registerPrintKeyVariants(k, lMap[k], gatheredKeys, gatheredMap));
+    Object.assign(gatheredMap, lMap);
   }
 
   globalChunksMap.forEach((items) => {
     items.forEach((item) => {
       const k = item.id || item.no_faktur;
       if (k && item.status_cetak) {
-        gatheredKeys.add(k);
-        if (item.printed_at && !gatheredMap[k]) {
-          gatheredMap[k] = item.printed_at;
-        }
+        registerPrintKeyVariants(k, item.printed_at || undefined, gatheredKeys, gatheredMap);
       }
     });
   });
@@ -97,22 +125,21 @@ export async function fetchAllLivePrintKeys(): Promise<{
   // 1. Include current memory caches
   if (globalPartitionMap.size > 0) {
     globalPartitionMap.forEach((p) => {
-      (p.printedKeys || []).forEach((k) => gatheredKeys.add(k));
-      Object.assign(gatheredMap, p.printedAtMap || {});
+      const pMap = p.printedAtMap || {};
+      (p.printedKeys || []).forEach((k) => registerPrintKeyVariants(k, pMap[k], gatheredKeys, gatheredMap));
+      Object.assign(gatheredMap, pMap);
     });
   }
   if (globalLegacyPrintState) {
-    (globalLegacyPrintState.printedKeys || []).forEach((k) => gatheredKeys.add(k));
-    Object.assign(gatheredMap, globalLegacyPrintState.printedAtMap || {});
+    const lMap = globalLegacyPrintState.printedAtMap || {};
+    (globalLegacyPrintState.printedKeys || []).forEach((k) => registerPrintKeyVariants(k, lMap[k], gatheredKeys, gatheredMap));
+    Object.assign(gatheredMap, lMap);
   }
   globalChunksMap.forEach((items) => {
     items.forEach((item) => {
       const k = item.id || item.no_faktur;
       if (k && item.status_cetak) {
-        gatheredKeys.add(k);
-        if (item.printed_at && !gatheredMap[k]) {
-          gatheredMap[k] = item.printed_at;
-        }
+        registerPrintKeyVariants(k, item.printed_at || undefined, gatheredKeys, gatheredMap);
       }
     });
   });
@@ -129,7 +156,7 @@ export async function fetchAllLivePrintKeys(): Promise<{
         const pData = pDoc.data();
         const pKeys = (pData.printedKeys as string[]) || [];
         const pMap = (pData.printedAtMap as Record<string, string>) || {};
-        pKeys.forEach((k) => gatheredKeys.add(k));
+        pKeys.forEach((k) => registerPrintKeyVariants(k, pMap[k], gatheredKeys, gatheredMap));
         Object.assign(gatheredMap, pMap);
         globalPartitionMap.set(pDoc.id, { printedKeys: pKeys, printedAtMap: pMap });
       });
@@ -137,8 +164,9 @@ export async function fetchAllLivePrintKeys(): Promise<{
 
     if (legacySnap && legacySnap.exists()) {
       const legData = legacySnap.data() as PrintState;
-      (legData.printedKeys || []).forEach((k) => gatheredKeys.add(k));
-      Object.assign(gatheredMap, legData.printedAtMap || {});
+      const legMap = legData.printedAtMap || {};
+      (legData.printedKeys || []).forEach((k) => registerPrintKeyVariants(k, legMap[k], gatheredKeys, gatheredMap));
+      Object.assign(gatheredMap, legMap);
       globalLegacyPrintState = legData;
     }
   } catch (err) {
@@ -187,26 +215,28 @@ export function subscribeToFakturs(
     const combinedMap: Record<string, string> = {};
 
     if (legacyPrintState) {
-      (legacyPrintState.printedKeys || []).forEach((k) => combinedKeys.add(k));
-      Object.assign(combinedMap, legacyPrintState.printedAtMap || {});
+      const lMap = legacyPrintState.printedAtMap || {};
+      (legacyPrintState.printedKeys || []).forEach((k) => registerPrintKeyVariants(k, lMap[k], combinedKeys, combinedMap));
+      Object.assign(combinedMap, lMap);
     }
 
     partitionMap.forEach((part) => {
-      (part.printedKeys || []).forEach((k) => combinedKeys.add(k));
-      Object.assign(combinedMap, part.printedAtMap || {});
+      const pMap = part.printedAtMap || {};
+      (part.printedKeys || []).forEach((k) => registerPrintKeyVariants(k, pMap[k], combinedKeys, combinedMap));
+      Object.assign(combinedMap, pMap);
     });
 
     globalPartitionMap.forEach((part) => {
-      (part.printedKeys || []).forEach((k) => combinedKeys.add(k));
-      Object.assign(combinedMap, part.printedAtMap || {});
+      const pMap = part.printedAtMap || {};
+      (part.printedKeys || []).forEach((k) => registerPrintKeyVariants(k, pMap[k], combinedKeys, combinedMap));
+      Object.assign(combinedMap, pMap);
     });
 
     globalChunksMap.forEach((items) => {
       items.forEach((item) => {
         const k = item.id || item.no_faktur;
         if (k && item.status_cetak) {
-          combinedKeys.add(k);
-          if (item.printed_at && !combinedMap[k]) combinedMap[k] = item.printed_at;
+          registerPrintKeyVariants(k, item.printed_at || undefined, combinedKeys, combinedMap);
         }
       });
     });
@@ -256,8 +286,7 @@ export function subscribeToFakturs(
     for (const d of allDocs) {
       const key = d.id || d.no_faktur;
       if (key && d.status_cetak) {
-        printedSet.add(key);
-        if (d.printed_at && !pMap[key]) pMap[key] = d.printed_at;
+        registerPrintKeyVariants(key, d.printed_at || undefined, printedSet, pMap);
       }
     }
     currentPrintState.printedKeys = Array.from(printedSet);
@@ -266,12 +295,18 @@ export function subscribeToFakturs(
     for (const d of allDocs) {
       const key = d.id || d.no_faktur;
       if (!key) continue;
-      const isPrinted = printedSet.has(key) || Boolean(d.status_cetak);
+      const cleanKey = key.replace(/-1P$/i, "");
+      const isOra = d.jenis_transaksi === "ORA" || key.endsWith("-1P");
+      const isPrinted = Boolean(
+        d.status_cetak ||
+        printedSet.has(key) ||
+        printedSet.has(cleanKey) ||
+        (isOra && printedSet.has(`${cleanKey}-1P`))
+      );
       d.status_cetak = isPrinted;
-      d.printed_at = isPrinted ? (pMap[key] || d.printed_at || null) : null;
+      d.printed_at = isPrinted ? (pMap[key] || pMap[cleanKey] || (isOra ? pMap[`${cleanKey}-1P`] : null) || d.printed_at || null) : null;
 
       // Apply customer/invoice category override if available
-      const cleanKey = key.replace(/-1P$/i, "");
       const cust = String(d.customer_name || d.extra?.nama_pelanggan || "").trim();
       const normCust = cust ? normalize(cust) : "";
       const overrideKat = currentCategoryOverrides[normCust] || currentCategoryOverrides[cust] || currentCategoryOverrides[cleanKey];
@@ -630,23 +665,35 @@ export async function saveFaktursBatch(
   const localPrintedKeys = existingPrintState?.printedKeys || [];
   // Strict Anti-Reappearance Guarantee: Once an invoice is printed in live DB or local state,
   // uploading files MUST NEVER un-print it or delete it from the printed set!
-  const unifiedPrintedSet = new Set<string>([
-    ...livePrintedKeys,
-    ...localPrintedKeys,
-  ]);
-
-
+  const unifiedPrintedSet = new Set<string>();
   const unifiedPrintedAtMap: Record<string, string> = {
     ...livePrintedAtMap,
     ...(existingPrintState?.printedAtMap || {}),
   };
 
+  livePrintedKeys.forEach((k) => registerPrintKeyVariants(k, livePrintedAtMap[k], unifiedPrintedSet, unifiedPrintedAtMap));
+  localPrintedKeys.forEach((k) => registerPrintKeyVariants(k, existingPrintState?.printedAtMap?.[k], unifiedPrintedSet, unifiedPrintedAtMap));
+
   for (const item of fakturs) {
     const key = item.id || item.no_faktur;
     if (key) {
-      if (unifiedPrintedSet.has(key)) {
+      const cleanKey = key.replace(/-1P$/i, "");
+      const isOra = item.jenis_transaksi === "ORA" || key.endsWith("-1P");
+      const isPrinted = Boolean(
+        item.status_cetak ||
+        unifiedPrintedSet.has(key) ||
+        unifiedPrintedSet.has(cleanKey) ||
+        (isOra && unifiedPrintedSet.has(`${cleanKey}-1P`))
+      );
+
+      if (isPrinted) {
         item.status_cetak = true;
-        item.printed_at = unifiedPrintedAtMap[key] || item.printed_at || new Date().toISOString();
+        item.printed_at = unifiedPrintedAtMap[key] ||
+          unifiedPrintedAtMap[cleanKey] ||
+          (isOra ? unifiedPrintedAtMap[`${cleanKey}-1P`] : null) ||
+          item.printed_at ||
+          new Date().toISOString();
+        registerPrintKeyVariants(key, item.printed_at, unifiedPrintedSet, unifiedPrintedAtMap);
       } else {
         item.status_cetak = false;
         item.printed_at = null;
@@ -823,15 +870,16 @@ export async function updateFakturPrintStatus(
   const partRef = doc(db, PRINT_PARTITIONS_COLLECTION, partId);
   const legacyRef = doc(db, APP_DATA_COLLECTION, PRINT_STATE_DOC);
 
-  let partKeys = new Set<string>();
-  let partMap: Record<string, string> = {};
+  const cached = globalPartitionMap.get(partId);
+  let partKeys = new Set<string>(cached?.printedKeys || []);
+  let partMap: Record<string, string> = { ...(cached?.printedAtMap || {}) };
 
   try {
     const pSnap = await getDoc(partRef);
     if (pSnap.exists()) {
       const data = pSnap.data();
-      partKeys = new Set((data.printedKeys as string[]) || []);
-      partMap = { ...((data.printedAtMap as Record<string, string>) || {}) };
+      ((data.printedKeys as string[]) || []).forEach((k) => partKeys.add(k));
+      Object.assign(partMap, (data.printedAtMap as Record<string, string>) || {});
     } else {
       // Fallback check legacy doc if partition not yet written
       const legSnap = await getDoc(legacyRef);
@@ -852,9 +900,33 @@ export async function updateFakturPrintStatus(
   if (status) {
     partKeys.add(invoiceKey);
     if (printedAt) partMap[invoiceKey] = printedAt;
+    if (invoiceKey.endsWith("-1P")) {
+      const bare = invoiceKey.replace(/-1P$/i, "");
+      partKeys.add(bare);
+      if (printedAt) partMap[bare] = printedAt;
+    } else {
+      const num = parseInt(invoiceKey.replace(/\D/g, ""), 10);
+      if (num < 25000) {
+        const oraK = `${invoiceKey}-1P`;
+        partKeys.add(oraK);
+        if (printedAt) partMap[oraK] = printedAt;
+      }
+    }
   } else {
     partKeys.delete(invoiceKey);
     delete partMap[invoiceKey];
+    if (invoiceKey.endsWith("-1P")) {
+      const bare = invoiceKey.replace(/-1P$/i, "");
+      partKeys.delete(bare);
+      delete partMap[bare];
+    } else {
+      const num = parseInt(invoiceKey.replace(/\D/g, ""), 10);
+      if (num < 25000) {
+        const oraK = `${invoiceKey}-1P`;
+        partKeys.delete(oraK);
+        delete partMap[oraK];
+      }
+    }
   }
 
   const nowIso = new Date().toISOString();
@@ -928,23 +1000,48 @@ export async function updateFaktursPrintStatusBatch(
   await Promise.all(
     Object.entries(keysByPartition).map(async ([partId, targetKeys]) => {
       const partRef = doc(db, PRINT_PARTITIONS_COLLECTION, partId);
+      const cached = globalPartitionMap.get(partId);
       const pSnap = await getDoc(partRef).catch(() => null);
-      let pKeys = new Set<string>();
-      let pMap: Record<string, string> = {};
+      let pKeys = new Set<string>(cached?.printedKeys || []);
+      let pMap: Record<string, string> = { ...(cached?.printedAtMap || {}) };
 
       if (pSnap && pSnap.exists()) {
         const data = pSnap.data();
-        pKeys = new Set((data.printedKeys as string[]) || []);
-        pMap = { ...((data.printedAtMap as Record<string, string>) || {}) };
+        ((data.printedKeys as string[]) || []).forEach((k) => pKeys.add(k));
+        Object.assign(pMap, (data.printedAtMap as Record<string, string>) || {});
       }
 
       targetKeys.forEach((k) => {
         if (status) {
           pKeys.add(k);
           if (printedAt) pMap[k] = printedAt;
+          if (k.endsWith("-1P")) {
+            const bare = k.replace(/-1P$/i, "");
+            pKeys.add(bare);
+            if (printedAt) pMap[bare] = printedAt;
+          } else {
+            const num = parseInt(k.replace(/\D/g, ""), 10);
+            if (num < 25000) {
+              const oraK = `${k}-1P`;
+              pKeys.add(oraK);
+              if (printedAt) pMap[oraK] = printedAt;
+            }
+          }
         } else {
           pKeys.delete(k);
           delete pMap[k];
+          if (k.endsWith("-1P")) {
+            const bare = k.replace(/-1P$/i, "");
+            pKeys.delete(bare);
+            delete pMap[bare];
+          } else {
+            const num = parseInt(k.replace(/\D/g, ""), 10);
+            if (num < 25000) {
+              const oraK = `${k}-1P`;
+              pKeys.delete(oraK);
+              delete pMap[oraK];
+            }
+          }
         }
       });
 

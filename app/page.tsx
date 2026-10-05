@@ -98,7 +98,11 @@ function dbRowsToFakturRecords(rows: Array<Record<string, unknown>>): {
 
     if (r.status_cetak) {
       printedSet.add(invKey);
-      if (pAt) printedAtMap[invKey] = pAt;
+      if (isOra) printedSet.add(cleanInv);
+      if (pAt) {
+        printedAtMap[invKey] = pAt;
+        if (isOra) printedAtMap[cleanInv] = pAt;
+      }
     }
 
     if (items.length > 0) {
@@ -450,10 +454,15 @@ export default function Home() {
     for (const r of records) {
       const key = r.invoiceKey || r.invoiceNumber;
       if (!key) continue;
+      const cleanKey = key.replace(/-1P$/i, "");
+      const isOraRec = r.jenisTransaksi === "ORA" || key.endsWith("-1P") || isOraCustomer(r.customerName);
 
       if (!map.has(key)) {
-        const isPrinted = printedInvoices.has(key) || Boolean(r.status_cetak);
-        const pAt = printedAtMap[key] || r.printed_at || null;
+        const isPrinted =
+          printedInvoices.has(key) ||
+          (isOraRec && printedInvoices.has(cleanKey)) ||
+          Boolean(r.status_cetak);
+        const pAt = printedAtMap[key] || (isOraRec ? printedAtMap[cleanKey] : null) || r.printed_at || null;
 
         map.set(key, {
           key,
@@ -481,10 +490,10 @@ export default function Home() {
       }
 
       const g = map.get(key)!;
-      if (!g.allPrinted && (printedInvoices.has(key) || r.status_cetak)) {
+      if (!g.allPrinted && (printedInvoices.has(key) || (isOraRec && printedInvoices.has(cleanKey)) || r.status_cetak)) {
         g.allPrinted = true;
         if (!g.printedAt) {
-          g.printedAt = printedAtMap[key] || r.printed_at || null;
+          g.printedAt = printedAtMap[key] || (isOraRec ? printedAtMap[cleanKey] : null) || r.printed_at || null;
         }
       }
       g.items.push(r);
@@ -937,13 +946,15 @@ export default function Home() {
 
           const isDocPrinted = Boolean(
             row.status_cetak ||
-            livePrintedKeys.has(targetKey)
+            livePrintedKeys.has(targetKey) ||
+            (isOra && livePrintedKeys.has(cleanInv))
           );
           if (isDocPrinted) {
             livePrintedKeys.add(targetKey);
-            if (!livePrintedAtMap[targetKey]) {
-              livePrintedAtMap[targetKey] = (row.printed_at as string) || new Date().toISOString();
-            }
+            if (isOra) livePrintedKeys.add(cleanInv);
+            const pTime = (row.printed_at as string) || livePrintedAtMap[targetKey] || (isOra ? livePrintedAtMap[cleanInv] : null) || new Date().toISOString();
+            livePrintedAtMap[targetKey] = pTime;
+            if (isOra) livePrintedAtMap[cleanInv] = pTime;
           }
           const docPrintedAt = isDocPrinted
             ? (livePrintedAtMap[targetKey] || (row.printed_at as string) || null)
@@ -957,21 +968,31 @@ export default function Home() {
           };
 
           existingStatusMap.set(targetKey, statusInfo);
+          if (isOra) {
+            existingStatusMap.set(cleanInv, statusInfo);
+          }
         });
 
         // 2. Pre-populate invMap with existing records
         const invMap = new Map<string, FirestoreFakturDoc>();
         existingDBDocsUnified.forEach((doc) => {
           const k = doc.id || doc.no_faktur;
+          const isOraDoc = Boolean(doc.jenis_transaksi === "ORA" || isOraCustomer(String(doc.customer_name || "")) || k.endsWith("-1P"));
+          const cleanK = k.replace(/-1P$/i, "");
           const isDocPrinted = Boolean(
             doc.status_cetak ||
-            livePrintedKeys.has(k)
+            livePrintedKeys.has(k) ||
+            (isOraDoc && (livePrintedKeys.has(cleanK) || livePrintedKeys.has(`${cleanK}-1P`)))
           );
           if (isDocPrinted) {
             livePrintedKeys.add(k);
+            if (isOraDoc) {
+              livePrintedKeys.add(cleanK);
+              livePrintedKeys.add(`${cleanK}-1P`);
+            }
           }
           const docPAt = isDocPrinted
-            ? (livePrintedAtMap[k] || doc.printed_at || null)
+            ? (livePrintedAtMap[k] || (isOraDoc ? livePrintedAtMap[cleanK] || livePrintedAtMap[`${cleanK}-1P`] : null) || doc.printed_at || null)
             : null;
 
           invMap.set(k, {
@@ -987,7 +1008,14 @@ export default function Home() {
         const newUnprintedKeysSet = new Set<string>();
         // Preserve all existing unprinted invoices from database ONLY if not printed!
         invMap.forEach((doc, k) => {
-          if (!doc.status_cetak && !mergedPrintedSet.has(k)) {
+          const isOraDoc = Boolean(doc.jenis_transaksi === "ORA" || isOraCustomer(String(doc.customer_name || "")) || k.endsWith("-1P"));
+          const cleanK = k.replace(/-1P$/i, "");
+          const isPrinted = Boolean(
+            doc.status_cetak ||
+            mergedPrintedSet.has(k) ||
+            (isOraDoc && (mergedPrintedSet.has(cleanK) || mergedPrintedSet.has(`${cleanK}-1P`)))
+          );
+          if (!isPrinted) {
             newUnprintedKeysSet.add(k);
           }
         });
@@ -1000,19 +1028,39 @@ export default function Home() {
           if (!cleanInv || cleanInv === "-" || cleanInv === "0") continue;
 
           const targetKey = isOra ? `${cleanInv}-1P` : cleanInv;
-          const prevInfo = existingStatusMap.get(targetKey);
+          const prevInfo = existingStatusMap.get(targetKey) || (isOra ? existingStatusMap.get(cleanInv) : undefined);
+          const existingEntry = invMap.get(targetKey) || (isOra ? invMap.get(cleanInv) : undefined);
 
           let isPrinted = false;
           let printedAt: string | null = null;
 
-          if (mergedPrintedSet.has(targetKey) || (prevInfo && prevInfo.status_cetak)) {
+          const isAlreadyPrinted = Boolean(
+            (existingEntry && existingEntry.status_cetak) ||
+            mergedPrintedSet.has(targetKey) ||
+            (isOra && (mergedPrintedSet.has(cleanInv) || mergedPrintedSet.has(`${cleanInv}-1P`))) ||
+            (prevInfo && prevInfo.status_cetak)
+          );
+
+          if (isAlreadyPrinted) {
             // Permanently preserve printed status (Anti-Reappearance Guaranteed)
             isPrinted = true;
-            printedAt = mergedPrintedAtMap[targetKey] || (prevInfo && prevInfo.printed_at) || new Date().toISOString();
+            printedAt = (existingEntry && existingEntry.printed_at) ||
+              mergedPrintedAtMap[targetKey] ||
+              (isOra ? mergedPrintedAtMap[cleanInv] || mergedPrintedAtMap[`${cleanInv}-1P`] : null) ||
+              (prevInfo && prevInfo.printed_at) ||
+              new Date().toISOString();
             mergedPrintedSet.add(targetKey);
+            if (isOra) {
+              mergedPrintedSet.add(cleanInv);
+              mergedPrintedSet.add(`${cleanInv}-1P`);
+            }
             mergedPrintedAtMap[targetKey] = printedAt;
             newUnprintedKeysSet.delete(targetKey);
-          } else if (prevInfo !== undefined) {
+            if (isOra) {
+              newUnprintedKeysSet.delete(cleanInv);
+              newUnprintedKeysSet.delete(`${cleanInv}-1P`);
+            }
+          } else if (prevInfo !== undefined || existingEntry !== undefined) {
             // Already in database and unprinted: keep unprinted
             isPrinted = false;
             printedAt = null;
@@ -1027,6 +1075,10 @@ export default function Home() {
               isPrinted = true;
               printedAt = null;
               mergedPrintedSet.add(targetKey);
+              if (isOra) {
+                mergedPrintedSet.add(cleanInv);
+                mergedPrintedSet.add(`${cleanInv}-1P`);
+              }
             } else {
               isPrinted = false;
               printedAt = null;
@@ -1041,6 +1093,15 @@ export default function Home() {
             categoryOverridesRef.current[rawCust] ||
             categoryOverridesRef.current[cleanInv] ||
             (prevInfo && (prevInfo.extra?.kategori as ("1P" | "2P" | "3P") | undefined));
+
+          if (isOra && invMap.has(cleanInv) && cleanInv !== targetKey) {
+            const oldBare = invMap.get(cleanInv)!;
+            if (oldBare.status_cetak) {
+              isPrinted = true;
+              if (!printedAt) printedAt = oldBare.printed_at || null;
+            }
+            invMap.delete(cleanInv);
+          }
 
           if (!invMap.has(targetKey)) {
             const kategori = isOra
@@ -1071,8 +1132,8 @@ export default function Home() {
           }
 
           const entry = invMap.get(targetKey)!;
-          entry.status_cetak = isPrinted;
-          entry.printed_at = printedAt;
+          entry.status_cetak = entry.status_cetak || isPrinted;
+          entry.printed_at = entry.printed_at || printedAt;
 
           if (overriddenKat && !isOra) {
             entry.kategori = overriddenKat;
