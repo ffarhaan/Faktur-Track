@@ -274,8 +274,8 @@ export default function Home() {
           categoryOverridesRef.current = overrides;
         }
 
-        if (printState) {
-          const pSet = new Set(printState.printedKeys || []);
+        if (printState && (printState.printedKeys?.length || 0) > 0) {
+          const pSet = new Set(printState.printedKeys);
           const pMap = printState.printedAtMap || {};
           setPrintedInvoices(pSet);
           setPrintedAtMap(pMap);
@@ -298,7 +298,7 @@ export default function Home() {
             docs as unknown as Array<Record<string, unknown>>
           );
           setRecords(recs);
-        } else {
+        } else if (reason === "chunks") {
           currentFakturDocsRef.current = [];
           setRecords([]);
           setPrintedInvoices(new Set());
@@ -1196,7 +1196,9 @@ export default function Home() {
         setUploadNotification(notifPayload);
         setPage(0);
         setLoading(false);
-        isUploadingRef.current = false;
+        setTimeout(() => {
+          isUploadingRef.current = false;
+        }, 350);
         showToast(`✓ Berhasil mengupload ${parsed.length} baris data!`);
       } catch (err) {
         console.error("Upload error:", err);
