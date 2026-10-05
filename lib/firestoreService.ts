@@ -83,6 +83,74 @@ export function getLivePrintState(): {
   };
 }
 
+/**
+ * Fully fetch all printed keys across all print_state_partitions and legacy doc from Firestore.
+ * Updates in-memory caches and guarantees 100% complete coverage.
+ */
+export async function fetchAllLivePrintKeys(): Promise<{
+  printedKeys: Set<string>;
+  printedAtMap: Record<string, string>;
+}> {
+  const gatheredKeys = new Set<string>();
+  const gatheredMap: Record<string, string> = {};
+
+  // 1. Include current memory caches
+  if (globalPartitionMap.size > 0) {
+    globalPartitionMap.forEach((p) => {
+      (p.printedKeys || []).forEach((k) => gatheredKeys.add(k));
+      Object.assign(gatheredMap, p.printedAtMap || {});
+    });
+  }
+  if (globalLegacyPrintState) {
+    (globalLegacyPrintState.printedKeys || []).forEach((k) => gatheredKeys.add(k));
+    Object.assign(gatheredMap, globalLegacyPrintState.printedAtMap || {});
+  }
+  globalChunksMap.forEach((items) => {
+    items.forEach((item) => {
+      const k = item.id || item.no_faktur;
+      if (k && item.status_cetak) {
+        gatheredKeys.add(k);
+        if (item.printed_at && !gatheredMap[k]) {
+          gatheredMap[k] = item.printed_at;
+        }
+      }
+    });
+  });
+
+  // 2. Fetch all partition documents from Firestore
+  try {
+    const [partitionsSnap, legacySnap] = await Promise.all([
+      getDocs(collection(db, PRINT_PARTITIONS_COLLECTION)).catch(() => null),
+      getDoc(doc(db, APP_DATA_COLLECTION, PRINT_STATE_DOC)).catch(() => null),
+    ]);
+
+    if (partitionsSnap && !partitionsSnap.empty) {
+      partitionsSnap.forEach((pDoc) => {
+        const pData = pDoc.data();
+        const pKeys = (pData.printedKeys as string[]) || [];
+        const pMap = (pData.printedAtMap as Record<string, string>) || {};
+        pKeys.forEach((k) => gatheredKeys.add(k));
+        Object.assign(gatheredMap, pMap);
+        globalPartitionMap.set(pDoc.id, { printedKeys: pKeys, printedAtMap: pMap });
+      });
+    }
+
+    if (legacySnap && legacySnap.exists()) {
+      const legData = legacySnap.data() as PrintState;
+      (legData.printedKeys || []).forEach((k) => gatheredKeys.add(k));
+      Object.assign(gatheredMap, legData.printedAtMap || {});
+      globalLegacyPrintState = legData;
+    }
+  } catch (err) {
+    console.warn("fetchAllLivePrintKeys Firestore error:", err);
+  }
+
+  return {
+    printedKeys: gatheredKeys,
+    printedAtMap: gatheredMap,
+  };
+}
+
 
 /**
  * Realtime listener for Chunked Fakturs, Print State (Partitioned + Legacy Fallback), Category Overrides, and Upload Broadcast
@@ -126,6 +194,21 @@ export function subscribeToFakturs(
     partitionMap.forEach((part) => {
       (part.printedKeys || []).forEach((k) => combinedKeys.add(k));
       Object.assign(combinedMap, part.printedAtMap || {});
+    });
+
+    globalPartitionMap.forEach((part) => {
+      (part.printedKeys || []).forEach((k) => combinedKeys.add(k));
+      Object.assign(combinedMap, part.printedAtMap || {});
+    });
+
+    globalChunksMap.forEach((items) => {
+      items.forEach((item) => {
+        const k = item.id || item.no_faktur;
+        if (k && item.status_cetak) {
+          combinedKeys.add(k);
+          if (item.printed_at && !combinedMap[k]) combinedMap[k] = item.printed_at;
+        }
+      });
     });
 
     currentPrintState = {
@@ -524,25 +607,10 @@ export async function saveFaktursBatch(
       Object.assign(gatheredMap, globalLegacyPrintState.printedAtMap || {});
     }
 
-    if (gatheredKeys.size === 0) {
-      // Fallback: network read if memory cache not yet primed
-      const [printSnap, partitionsSnap] = await Promise.all([
-        getDoc(doc(db, APP_DATA_COLLECTION, PRINT_STATE_DOC)).catch(() => null),
-        getDocs(collection(db, PRINT_PARTITIONS_COLLECTION)).catch(() => null),
-      ]);
-      if (printSnap && printSnap.exists()) {
-        const liveData = printSnap.data() as PrintState;
-        (liveData.printedKeys || []).forEach((k) => gatheredKeys.add(k));
-        Object.assign(gatheredMap, liveData.printedAtMap || {});
-      }
-      if (partitionsSnap && !partitionsSnap.empty) {
-        partitionsSnap.forEach((pDoc) => {
-          const pData = pDoc.data();
-          ((pData.printedKeys as string[]) || []).forEach((k) => gatheredKeys.add(k));
-          Object.assign(gatheredMap, (pData.printedAtMap as Record<string, string>) || {});
-        });
-      }
-    }
+    // Authoritatively fetch all server partitions to guarantee 100% complete coverage
+    const serverPrintState = await fetchAllLivePrintKeys();
+    serverPrintState.printedKeys.forEach((k) => gatheredKeys.add(k));
+    Object.assign(gatheredMap, serverPrintState.printedAtMap);
 
     livePrintedKeys = Array.from(gatheredKeys);
     livePrintedAtMap = gatheredMap;
@@ -695,27 +763,30 @@ export async function updatePrintState(
     }
   }
 
-  // Filter only partitions that have genuine changes compared to in-memory cache
-  const modifiedPartitions = Object.entries(partitionBuckets).filter(([partId, data]) => {
+  // Non-destructive partition update:
+  // For each partition bucket, union incoming keys with existing partition keys to ensure zero data loss
+  const partitionWrites = Object.entries(partitionBuckets).map(async ([partId, data]) => {
     const existing = globalPartitionMap.get(partId);
-    if (!existing) return true;
-    if (existing.printedKeys.length !== data.keys.length) return true;
-    const existingSet = new Set(existing.printedKeys);
-    return data.keys.some((k) => !existingSet.has(k));
-  });
+    const existingKeys = existing ? existing.printedKeys : [];
+    const mergedKeysSet = new Set<string>([...existingKeys, ...data.keys]);
+    const mergedKeys = Array.from(mergedKeysSet);
+    const mergedMap = { ...(existing ? existing.printedAtMap : {}), ...data.map };
 
-  // Write only modified partitions
-  const partitionWrites = modifiedPartitions.map(async ([partId, data]) => {
+    if (existing && existing.printedKeys.length === mergedKeys.length) {
+      const allPresent = existing.printedKeys.every((k) => mergedKeysSet.has(k));
+      if (allPresent) return;
+    }
+
     const partRef = doc(db, PRINT_PARTITIONS_COLLECTION, partId);
     await setDoc(partRef, {
       partitionId: partId,
-      printedKeys: data.keys,
-      printedAtMap: data.map,
-      count: data.keys.length,
+      printedKeys: mergedKeys,
+      printedAtMap: mergedMap,
+      count: mergedKeys.length,
       updatedAt: nowIso,
     });
     // Immediately update memory cache
-    globalPartitionMap.set(partId, { printedKeys: data.keys, printedAtMap: data.map });
+    globalPartitionMap.set(partId, { printedKeys: mergedKeys, printedAtMap: mergedMap });
   });
 
   // 2. Dual-write to legacy doc (kept under safe limit by taking latest keys if ever > 15,000)

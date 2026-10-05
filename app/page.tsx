@@ -15,6 +15,7 @@ import {
   subscribeToFakturs,
   getExistingFakturs,
   getLivePrintState,
+  fetchAllLivePrintKeys,
   saveFaktursBatch,
   updateFakturPrintStatus,
   updateFaktursPrintStatusBatch,
@@ -295,12 +296,18 @@ export default function Home() {
         }
 
         if (printState && (printState.printedKeys?.length || 0) > 0) {
-          const pSet = new Set(printState.printedKeys);
-          const pMap = printState.printedAtMap || {};
-          printedInvoicesRef.current = pSet;
-          printedAtMapRef.current = pMap;
-          setPrintedInvoices(pSet);
-          setPrintedAtMap(pMap);
+          const newKeys = printState.printedKeys;
+          const newMap = printState.printedAtMap || {};
+          setPrintedInvoices((prev) => {
+            const next = new Set<string>([...Array.from(prev), ...newKeys]);
+            printedInvoicesRef.current = next;
+            return next;
+          });
+          setPrintedAtMap((prev) => {
+            const next = { ...prev, ...newMap };
+            printedAtMapRef.current = next;
+            return next;
+          });
         }
 
         // Real-time Upload Broadcast to all other devices!
@@ -833,27 +840,28 @@ export default function Home() {
 
         const importedAt = new Date().toISOString();
 
-        // 1. Authoritative live printed keys from memory caches, firestoreService, and refs
+        // 1. Authoritative complete live printed keys from remote Firestore partitions, module caches, and refs
+        const serverLive = await fetchAllLivePrintKeys();
         const livePrint = getLivePrintState();
         const livePrintedKeys = new Set<string>([
+          ...Array.from(serverLive.printedKeys),
           ...livePrint.printedKeys,
           ...Array.from(printedInvoicesRef.current),
         ]);
         const livePrintedAtMap: Record<string, string> = {
+          ...serverLive.printedAtMap,
           ...livePrint.printedAtMap,
           ...printedAtMapRef.current,
         };
         let loadedProgression: InvoiceProgression | null = invoiceProgressionRef.current;
         let existingDBDocs: FirestoreFakturDoc[] = currentFakturDocsRef.current || [];
 
-        // If either existing docs or print state is empty, fetch remote DB to guarantee zero data loss
-        if (existingDBDocs.length === 0 || livePrintedKeys.size === 0) {
+        // If existing docs are empty, fetch remote DB to guarantee zero data loss
+        if (existingDBDocs.length === 0) {
           try {
             const res = await getExistingFakturs();
-            if (existingDBDocs.length === 0) {
-              existingDBDocs = res.docs;
-              if (!loadedProgression) loadedProgression = res.progression;
-            }
+            existingDBDocs = res.docs;
+            if (!loadedProgression) loadedProgression = res.progression;
             if (res.printState) {
               (res.printState.printedKeys || []).forEach((k) => livePrintedKeys.add(k));
               Object.assign(livePrintedAtMap, res.printState.printedAtMap || {});
