@@ -100,8 +100,9 @@ Dokumen ini adalah acuan baku dan permanen untuk seluruh pengembangan, pemelihar
   2. `app_data/print_state_part_{idx}`: Status cetak dipecah per partisi (1.000 key per partisi) untuk menjamin kapasitas puluhan ribu faktur tanpa melanggar batas 1 MB per dokumen Firestore.
   3. `app_data/category_overrides`: Menyimpan pemetaan nama apotek / invoice ke kategori kustom (`1P`, `2P`, `3P`).
   4. `faktur_chunks/chunk_{idx}`: Menyimpan data faktur yang dipecah per chunk (<500 KB per chunk). Masing-masing item di chunk menyertakan `status_cetak` dan `printed_at` sebagai cadangan redundan permanen.
-- **Fitur Reset Data**:
-  - Menghapus seluruh dokumen di `faktur_chunks` dan mereset `metadata` serta seluruh partisi `print_state_part_*` kembali ke kondisi kosong awal.
+- **Perlindungan Data dari Penghapusan**:
+  - Tombol reset/hapus semua data telah ditiadakan dari antarmuka pengguna (UI) guna mencegah penghapusan data secara tidak sengaja.
+
 
 ---
 
