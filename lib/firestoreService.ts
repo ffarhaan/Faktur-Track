@@ -126,29 +126,24 @@ export function subscribeToFakturs(
     }
 
     const printedSet = new Set(currentPrintState.printedKeys || []);
-    const pMap = currentPrintState.printedAtMap || {};
+    const pMap: Record<string, string> = { ...(currentPrintState.printedAtMap || {}) };
 
-    // Auto-rescue print keys directly from documents if partition stream is still warming up!
-    // This guarantees the UI NEVER displays 0 or incomplete printed invoices!
-    if (printedSet.size === 0) {
-      for (const d of allDocs) {
-        const key = d.id || d.no_faktur;
-        if (key && d.status_cetak) {
-          printedSet.add(key);
-          if (d.printed_at) pMap[key] = d.printed_at;
-        }
-      }
-      if (printedSet.size > 0) {
-        currentPrintState.printedKeys = Array.from(printedSet);
-        currentPrintState.printedAtMap = pMap;
+    // Always merge print keys directly from documents so that any printed invoice in chunks is NEVER lost
+    // even if partitions are still streaming or incomplete!
+    for (const d of allDocs) {
+      const key = d.id || d.no_faktur;
+      if (key && d.status_cetak) {
+        printedSet.add(key);
+        if (d.printed_at && !pMap[key]) pMap[key] = d.printed_at;
       }
     }
+    currentPrintState.printedKeys = Array.from(printedSet);
+    currentPrintState.printedAtMap = pMap;
 
     for (const d of allDocs) {
       const key = d.id || d.no_faktur;
       if (!key) continue;
-      // CRITICAL: NEVER wipe out existing status_cetak if printedSet is loading/empty
-      const isPrinted = printedSet.size > 0 ? printedSet.has(key) : Boolean(d.status_cetak);
+      const isPrinted = printedSet.has(key) || Boolean(d.status_cetak);
       d.status_cetak = isPrinted;
       d.printed_at = isPrinted ? (pMap[key] || d.printed_at || null) : null;
 
@@ -223,7 +218,7 @@ export function subscribeToFakturs(
           if (!initialEmitTimer) {
             initialEmitTimer = setTimeout(() => {
               if (!hasEmittedInitialPayload) emitData("chunks");
-            }, 100);
+            }, 2500);
           }
         }
       } else {

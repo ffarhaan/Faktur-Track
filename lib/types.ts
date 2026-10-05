@@ -16,6 +16,8 @@ export interface FakturRecord {
   klasifikasiObat?: "Prekursor" | "OOT";
   isDoubleInv: boolean;
   isRetur?: boolean;
+  status_cetak?: boolean;
+  printed_at?: string | null;
   sourceFile?: string;
   rowIndex?: number;
 }

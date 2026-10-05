@@ -127,6 +127,8 @@ function dbRowsToFakturRecords(rows: Array<Record<string, unknown>>): {
           klasifikasiObat: klasObat,
           isDoubleInv: false,
           isRetur: (typeof it.total_harga === "number" ? it.total_harga : parseFloat(String(it.total_harga || 0)) || 0) < 0 || itemDesc.toUpperCase().includes("RETUR") || cleanInv.toUpperCase().includes("RETUR") || String(extra.jenis_transaksi || "").toUpperCase().includes("RETUR"),
+          status_cetak: Boolean(r.status_cetak),
+          printed_at: pAt,
           rowIndex: idx,
         });
       }
@@ -150,6 +152,8 @@ function dbRowsToFakturRecords(rows: Array<Record<string, unknown>>): {
         kategori,
         isDoubleInv: false,
         isRetur: docAmount < 0 || cleanInv.toUpperCase().includes("RETUR") || String(extra.jenis_transaksi || "").toUpperCase().includes("RETUR"),
+        status_cetak: Boolean(r.status_cetak),
+        printed_at: pAt,
         rowIndex: 0,
       });
     }
@@ -294,10 +298,26 @@ export default function Home() {
 
         if (docs.length > 0) {
           currentFakturDocsRef.current = docs;
-          const { records: recs } = dbRowsToFakturRecords(
+          const { records: recs, printedSet: docPrintedSet, printedAtMap: docPrintedAtMap } = dbRowsToFakturRecords(
             docs as unknown as Array<Record<string, unknown>>
           );
           setRecords(recs);
+
+          // Synchronously merge printed invoices so they NEVER desynchronize!
+          setPrintedInvoices((prev) => {
+            const next = new Set<string>([
+              ...Array.from(prev),
+              ...(printState?.printedKeys || []),
+              ...Array.from(docPrintedSet),
+            ]);
+            return next;
+          });
+
+          setPrintedAtMap((prev) => ({
+            ...prev,
+            ...(printState?.printedAtMap || {}),
+            ...docPrintedAtMap,
+          }));
         } else if (reason === "chunks") {
           currentFakturDocsRef.current = [];
           setRecords([]);
@@ -325,13 +345,18 @@ export default function Home() {
         setCategoryOverrides(overrides);
         categoryOverridesRef.current = overrides;
       }
-      if (printState) {
-        setPrintedInvoices(new Set(printState.printedKeys || []));
-        setPrintedAtMap(printState.printedAtMap || {});
-      }
-      const { records: recs } = dbRowsToFakturRecords(
+      const { records: recs, printedSet: docPrintedSet, printedAtMap: docPrintedAtMap } = dbRowsToFakturRecords(
         docs as unknown as Array<Record<string, unknown>>
       );
+      const unifiedPrintedKeys = new Set([
+        ...(printState?.printedKeys || []),
+        ...Array.from(docPrintedSet),
+      ]);
+      setPrintedInvoices(unifiedPrintedKeys);
+      setPrintedAtMap({
+        ...(printState?.printedAtMap || {}),
+        ...docPrintedAtMap,
+      });
       setRecords(recs);
       showToast("✓ Data berhasil diperbarui.");
     } catch (err) {
@@ -393,8 +418,8 @@ export default function Home() {
       if (!key) continue;
 
       if (!map.has(key)) {
-        const isPrinted = printedInvoices.has(key);
-        const pAt = printedAtMap[key] || null;
+        const isPrinted = printedInvoices.has(key) || Boolean(r.status_cetak);
+        const pAt = printedAtMap[key] || r.printed_at || null;
 
         map.set(key, {
           key,
@@ -422,6 +447,12 @@ export default function Home() {
       }
 
       const g = map.get(key)!;
+      if (!g.allPrinted && (printedInvoices.has(key) || r.status_cetak)) {
+        g.allPrinted = true;
+        if (!g.printedAt) {
+          g.printedAt = printedAtMap[key] || r.printed_at || null;
+        }
+      }
       g.items.push(r);
       g.totalHarga += r.totalHarga;
       g.totalItems += 1;
@@ -1193,8 +1224,6 @@ export default function Home() {
         setRecords(localRecs);
         setPrintedInvoices(mergedPrintedSet);
         setPrintedAtMap(mergedPrintedAtMap);
-        setInvoiceProgression(progObj);
-
         const notifPayload: UploadNotification = {
           fileName: fileNames.join(", "),
           prevOra,
@@ -1210,6 +1239,11 @@ export default function Home() {
           uploaderId: deviceIdRef.current,
         };
 
+        setInvoiceProgression(progObj);
+        setUploadNotification(notifPayload);
+        setPage(0);
+        setLoading(false);
+
         // 6. Save to Firestore and AWAIT completion so consecutive uploads cannot collide or overwrite with stale data
         await saveFaktursBatch(
           payload,
@@ -1223,12 +1257,9 @@ export default function Home() {
           notifPayload
         );
 
-        setUploadNotification(notifPayload);
-        setPage(0);
-        setLoading(false);
         setTimeout(() => {
           isUploadingRef.current = false;
-        }, 350);
+        }, 500);
         showToast(`✓ Berhasil mengupload ${parsed.length} baris data!`);
       } catch (err) {
         console.error("Upload error:", err);
