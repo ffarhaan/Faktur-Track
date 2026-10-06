@@ -70,16 +70,16 @@ export default function LoginModal({
         }`}
       >
         <div className="text-center mb-6">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-blue-600/10 text-blue-500 text-2xl mb-3">
-            🔐
+          <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-emerald-600/10 text-emerald-500 text-2xl mb-3">
+            🟢
           </div>
-          <h2 className="text-lg font-bold">Masuk ke Faktur Tracker</h2>
+          <h2 className="text-lg font-bold">Siapa Pengguna yang Sedang ON?</h2>
           <p
             className={`text-xs mt-1 ${
               isDarkMode ? "text-slate-400" : "text-slate-500"
             }`}
           >
-            Pilih pengguna Anda untuk melanjutkan
+            Pilih nama Anda untuk memulai sesi & mencatat riwayat cetak
           </p>
         </div>
 
@@ -165,9 +165,9 @@ export default function LoginModal({
             )}
             <button
               type="submit"
-              className="flex-1 py-2 text-xs font-bold rounded-lg bg-blue-600 hover:bg-blue-500 text-white shadow-md shadow-blue-600/30 transition-colors"
+              className="flex-1 py-2 text-xs font-bold rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-600/30 transition-colors"
             >
-              {isStranger ? "Masuk sebagai Stranger" : "Masuk"}
+              {isStranger ? "Mulai Sesi sebagai Stranger" : "Mulai Sesi (ON)"}
             </button>
           </div>
         </form>

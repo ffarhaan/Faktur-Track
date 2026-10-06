@@ -27,7 +27,7 @@ export type SubscribeChangeReason = "chunks" | "print" | "meta";
 
 // Persistent module-level in-memory caches across subscription lifecycles
 const globalChunksMap = new Map<string, FirestoreFakturDoc[]>();
-const globalPartitionMap = new Map<string, { printedKeys: string[]; printedAtMap: Record<string, string> }>();
+const globalPartitionMap = new Map<string, { printedKeys: string[]; printedAtMap: Record<string, string>; printedByMap?: Record<string, string> }>();
 let globalLegacyPrintState: PrintState | null = null;
 let globalMetadata: { chunkIds: string[]; invoiceProgression?: InvoiceProgression } | null = null;
 let globalCategoryOverrides: Record<string, "1P" | "2P" | "3P"> = {};
@@ -68,21 +68,27 @@ function registerPrintKeyVariants(
 export function getLivePrintState(): {
   printedKeys: string[];
   printedAtMap: Record<string, string>;
+  printedByMap: Record<string, string>;
 } {
   const gatheredKeys = new Set<string>();
   const gatheredMap: Record<string, string> = {};
+  const gatheredByMap: Record<string, string> = {};
 
   if (globalPartitionMap.size > 0) {
     globalPartitionMap.forEach((p) => {
       const pMap = p.printedAtMap || {};
+      const pBy = p.printedByMap || {};
       (p.printedKeys || []).forEach((k) => registerPrintKeyVariants(k, pMap[k], gatheredKeys, gatheredMap));
       Object.assign(gatheredMap, pMap);
+      Object.assign(gatheredByMap, pBy);
     });
   }
   if (globalLegacyPrintState) {
     const lMap = globalLegacyPrintState.printedAtMap || {};
+    const lBy = globalLegacyPrintState.printedByMap || {};
     (globalLegacyPrintState.printedKeys || []).forEach((k) => registerPrintKeyVariants(k, lMap[k], gatheredKeys, gatheredMap));
     Object.assign(gatheredMap, lMap);
+    Object.assign(gatheredByMap, lBy);
   }
 
   globalChunksMap.forEach((items) => {
@@ -90,6 +96,7 @@ export function getLivePrintState(): {
       const k = item.id || item.no_faktur;
       if (k && item.status_cetak) {
         registerPrintKeyVariants(k, item.printed_at || undefined, gatheredKeys, gatheredMap);
+        if (item.printed_by && !gatheredByMap[k]) gatheredByMap[k] = item.printed_by;
       }
     });
   });
@@ -97,6 +104,7 @@ export function getLivePrintState(): {
   return {
     printedKeys: Array.from(gatheredKeys),
     printedAtMap: gatheredMap,
+    printedByMap: gatheredByMap,
   };
 }
 
@@ -107,28 +115,35 @@ export function getLivePrintState(): {
 export async function fetchAllLivePrintKeys(): Promise<{
   printedKeys: Set<string>;
   printedAtMap: Record<string, string>;
+  printedByMap: Record<string, string>;
 }> {
   const gatheredKeys = new Set<string>();
   const gatheredMap: Record<string, string> = {};
+  const gatheredByMap: Record<string, string> = {};
 
   // 1. Include current memory caches
   if (globalPartitionMap.size > 0) {
     globalPartitionMap.forEach((p) => {
       const pMap = p.printedAtMap || {};
+      const pBy = p.printedByMap || {};
       (p.printedKeys || []).forEach((k) => registerPrintKeyVariants(k, pMap[k], gatheredKeys, gatheredMap));
       Object.assign(gatheredMap, pMap);
+      Object.assign(gatheredByMap, pBy);
     });
   }
   if (globalLegacyPrintState) {
     const lMap = globalLegacyPrintState.printedAtMap || {};
+    const lBy = globalLegacyPrintState.printedByMap || {};
     (globalLegacyPrintState.printedKeys || []).forEach((k) => registerPrintKeyVariants(k, lMap[k], gatheredKeys, gatheredMap));
     Object.assign(gatheredMap, lMap);
+    Object.assign(gatheredByMap, lBy);
   }
   globalChunksMap.forEach((items) => {
     items.forEach((item) => {
       const k = item.id || item.no_faktur;
       if (k && item.status_cetak) {
         registerPrintKeyVariants(k, item.printed_at || undefined, gatheredKeys, gatheredMap);
+        if (item.printed_by && !gatheredByMap[k]) gatheredByMap[k] = item.printed_by;
       }
     });
   });
@@ -145,17 +160,21 @@ export async function fetchAllLivePrintKeys(): Promise<{
         const pData = pDoc.data();
         const pKeys = (pData.printedKeys as string[]) || [];
         const pMap = (pData.printedAtMap as Record<string, string>) || {};
+        const pBy = (pData.printedByMap as Record<string, string>) || {};
         pKeys.forEach((k) => registerPrintKeyVariants(k, pMap[k], gatheredKeys, gatheredMap));
         Object.assign(gatheredMap, pMap);
-        globalPartitionMap.set(pDoc.id, { printedKeys: pKeys, printedAtMap: pMap });
+        Object.assign(gatheredByMap, pBy);
+        globalPartitionMap.set(pDoc.id, { printedKeys: pKeys, printedAtMap: pMap, printedByMap: pBy });
       });
     }
 
     if (legacySnap && legacySnap.exists()) {
       const legData = legacySnap.data() as PrintState;
       const legMap = legData.printedAtMap || {};
+      const legBy = legData.printedByMap || {};
       (legData.printedKeys || []).forEach((k) => registerPrintKeyVariants(k, legMap[k], gatheredKeys, gatheredMap));
       Object.assign(gatheredMap, legMap);
+      Object.assign(gatheredByMap, legBy);
       globalLegacyPrintState = legData;
     }
   } catch (err) {
@@ -165,6 +184,7 @@ export async function fetchAllLivePrintKeys(): Promise<{
   return {
     printedKeys: gatheredKeys,
     printedAtMap: gatheredMap,
+    printedByMap: gatheredByMap,
   };
 }
 
@@ -189,12 +209,13 @@ export function subscribeToFakturs(
   let currentUploadNotification: UploadNotification | null = null;
 
   // Track partitioned print docs with module cache pre-population
-  const partitionMap = new Map<string, { printedKeys: string[]; printedAtMap: Record<string, string> }>(globalPartitionMap);
+  const partitionMap = new Map<string, { printedKeys: string[]; printedAtMap: Record<string, string>; printedByMap?: Record<string, string> }>(globalPartitionMap);
   let legacyPrintState: PrintState | null = globalLegacyPrintState;
 
   let currentPrintState: PrintState = {
     printedKeys: [],
     printedAtMap: {},
+    printedByMap: {},
     updatedAt: "",
   };
 
@@ -202,23 +223,30 @@ export function subscribeToFakturs(
     // Merge partitions + legacy document for seamless zero-downtime transition
     const combinedKeys = new Set<string>();
     const combinedMap: Record<string, string> = {};
+    const combinedByMap: Record<string, string> = {};
 
     if (legacyPrintState) {
       const lMap = legacyPrintState.printedAtMap || {};
+      const lBy = legacyPrintState.printedByMap || {};
       (legacyPrintState.printedKeys || []).forEach((k) => registerPrintKeyVariants(k, lMap[k], combinedKeys, combinedMap));
       Object.assign(combinedMap, lMap);
+      Object.assign(combinedByMap, lBy);
     }
 
     partitionMap.forEach((part) => {
       const pMap = part.printedAtMap || {};
+      const pBy = part.printedByMap || {};
       (part.printedKeys || []).forEach((k) => registerPrintKeyVariants(k, pMap[k], combinedKeys, combinedMap));
       Object.assign(combinedMap, pMap);
+      Object.assign(combinedByMap, pBy);
     });
 
     globalPartitionMap.forEach((part) => {
       const pMap = part.printedAtMap || {};
+      const pBy = part.printedByMap || {};
       (part.printedKeys || []).forEach((k) => registerPrintKeyVariants(k, pMap[k], combinedKeys, combinedMap));
       Object.assign(combinedMap, pMap);
+      Object.assign(combinedByMap, pBy);
     });
 
     globalChunksMap.forEach((items) => {
@@ -226,6 +254,7 @@ export function subscribeToFakturs(
         const k = item.id || item.no_faktur;
         if (k && item.status_cetak) {
           registerPrintKeyVariants(k, item.printed_at || undefined, combinedKeys, combinedMap);
+          if (item.printed_by && !combinedByMap[k]) combinedByMap[k] = item.printed_by;
         }
       });
     });
@@ -233,6 +262,7 @@ export function subscribeToFakturs(
     currentPrintState = {
       printedKeys: Array.from(combinedKeys),
       printedAtMap: combinedMap,
+      printedByMap: combinedByMap,
       updatedAt: new Date().toISOString(),
     };
   };
@@ -269,6 +299,7 @@ export function subscribeToFakturs(
 
     const printedSet = new Set(currentPrintState.printedKeys || []);
     const pMap: Record<string, string> = { ...(currentPrintState.printedAtMap || {}) };
+    const pByMap: Record<string, string> = { ...(currentPrintState.printedByMap || {}) };
 
     // Always merge print keys directly from documents so that any printed invoice in chunks is NEVER lost
     // even if partitions are still streaming or incomplete!
@@ -276,10 +307,12 @@ export function subscribeToFakturs(
       const key = d.id || d.no_faktur;
       if (key && d.status_cetak) {
         registerPrintKeyVariants(key, d.printed_at || undefined, printedSet, pMap);
+        if (d.printed_by && !pByMap[key]) pByMap[key] = d.printed_by;
       }
     }
     currentPrintState.printedKeys = Array.from(printedSet);
     currentPrintState.printedAtMap = pMap;
+    currentPrintState.printedByMap = pByMap;
 
     for (const d of allDocs) {
       const key = d.id || d.no_faktur;
@@ -288,6 +321,7 @@ export function subscribeToFakturs(
       const isPrinted = Boolean(d.status_cetak || printedSet.has(key));
       d.status_cetak = isPrinted;
       d.printed_at = isPrinted ? (pMap[key] || d.printed_at || null) : null;
+      d.printed_by = isPrinted ? (pByMap[key] || d.printed_by || null) : null;
 
       // Apply customer/invoice category override if available
       const cust = String(d.customer_name || d.extra?.nama_pelanggan || "").trim();
@@ -849,7 +883,8 @@ export async function updatePrintState(
 export async function updateFakturPrintStatus(
   invoiceKey: string,
   status: boolean,
-  printedAt: string | null
+  printedAt: string | null,
+  printedBy?: string | null
 ): Promise<void> {
   const partId = getPrintPartitionId(invoiceKey);
   const partRef = doc(db, PRINT_PARTITIONS_COLLECTION, partId);
@@ -858,6 +893,7 @@ export async function updateFakturPrintStatus(
   const cached = globalPartitionMap.get(partId);
   let partKeys = new Set<string>(cached?.printedKeys || []);
   let partMap: Record<string, string> = { ...(cached?.printedAtMap || {}) };
+  let partByMap: Record<string, string> = { ...(cached?.printedByMap || {}) };
 
   try {
     const pSnap = await getDoc(partRef);
@@ -865,18 +901,7 @@ export async function updateFakturPrintStatus(
       const data = pSnap.data();
       ((data.printedKeys as string[]) || []).forEach((k) => partKeys.add(k));
       Object.assign(partMap, (data.printedAtMap as Record<string, string>) || {});
-    } else {
-      // Fallback check legacy doc if partition not yet written
-      const legSnap = await getDoc(legacyRef);
-      if (legSnap.exists()) {
-        const legData = legSnap.data() as PrintState;
-        (legData.printedKeys || []).forEach((k) => {
-          if (getPrintPartitionId(k) === partId) partKeys.add(k);
-        });
-        Object.entries(legData.printedAtMap || {}).forEach(([k, v]) => {
-          if (getPrintPartitionId(k) === partId) partMap[k] = v;
-        });
-      }
+      Object.assign(partByMap, (data.printedByMap as Record<string, string>) || {});
     }
   } catch (err) {
     console.warn("Could not read partition before update:", err);
@@ -885,41 +910,32 @@ export async function updateFakturPrintStatus(
   if (status) {
     partKeys.add(invoiceKey);
     if (printedAt) partMap[invoiceKey] = printedAt;
-    if (invoiceKey.endsWith("-1P")) {
-      const bare = invoiceKey.replace(/-1P$/i, "");
-      partKeys.add(bare);
-      if (printedAt) partMap[bare] = printedAt;
-    } else {
-      const num = parseInt(invoiceKey.replace(/\D/g, ""), 10);
-      if (num < 25000) {
-        const oraK = `${invoiceKey}-1P`;
-        partKeys.add(oraK);
-        if (printedAt) partMap[oraK] = printedAt;
-      }
-    }
+    if (printedBy) partByMap[invoiceKey] = printedBy;
   } else {
     partKeys.delete(invoiceKey);
     delete partMap[invoiceKey];
-    if (invoiceKey.endsWith("-1P")) {
-      const bare = invoiceKey.replace(/-1P$/i, "");
-      partKeys.delete(bare);
-      delete partMap[bare];
-    } else {
-      const num = parseInt(invoiceKey.replace(/\D/g, ""), 10);
-      if (num < 25000) {
-        const oraK = `${invoiceKey}-1P`;
-        partKeys.delete(oraK);
-        delete partMap[oraK];
-      }
-    }
+    delete partByMap[invoiceKey];
   }
 
   const nowIso = new Date().toISOString();
+
+  // Update in-memory chunks so active client immediately reflects printed_by
+  globalChunksMap.forEach((items) => {
+    items.forEach((item) => {
+      const k = item.id || item.no_faktur;
+      if (k === invoiceKey) {
+        item.status_cetak = status;
+        item.printed_at = status ? printedAt : null;
+        item.printed_by = status ? (printedBy || null) : null;
+      }
+    });
+  });
 
   // Immediately update in-memory cache
   globalPartitionMap.set(partId, {
     printedKeys: Array.from(partKeys),
     printedAtMap: partMap,
+    printedByMap: partByMap,
   });
 
   // 1. Write partition document
@@ -927,6 +943,7 @@ export async function updateFakturPrintStatus(
     partitionId: partId,
     printedKeys: Array.from(partKeys),
     printedAtMap: partMap,
+    printedByMap: partByMap,
     count: partKeys.size,
     updatedAt: nowIso,
   });
@@ -939,21 +956,26 @@ export async function updateFakturPrintStatus(
         const legData = legSnap.data() as PrintState;
         const liveKeys = new Set(legData.printedKeys || []);
         const liveMap = { ...(legData.printedAtMap || {}) };
+        const liveByMap = { ...(legData.printedByMap || {}) };
         if (status) {
           liveKeys.add(invoiceKey);
           if (printedAt) liveMap[invoiceKey] = printedAt;
+          if (printedBy) liveByMap[invoiceKey] = printedBy;
         } else {
           liveKeys.delete(invoiceKey);
           delete liveMap[invoiceKey];
+          delete liveByMap[invoiceKey];
         }
         await setDoc(legacyRef, {
           printedKeys: Array.from(liveKeys),
           printedAtMap: liveMap,
+          printedByMap: liveByMap,
           updatedAt: nowIso,
         });
         globalLegacyPrintState = {
           printedKeys: Array.from(liveKeys),
           printedAtMap: liveMap,
+          printedByMap: liveByMap,
           updatedAt: nowIso,
         };
       }
@@ -971,7 +993,8 @@ export async function updateFakturPrintStatus(
 export async function updateFaktursPrintStatusBatch(
   keys: string[],
   status: boolean,
-  printedAt: string | null
+  printedAt: string | null,
+  printedBy?: string | null
 ): Promise<void> {
   const keysByPartition: Record<string, string[]> = {};
   for (const k of keys) {
@@ -982,6 +1005,19 @@ export async function updateFaktursPrintStatusBatch(
 
   const nowIso = new Date().toISOString();
 
+  // Update in-memory chunks
+  const keySet = new Set(keys);
+  globalChunksMap.forEach((items) => {
+    items.forEach((item) => {
+      const k = item.id || item.no_faktur;
+      if (k && keySet.has(k)) {
+        item.status_cetak = status;
+        item.printed_at = status ? printedAt : null;
+        item.printed_by = status ? (printedBy || null) : null;
+      }
+    });
+  });
+
   await Promise.all(
     Object.entries(keysByPartition).map(async ([partId, targetKeys]) => {
       const partRef = doc(db, PRINT_PARTITIONS_COLLECTION, partId);
@@ -989,44 +1025,24 @@ export async function updateFaktursPrintStatusBatch(
       const pSnap = await getDoc(partRef).catch(() => null);
       let pKeys = new Set<string>(cached?.printedKeys || []);
       let pMap: Record<string, string> = { ...(cached?.printedAtMap || {}) };
+      let pByMap: Record<string, string> = { ...(cached?.printedByMap || {}) };
 
       if (pSnap && pSnap.exists()) {
         const data = pSnap.data();
         ((data.printedKeys as string[]) || []).forEach((k) => pKeys.add(k));
         Object.assign(pMap, (data.printedAtMap as Record<string, string>) || {});
+        Object.assign(pByMap, (data.printedByMap as Record<string, string>) || {});
       }
 
       targetKeys.forEach((k) => {
         if (status) {
           pKeys.add(k);
           if (printedAt) pMap[k] = printedAt;
-          if (k.endsWith("-1P")) {
-            const bare = k.replace(/-1P$/i, "");
-            pKeys.add(bare);
-            if (printedAt) pMap[bare] = printedAt;
-          } else {
-            const num = parseInt(k.replace(/\D/g, ""), 10);
-            if (num < 25000) {
-              const oraK = `${k}-1P`;
-              pKeys.add(oraK);
-              if (printedAt) pMap[oraK] = printedAt;
-            }
-          }
+          if (printedBy) pByMap[k] = printedBy;
         } else {
           pKeys.delete(k);
           delete pMap[k];
-          if (k.endsWith("-1P")) {
-            const bare = k.replace(/-1P$/i, "");
-            pKeys.delete(bare);
-            delete pMap[bare];
-          } else {
-            const num = parseInt(k.replace(/\D/g, ""), 10);
-            if (num < 25000) {
-              const oraK = `${k}-1P`;
-              pKeys.delete(oraK);
-              delete pMap[oraK];
-            }
-          }
+          delete pByMap[k];
         }
       });
 
@@ -1034,6 +1050,7 @@ export async function updateFaktursPrintStatusBatch(
         partitionId: partId,
         printedKeys: Array.from(pKeys),
         printedAtMap: pMap,
+        printedByMap: pByMap,
         count: pKeys.size,
         updatedAt: nowIso,
       });
@@ -1042,6 +1059,7 @@ export async function updateFaktursPrintStatusBatch(
       globalPartitionMap.set(partId, {
         printedKeys: Array.from(pKeys),
         printedAtMap: pMap,
+        printedByMap: pByMap,
       });
     })
   );
@@ -1054,23 +1072,28 @@ export async function updateFaktursPrintStatusBatch(
       const legData = legSnap.data() as PrintState;
       const curKeys = new Set(legData.printedKeys || []);
       const curMap = { ...(legData.printedAtMap || {}) };
+      const curByMap = { ...(legData.printedByMap || {}) };
       keys.forEach((k) => {
         if (status) {
           curKeys.add(k);
           if (printedAt) curMap[k] = printedAt;
+          if (printedBy) curByMap[k] = printedBy;
         } else {
           curKeys.delete(k);
           delete curMap[k];
+          delete curByMap[k];
         }
       });
       await setDoc(legacyRef, {
         printedKeys: Array.from(curKeys),
         printedAtMap: curMap,
+        printedByMap: curByMap,
         updatedAt: nowIso,
       });
       globalLegacyPrintState = {
         printedKeys: Array.from(curKeys),
         printedAtMap: curMap,
+        printedByMap: curByMap,
         updatedAt: nowIso,
       };
     }

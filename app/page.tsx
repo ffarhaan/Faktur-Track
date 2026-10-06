@@ -80,10 +80,12 @@ function dbRowsToFakturRecords(rows: Array<Record<string, unknown>>): {
   records: FakturRecord[];
   printedSet: Set<string>;
   printedAtMap: Record<string, string>;
+  printedByMap: Record<string, string>;
 } {
   const records: FakturRecord[] = [];
   const printedSet = new Set<string>();
   const printedAtMap: Record<string, string> = {};
+  const printedByMap: Record<string, string> = {};
 
   for (const r of rows) {
     const rawInv = String(r.no_faktur || "");
@@ -97,11 +99,15 @@ function dbRowsToFakturRecords(rows: Array<Record<string, unknown>>): {
     const cleanJenis: "DOO" | "ORA" = isOra ? "ORA" : "DOO";
     const kategori = (r.kategori as "1P" | "2P" | "3P") || categorize(cleanJenis, cust, cleanJenis);
     const pAt = (r.printed_at as string) || null;
+    const pBy = (r.printed_by as string) || (extra.printed_by as string) || null;
 
     if (r.status_cetak) {
       printedSet.add(invKey);
       if (pAt) {
         printedAtMap[invKey] = pAt;
+      }
+      if (pBy) {
+        printedByMap[invKey] = pBy;
       }
     }
 
@@ -134,6 +140,7 @@ function dbRowsToFakturRecords(rows: Array<Record<string, unknown>>): {
           isRetur: (typeof it.total_harga === "number" ? it.total_harga : parseFloat(String(it.total_harga || 0)) || 0) < 0 || itemDesc.toUpperCase().includes("RETUR") || cleanInv.toUpperCase().includes("RETUR") || String(extra.jenis_transaksi || "").toUpperCase().includes("RETUR"),
           status_cetak: Boolean(r.status_cetak),
           printed_at: pAt,
+          printed_by: pBy,
           rowIndex: idx,
         });
       }
@@ -159,6 +166,7 @@ function dbRowsToFakturRecords(rows: Array<Record<string, unknown>>): {
         isRetur: docAmount < 0 || cleanInv.toUpperCase().includes("RETUR") || String(extra.jenis_transaksi || "").toUpperCase().includes("RETUR"),
         status_cetak: Boolean(r.status_cetak),
         printed_at: pAt,
+        printed_by: pBy,
         rowIndex: 0,
       });
     }
@@ -180,7 +188,7 @@ function dbRowsToFakturRecords(rows: Array<Record<string, unknown>>): {
     }
   }
 
-  return { records, printedSet, printedAtMap };
+  return { records, printedSet, printedAtMap, printedByMap };
 }
 
 export default function Home() {
@@ -196,6 +204,7 @@ export default function Home() {
   const [page, setPage] = useState(0);
   const [printedInvoices, setPrintedInvoices] = useState<Set<string>>(new Set());
   const [printedAtMap, setPrintedAtMap] = useState<Record<string, string>>({});
+  const [printedByMap, setPrintedByMap] = useState<Record<string, string>>({});
   const [invoiceProgression, setInvoiceProgression] = useState<InvoiceProgression | null>(null);
   const [expandedInvoices, setExpandedInvoices] = useState<Set<string>>(new Set());
   const [dragOver, setDragOver] = useState(false);
@@ -209,18 +218,19 @@ export default function Home() {
   // User Authentication & Role State
   const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
   const currentUserRef = useRef<AppUser | null>(null);
-  const [showLoginModal, setShowLoginModal] = useState(false);
+  const [showLoginModal, setShowLoginModal] = useState(true);
 
   useEffect(() => {
     currentUserRef.current = currentUser;
   }, [currentUser]);
 
   useEffect(() => {
-    const saved = typeof window !== "undefined" ? localStorage.getItem("faktur_tracker_user") : null;
+    const saved = typeof window !== "undefined" ? sessionStorage.getItem("faktur_tracker_user") : null;
     if (saved) {
       try {
         const u = JSON.parse(saved);
         setCurrentUser(u);
+        setShowLoginModal(false);
       } catch {
         setShowLoginModal(true);
       }
@@ -233,10 +243,10 @@ export default function Home() {
     setCurrentUser(user);
     currentUserRef.current = user;
     if (typeof window !== "undefined") {
-      localStorage.setItem("faktur_tracker_user", JSON.stringify(user));
+      sessionStorage.setItem("faktur_tracker_user", JSON.stringify(user));
     }
     setShowLoginModal(false);
-    showToast(`✓ Masuk sebagai ${user.name}${user.role === "readonly" ? " (Hanya Lihat)" : ""}`);
+    showToast(`✓ Pengguna aktif (ON): ${user.name}${user.role === "readonly" ? " (Hanya Lihat)" : ""}`);
   };
 
   // Clear / Reset All Data
@@ -274,6 +284,7 @@ export default function Home() {
   const categoryOverridesRef = useRef<Record<string, "1P" | "2P" | "3P">>({});
   const printedInvoicesRef = useRef<Set<string>>(new Set());
   const printedAtMapRef = useRef<Record<string, string>>({});
+  const printedByMapRef = useRef<Record<string, string>>({});
   const invoiceProgressionRef = useRef<InvoiceProgression | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const isUploadingRef = useRef(false);
@@ -290,6 +301,10 @@ export default function Home() {
   useEffect(() => {
     printedAtMapRef.current = printedAtMap;
   }, [printedAtMap]);
+
+  useEffect(() => {
+    printedByMapRef.current = printedByMap;
+  }, [printedByMap]);
 
   useEffect(() => {
     invoiceProgressionRef.current = invoiceProgression;
@@ -368,6 +383,7 @@ export default function Home() {
         if (printState && (printState.printedKeys?.length || 0) > 0) {
           const newKeys = printState.printedKeys;
           const newMap = printState.printedAtMap || {};
+          const newByMap = printState.printedByMap || {};
           setPrintedInvoices((prev) => {
             const next = new Set<string>([...Array.from(prev), ...newKeys]);
             printedInvoicesRef.current = next;
@@ -376,6 +392,11 @@ export default function Home() {
           setPrintedAtMap((prev) => {
             const next = { ...prev, ...newMap };
             printedAtMapRef.current = next;
+            return next;
+          });
+          setPrintedByMap((prev) => {
+            const next = { ...prev, ...newByMap };
+            printedByMapRef.current = next;
             return next;
           });
         }
@@ -393,7 +414,7 @@ export default function Home() {
 
         if (docs.length > 0) {
           currentFakturDocsRef.current = docs;
-          const { records: recs, printedSet: docPrintedSet, printedAtMap: docPrintedAtMap } = dbRowsToFakturRecords(
+          const { records: recs, printedSet: docPrintedSet, printedAtMap: docPrintedAtMap, printedByMap: docPrintedByMap } = dbRowsToFakturRecords(
             docs as unknown as Array<Record<string, unknown>>
           );
           setRecords(recs);
@@ -418,13 +439,25 @@ export default function Home() {
             printedAtMapRef.current = next;
             return next;
           });
+
+          setPrintedByMap((prev) => {
+            const next = {
+              ...prev,
+              ...(printState?.printedByMap || {}),
+              ...docPrintedByMap,
+            };
+            printedByMapRef.current = next;
+            return next;
+          });
         } else if (reason === "chunks") {
           currentFakturDocsRef.current = [];
           setRecords([]);
           printedInvoicesRef.current = new Set();
           printedAtMapRef.current = {};
+          printedByMapRef.current = {};
           setPrintedInvoices(new Set());
           setPrintedAtMap({});
+          setPrintedByMap({});
         }
         setLoading(false);
       },
@@ -447,7 +480,7 @@ export default function Home() {
         setCategoryOverrides(overrides);
         categoryOverridesRef.current = overrides;
       }
-      const { records: recs, printedSet: docPrintedSet, printedAtMap: docPrintedAtMap } = dbRowsToFakturRecords(
+      const { records: recs, printedSet: docPrintedSet, printedAtMap: docPrintedAtMap, printedByMap: docPrintedByMap } = dbRowsToFakturRecords(
         docs as unknown as Array<Record<string, unknown>>
       );
       const unifiedPrintedKeys = new Set([
@@ -458,6 +491,10 @@ export default function Home() {
       setPrintedAtMap({
         ...(printState?.printedAtMap || {}),
         ...docPrintedAtMap,
+      });
+      setPrintedByMap({
+        ...(printState?.printedByMap || {}),
+        ...docPrintedByMap,
       });
       setRecords(recs);
       showToast("✓ Data berhasil diperbarui.");
@@ -479,6 +516,7 @@ export default function Home() {
       const willBePrinted = !group.allPrinted;
       const targetKey = group.invoiceKey;
       const nowIso = new Date().toISOString();
+      const currentUserName = currentUserRef.current?.name || "Admin";
 
       // 1. Optimistic Local Update
       setPrintedInvoices((prev) => {
@@ -497,19 +535,33 @@ export default function Home() {
         return next;
       });
 
+      setPrintedByMap((prev) => {
+        const next = { ...prev };
+        if (willBePrinted) next[targetKey] = currentUserName;
+        else delete next[targetKey];
+        printedByMapRef.current = next;
+        return next;
+      });
+
       if (currentFakturDocsRef.current) {
         currentFakturDocsRef.current.forEach((d) => {
           const k = d.id || d.no_faktur;
           if (k === targetKey) {
             d.status_cetak = willBePrinted;
             d.printed_at = willBePrinted ? nowIso : null;
+            d.printed_by = willBePrinted ? currentUserName : null;
           }
         });
       }
 
       // 2. Firestore Sync
       try {
-        await updateFakturPrintStatus(targetKey, willBePrinted, willBePrinted ? nowIso : null);
+        await updateFakturPrintStatus(
+          targetKey,
+          willBePrinted,
+          willBePrinted ? nowIso : null,
+          willBePrinted ? currentUserName : null
+        );
       } catch (err) {
         console.error("Print toggle sync error:", err);
       }
@@ -524,15 +576,11 @@ export default function Home() {
     for (const r of records) {
       const key = r.invoiceKey || r.invoiceNumber;
       if (!key) continue;
-      const cleanKey = key.replace(/-1P$/i, "");
-      const isOraRec = r.jenisTransaksi === "ORA" || key.endsWith("-1P") || isOraCustomer(r.customerName);
 
       if (!map.has(key)) {
-        const isPrinted =
-          printedInvoices.has(key) ||
-          (isOraRec && printedInvoices.has(cleanKey)) ||
-          Boolean(r.status_cetak);
-        const pAt = printedAtMap[key] || (isOraRec ? printedAtMap[cleanKey] : null) || r.printed_at || null;
+        const isPrinted = printedInvoices.has(key) || Boolean(r.status_cetak);
+        const pAt = printedAtMap[key] || r.printed_at || null;
+        const pBy = r.printed_by || printedByMap[key] || null;
 
         map.set(key, {
           key,
@@ -556,14 +604,18 @@ export default function Home() {
           totalItems: 0,
           allPrinted: isPrinted,
           printedAt: pAt,
+          printedBy: pBy,
         });
       }
 
       const g = map.get(key)!;
-      if (!g.allPrinted && (printedInvoices.has(key) || (isOraRec && printedInvoices.has(cleanKey)) || r.status_cetak)) {
+      if (!g.allPrinted && (printedInvoices.has(key) || r.status_cetak)) {
         g.allPrinted = true;
         if (!g.printedAt) {
-          g.printedAt = printedAtMap[key] || (isOraRec ? printedAtMap[cleanKey] : null) || r.printed_at || null;
+          g.printedAt = printedAtMap[key] || r.printed_at || null;
+        }
+        if (!g.printedBy) {
+          g.printedBy = r.printed_by || printedByMap[key] || null;
         }
       }
       g.items.push(r);
@@ -596,7 +648,7 @@ export default function Home() {
       const nb = parseInvNum(b.invoiceNumber);
       return nb - na; // Descending
     });
-  }, [records, printedInvoices, printedAtMap]);
+  }, [records, printedInvoices, printedAtMap, printedByMap]);
 
   // Max Invoice KPIs
   const highestInvoices = useMemo(() => {
@@ -715,6 +767,7 @@ export default function Home() {
     if (!confirm(`Tandai ${unprinted.length} faktur yang tampil sebagai SUDAH TERPRINT?`)) return;
 
     const nowIso = new Date().toISOString();
+    const currentUserName = currentUserRef.current?.name || "Admin";
     const targetKeys = unprinted.map((g) => g.invoiceKey);
 
     setPrintedInvoices((prev) => {
@@ -733,6 +786,15 @@ export default function Home() {
       return next;
     });
 
+    setPrintedByMap((prev) => {
+      const next = { ...prev };
+      targetKeys.forEach((k) => {
+        next[k] = currentUserName;
+      });
+      printedByMapRef.current = next;
+      return next;
+    });
+
     const targetSet = new Set(targetKeys);
     if (currentFakturDocsRef.current) {
       currentFakturDocsRef.current.forEach((d) => {
@@ -740,14 +802,15 @@ export default function Home() {
         if (k && targetSet.has(k)) {
           d.status_cetak = true;
           d.printed_at = nowIso;
+          d.printed_by = currentUserName;
         }
       });
     }
 
     try {
       setLoading(true);
-      await updateFaktursPrintStatusBatch(targetKeys, true, nowIso);
-      showToast(`✓ Berhasil menandai ${targetKeys.length} faktur selesai dicetak!`);
+      await updateFaktursPrintStatusBatch(targetKeys, true, nowIso, currentUserName);
+      showToast(`✓ Berhasil menandai ${targetKeys.length} faktur selesai dicetak oleh ${currentUserName}!`);
     } catch (err) {
       console.error("Batch print error:", err);
       alert("Terjadi kesalahan saat menyimpan ke database.");
@@ -1443,6 +1506,7 @@ export default function Home() {
       Kategori: g.kategori,
       "Status Cetak": g.allPrinted ? "Sudah Terprint" : "Belum Terprint",
       "Waktu Cetak": g.allPrinted && g.printedAt ? formatPrintTime(g.printedAt) : "-",
+      "Dicetak Oleh": g.allPrinted && g.printedBy ? g.printedBy : "-",
       "Total Harga": g.totalHarga,
     }));
 
@@ -1641,22 +1705,25 @@ export default function Home() {
             {/* User Profile & Switch Account Button */}
             <button
               onClick={() => setShowLoginModal(true)}
-              className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 border ${
-                currentUser?.role === "readonly"
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 border shadow-xs ${
+                !currentUser
+                  ? "bg-rose-500 text-white animate-pulse"
+                  : currentUser?.role === "readonly"
                   ? isDarkMode
-                    ? "bg-amber-950/40 border-amber-800/60 text-amber-300 hover:bg-amber-900/50"
+                    ? "bg-amber-950/60 border-amber-800/80 text-amber-300 hover:bg-amber-900/60"
                     : "bg-amber-50 border-amber-300 text-amber-800 hover:bg-amber-100"
                   : isDarkMode
-                  ? "bg-emerald-950/40 border-emerald-800/60 text-emerald-300 hover:bg-emerald-900/50"
+                  ? "bg-emerald-950/60 border-emerald-700/80 text-emerald-300 hover:bg-emerald-900/60"
                   : "bg-emerald-50 border-emerald-300 text-emerald-800 hover:bg-emerald-100"
               }`}
-              title="Ganti Pengguna / Profil"
+              title="Klik untuk Ganti Pengguna yang Sedang ON"
             >
-              <span>{currentUser?.role === "readonly" ? "👀" : "👤"}</span>
-              <span>{currentUser ? currentUser.name : "Pilih Pengguna"}</span>
+              <span>{currentUser?.role === "readonly" ? "👀" : "🟢"}</span>
+              <span>ON: <strong>{currentUser ? currentUser.name : "Pilih Pengguna"}</strong></span>
               {currentUser?.role === "readonly" && (
                 <span className="text-[10px] opacity-80">(Read Only)</span>
               )}
+              <span className="text-[10px] underline ml-1 opacity-70">Ganti</span>
             </button>
           </div>
         </div>
@@ -2316,13 +2383,22 @@ export default function Home() {
                             }}
                           >
                             {g.allPrinted && g.printedAt ? (
-                              <span className={`inline-flex items-center gap-1 px-1.5 py-0.2 rounded border ${
-                                isDarkMode
-                                  ? "text-emerald-300 bg-emerald-950/90 border-emerald-700/60"
-                                  : "text-emerald-800 bg-emerald-50 border-emerald-200"
-                              }`}>
-                                ⏱ {formatPrintTime(g.printedAt)}
-                              </span>
+                              <div className="flex flex-col gap-0.5">
+                                <span className={`inline-flex items-center gap-1 px-1.5 py-0.2 rounded border ${
+                                  isDarkMode
+                                    ? "text-emerald-300 bg-emerald-950/90 border-emerald-700/60"
+                                    : "text-emerald-800 bg-emerald-50 border-emerald-200"
+                                }`}>
+                                  ⏱ {formatPrintTime(g.printedAt)}
+                                </span>
+                                {g.printedBy && (
+                                  <span className={`text-[9px] font-sans font-medium px-0.5 ${
+                                    isDarkMode ? "text-emerald-400/80" : "text-emerald-700/90"
+                                  }`}>
+                                    oleh: <strong>{g.printedBy}</strong>
+                                  </span>
+                                )}
+                              </div>
                             ) : (
                               <span className={isDarkMode ? "text-slate-600" : "text-slate-300"}>-</span>
                             )}

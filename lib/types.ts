@@ -18,6 +18,7 @@ export interface FakturRecord {
   isRetur?: boolean;
   status_cetak?: boolean;
   printed_at?: string | null;
+  printed_by?: string | null;
   sourceFile?: string;
   rowIndex?: number;
 }
@@ -32,6 +33,7 @@ export interface FirestoreFakturDoc {
   kategori: string;
   status_cetak?: boolean;
   printed_at?: string | null;
+  printed_by?: string | null;
   extra: {
     nama_pelanggan?: string;
     order_date?: string;
@@ -59,6 +61,7 @@ export interface FirestoreFakturDoc {
 export interface PrintState {
   printedKeys: string[];
   printedAtMap: Record<string, string>;
+  printedByMap?: Record<string, string>;
   updatedAt: string;
 }
 
@@ -106,6 +109,7 @@ export interface FakturGroup {
   totalItems: number;
   allPrinted: boolean;
   printedAt: string | null;
+  printedBy?: string | null;
 }
 
 export interface UploadNotification {
