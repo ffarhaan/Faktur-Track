@@ -254,8 +254,48 @@ export default function Home() {
         window.location.reload();
       }
     };
+    const handleRejection = (e: PromiseRejectionEvent) => {
+      const reason = String(e?.reason || "");
+      if (
+        reason.includes("ChunkLoadError") ||
+        reason.includes("Loading chunk") ||
+        reason.includes("Failed to fetch dynamically imported module")
+      ) {
+        window.location.reload();
+      }
+    };
     window.addEventListener("error", handleChunkError);
-    return () => window.removeEventListener("error", handleChunkError);
+    window.addEventListener("unhandledrejection", handleRejection);
+    return () => {
+      window.removeEventListener("error", handleChunkError);
+      window.removeEventListener("unhandledrejection", handleRejection);
+    };
+  }, []);
+
+  // Poll for new Vercel deployments and auto-refresh seamlessly
+  useEffect(() => {
+    const initialBuildId = process.env.NEXT_PUBLIC_APP_BUILD_ID;
+    if (!initialBuildId || initialBuildId === "dev") return;
+
+    const interval = setInterval(async () => {
+      if (isUploadingRef.current) return;
+      try {
+        const res = await fetch(`/api/version?t=${Date.now()}`, {
+          cache: "no-store",
+          headers: { "Cache-Control": "no-cache" },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.buildId && data.buildId !== initialBuildId && data.buildId !== "dev") {
+            window.location.reload();
+          }
+        }
+      } catch {
+        // silent
+      }
+    }, 15000);
+
+    return () => clearInterval(interval);
   }, []);
 
   // Subscribe to real-time online presence
@@ -1727,10 +1767,11 @@ export default function Home() {
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                     <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                   </span>
-                  <span>Online ({onlineUsers.length}):</span>
+                  <span>Online ({onlineUsers.filter(u => u && u.name).length}):</span>
                   <span className="font-bold max-w-[120px] sm:max-w-[200px] truncate text-left">
-                    {onlineUsers.length > 0
+                    {onlineUsers.filter(u => u && u.name).length > 0
                       ? onlineUsers
+                          .filter(u => u && u.name)
                           .map((u) => (u.name === currentUser?.name ? `${u.name} (Anda)` : u.name))
                           .join(", ")
                       : currentUser?.name || "Menghubungkan..."}
@@ -1754,7 +1795,7 @@ export default function Home() {
                             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                             <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                           </span>
-                          <span>Pengguna Sedang ON ({onlineUsers.length})</span>
+                          <span>Pengguna Sedang ON ({onlineUsers.filter(u => u && u.name).length})</span>
                         </div>
                         <button
                           onClick={() => setShowOnlinePopover(false)}
@@ -1765,13 +1806,15 @@ export default function Home() {
                       </div>
 
                       <div className="space-y-1.5 max-h-60 overflow-y-auto pr-1">
-                        {onlineUsers.length === 0 ? (
+                        {onlineUsers.filter(u => u && u.name).length === 0 ? (
                           <div className="text-xs text-slate-500 py-2 text-center">
                             Memeriksa pengguna online...
                           </div>
                         ) : (
-                          onlineUsers.map((u) => {
-                            const isMe = u.name === currentUser?.name;
+                          onlineUsers
+                            .filter(u => u && u.name)
+                            .map((u) => {
+                              const isMe = u.name === currentUser?.name;
                             return (
                               <div
                                 key={u.deviceId || u.name}
@@ -2671,7 +2714,7 @@ export default function Home() {
                                   <span className={`text-[9px] font-sans font-medium px-0.5 ${
                                     isDarkMode ? "text-emerald-400/80" : "text-emerald-700/90"
                                   }`}>
-                                    oleh: <strong>{g.printedBy}</strong>
+                                    oleh: <strong>{String(g.printedBy)}</strong>
                                   </span>
                                 )}
                               </div>
