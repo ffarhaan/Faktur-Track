@@ -38,6 +38,7 @@ export default function LoginModal({
   const [selectedName, setSelectedName] = useState<string>("Farhan");
   const [password, setPassword] = useState<string>("");
   const [errorMsg, setErrorMsg] = useState<string>("");
+  const [submitting, setSubmitting] = useState(false);
   const passwordInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -56,17 +57,15 @@ export default function LoginModal({
     }
   }, [selectedName]);
 
-  if (!isOpen) return null;
-
-  const isStranger = String(selectedName || "").toLowerCase() === "stranger";
-
   const handleSelectUser = (name: string) => {
     setSelectedName(name);
     setErrorMsg("");
     setPassword("");
   };
 
-  const [submitting, setSubmitting] = useState(false);
+  if (!isOpen) return null;
+
+  const isStranger = String(selectedName || "").toLowerCase() === "stranger";
 
   const handleSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
