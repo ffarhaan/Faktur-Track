@@ -21,6 +21,7 @@ const METADATA_DOC = "metadata";
 const PRINT_STATE_DOC = "print_state";
 const PRINT_PARTITIONS_COLLECTION = "print_state_partitions";
 const CATEGORY_OVERRIDES_DOC = "category_overrides";
+const PRODUCT_CATEGORY_OVERRIDES_DOC = "product_category_overrides";
 const CHUNKS_COLLECTION = "faktur_chunks";
 const PRESENCE_DOC = "online_presence";
 const USER_CREDENTIALS_DOC = "user_credentials";
@@ -33,6 +34,7 @@ const globalPartitionMap = new Map<string, { printedKeys: string[]; printedAtMap
 let globalLegacyPrintState: PrintState | null = null;
 let globalMetadata: { chunkIds: string[]; invoiceProgression?: InvoiceProgression } | null = null;
 let globalCategoryOverrides: Record<string, "1P" | "2P" | "3P"> = {};
+let globalProductCategoryOverrides: Record<string, string> = {};
 
 /**
  * Deterministically partition an invoice key into a partition bucket document ID
@@ -201,13 +203,15 @@ export function subscribeToFakturs(
     printState?: PrintState | null,
     categoryOverrides?: Record<string, "1P" | "2P" | "3P"> | null,
     uploadNotification?: UploadNotification | null,
-    reason?: SubscribeChangeReason
+    reason?: SubscribeChangeReason,
+    productCategoryOverrides?: Record<string, string> | null
   ) => void,
   onError?: (err: Error) => void
 ): Unsubscribe {
   let currentProgression: InvoiceProgression | null = globalMetadata?.invoiceProgression || null;
   const currentChunksMap = new Map<string, FirestoreFakturDoc[]>(globalChunksMap);
   let currentCategoryOverrides: Record<string, "1P" | "2P" | "3P"> = { ...globalCategoryOverrides };
+  let currentProductCategoryOverrides: Record<string, string> = { ...globalProductCategoryOverrides };
   let currentUploadNotification: UploadNotification | null = null;
 
   // Track partitioned print docs with module cache pre-population
@@ -333,10 +337,35 @@ export function subscribeToFakturs(
         d.kategori = overrideKat;
         if (d.extra) d.extra.kategori = overrideKat;
       }
+
+      // Apply product category overrides to line items
+      if (Array.isArray(d.extra?.items)) {
+        for (const item of d.extra.items) {
+          const itCode = String(item.item_code || "").trim();
+          const itDesc = String(item.item_description || "").trim();
+          const itNorm = itDesc ? normalize(itDesc) : "";
+          const numCode = itCode ? itCode.replace(/[^0-9]/g, "") : "";
+          const prodKat =
+            currentProductCategoryOverrides[itCode] ||
+            (numCode ? currentProductCategoryOverrides[numCode] : undefined) ||
+            currentProductCategoryOverrides[itNorm] ||
+            currentProductCategoryOverrides[itDesc];
+          if (prodKat) {
+            item.kategori_produk = prodKat;
+            if (prodKat === "PREKURSOR" || prodKat === "Prekursor") {
+              item.klasifikasi_obat = "Prekursor";
+            } else if (prodKat === "OOT") {
+              item.klasifikasi_obat = "OOT";
+            } else {
+              delete item.klasifikasi_obat;
+            }
+          }
+        }
+      }
     }
 
     hasEmittedInitialPayload = true;
-    onData(allDocs, currentProgression, currentPrintState, currentCategoryOverrides, currentUploadNotification, reason);
+    onData(allDocs, currentProgression, currentPrintState, currentCategoryOverrides, currentUploadNotification, reason, currentProductCategoryOverrides);
   };
 
   const tryInitialEmit = () => {
@@ -365,7 +394,7 @@ export function subscribeToFakturs(
     printEmitTimer = setTimeout(() => {
       recomputePrintState();
       if (hasEmittedInitialPayload) {
-        onData([], currentProgression, currentPrintState, currentCategoryOverrides, null, "print");
+        onData([], currentProgression, currentPrintState, currentCategoryOverrides, null, "print", currentProductCategoryOverrides);
       }
     }, 80);
   };
@@ -473,6 +502,20 @@ export function subscribeToFakturs(
     (err) => console.warn("Category overrides sync warning:", err)
   );
 
+  const unsubProductOverrides = onSnapshot(
+    doc(db, APP_DATA_COLLECTION, PRODUCT_CATEGORY_OVERRIDES_DOC),
+    (snap) => {
+      if (snap.exists()) {
+        currentProductCategoryOverrides = (snap.data() || {}) as Record<string, string>;
+        globalProductCategoryOverrides = { ...currentProductCategoryOverrides };
+      }
+      if (hasEmittedInitialPayload) {
+        emitData("meta");
+      }
+    },
+    (err) => console.warn("Product category overrides sync warning:", err)
+  );
+
   const unsubMeta = onSnapshot(
     doc(db, APP_DATA_COLLECTION, METADATA_DOC),
     (snap) => {
@@ -491,7 +534,7 @@ export function subscribeToFakturs(
         }
       }
       if (hasEmittedInitialPayload) {
-        onData([], currentProgression, currentPrintState, currentCategoryOverrides, uploadNotif, "meta");
+        onData([], currentProgression, currentPrintState, currentCategoryOverrides, uploadNotif, "meta", currentProductCategoryOverrides);
       }
     },
     (err) => console.warn("Metadata sync warning:", err)
@@ -506,6 +549,7 @@ export function subscribeToFakturs(
     unsubLegacyPrint();
     unsubPartitions();
     unsubOverrides();
+    unsubProductOverrides();
   };
 }
 
@@ -517,13 +561,15 @@ export async function getExistingFakturs(): Promise<{
   progression: InvoiceProgression | null;
   printState: PrintState | null;
   categoryOverrides: Record<string, "1P" | "2P" | "3P">;
+  productCategoryOverrides: Record<string, string>;
 }> {
-  const [chunksSnap, metaSnap, legacyPrintSnap, partitionsSnap, overrideSnap] = await Promise.all([
+  const [chunksSnap, metaSnap, legacyPrintSnap, partitionsSnap, overrideSnap, prodOverrideSnap] = await Promise.all([
     getDocsFromServer(collection(db, CHUNKS_COLLECTION)).catch(() => getDocs(collection(db, CHUNKS_COLLECTION))),
     getDocFromServer(doc(db, APP_DATA_COLLECTION, METADATA_DOC)).catch(() => getDoc(doc(db, APP_DATA_COLLECTION, METADATA_DOC))),
     getDocFromServer(doc(db, APP_DATA_COLLECTION, PRINT_STATE_DOC)).catch(() => getDoc(doc(db, APP_DATA_COLLECTION, PRINT_STATE_DOC))),
     getDocsFromServer(collection(db, PRINT_PARTITIONS_COLLECTION)).catch(() => getDocs(collection(db, PRINT_PARTITIONS_COLLECTION))),
     getDocFromServer(doc(db, APP_DATA_COLLECTION, CATEGORY_OVERRIDES_DOC)).catch(() => getDoc(doc(db, APP_DATA_COLLECTION, CATEGORY_OVERRIDES_DOC))),
+    getDocFromServer(doc(db, APP_DATA_COLLECTION, PRODUCT_CATEGORY_OVERRIDES_DOC)).catch(() => getDoc(doc(db, APP_DATA_COLLECTION, PRODUCT_CATEGORY_OVERRIDES_DOC))),
   ]);
 
   const sortedDocs = chunksSnap.docs.sort((a, b) => {
@@ -534,6 +580,10 @@ export async function getExistingFakturs(): Promise<{
 
   const categoryOverrides = (overrideSnap && overrideSnap.exists()
     ? (overrideSnap.data() as Record<string, "1P" | "2P" | "3P">)
+    : {}) || {};
+
+  const productCategoryOverrides = (prodOverrideSnap && prodOverrideSnap.exists()
+    ? (prodOverrideSnap.data() as Record<string, string>)
     : {}) || {};
 
   const docs: FirestoreFakturDoc[] = [];
@@ -596,9 +646,34 @@ export async function getExistingFakturs(): Promise<{
       d.kategori = overrideKat;
       if (d.extra) d.extra.kategori = overrideKat;
     }
+
+    // Apply product category overrides to line items
+    if (Array.isArray(d.extra?.items)) {
+      for (const item of d.extra.items) {
+        const itCode = String(item.item_code || "").trim();
+        const itDesc = String(item.item_description || "").trim();
+        const itNorm = itDesc ? normalize(itDesc) : "";
+        const numCode = itCode ? itCode.replace(/[^0-9]/g, "") : "";
+        const prodKat =
+          productCategoryOverrides[itCode] ||
+          (numCode ? productCategoryOverrides[numCode] : undefined) ||
+          productCategoryOverrides[itNorm] ||
+          productCategoryOverrides[itDesc];
+        if (prodKat) {
+          item.kategori_produk = prodKat;
+          if (prodKat === "PREKURSOR" || prodKat === "Prekursor") {
+            item.klasifikasi_obat = "Prekursor";
+          } else if (prodKat === "OOT") {
+            item.klasifikasi_obat = "OOT";
+          } else {
+            delete item.klasifikasi_obat;
+          }
+        }
+      }
+    }
   }
 
-  return { docs, progression, printState, categoryOverrides };
+  return { docs, progression, printState, categoryOverrides, productCategoryOverrides };
 }
 
 /**
@@ -1159,6 +1234,79 @@ export async function updateFakturCategory(
           item.kategori = newKategori;
           if (item.extra) item.extra.kategori = newKategori;
           updated = true;
+        }
+      }
+      if (updated) {
+        await setDoc(chunkRef, { ...data, items, updatedAt: new Date().toISOString() });
+      }
+    }
+  }
+}
+
+/**
+ * Update Product Category (FARMA / ALKES / CCP / PREKURSOR / OOT) in Firestore
+ * Persists to product_category_overrides doc and updates matching items across all chunks
+ */
+export async function updateProductCategoryOverride(
+  productCode: string,
+  productName: string,
+  newCategory: string
+): Promise<void> {
+  const cleanCode = productCode ? productCode.trim() : "";
+  const numOnly = cleanCode ? cleanCode.replace(/[^0-9]/g, "") : "";
+  const cleanName = productName ? productName.trim() : "";
+  const normName = cleanName ? normalize(cleanName) : "";
+
+  // 1. Save product category override directly to Firestore
+  const overrideDocRef = doc(db, APP_DATA_COLLECTION, PRODUCT_CATEGORY_OVERRIDES_DOC);
+  const overrideSnap = await getDoc(overrideDocRef).catch(() => null);
+  const existingOverrides = (overrideSnap && overrideSnap.exists()) ? overrideSnap.data() : {};
+
+  const updates: Record<string, string> = {};
+  if (cleanCode && cleanCode !== "-") updates[cleanCode] = newCategory;
+  if (numOnly) updates[numOnly] = newCategory;
+  if (cleanName && cleanName !== "-") updates[cleanName] = newCategory;
+  if (normName) updates[normName] = newCategory;
+
+  await setDoc(
+    overrideDocRef,
+    { ...existingOverrides, ...updates, updatedAt: new Date().toISOString() },
+    { merge: true }
+  );
+
+  // 2. Update matching items across chunks in Firestore
+  const metaSnap = await getDoc(doc(db, APP_DATA_COLLECTION, METADATA_DOC));
+  const chunkIds = (metaSnap.exists() ? (metaSnap.data().chunkIds as string[]) : []) || [];
+
+  for (const chunkId of chunkIds) {
+    const chunkRef = doc(db, CHUNKS_COLLECTION, chunkId);
+    const cSnap = await getDoc(chunkRef);
+    if (cSnap.exists()) {
+      const data = cSnap.data();
+      let updated = false;
+      const items = (data.items as FirestoreFakturDoc[]) || [];
+      for (const item of items) {
+        if (Array.isArray(item.extra?.items)) {
+          for (const lineItem of item.extra.items) {
+            const lCode = String(lineItem.item_code || "").trim();
+            const lDesc = String(lineItem.item_description || "").trim();
+            const lNorm = lDesc ? normalize(lDesc) : "";
+            const isMatch =
+              (cleanCode && cleanCode !== "-" && lCode === cleanCode) ||
+              (normName && lNorm === normName) ||
+              (cleanName && cleanName !== "-" && lDesc === cleanName);
+            if (isMatch) {
+              lineItem.kategori_produk = newCategory;
+              if (newCategory === "PREKURSOR" || newCategory === "Prekursor") {
+                lineItem.klasifikasi_obat = "Prekursor";
+              } else if (newCategory === "OOT") {
+                lineItem.klasifikasi_obat = "OOT";
+              } else {
+                delete lineItem.klasifikasi_obat;
+              }
+              updated = true;
+            }
+          }
         }
       }
       if (updated) {

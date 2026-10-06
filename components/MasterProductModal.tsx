@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from "react";
 import masterProductList from "@/lib/masterProduct.json";
+import { normalize } from "@/lib/parser";
 
 interface ProductItem {
   kodeBarang?: string;
@@ -15,13 +16,42 @@ interface ProductItem {
 
 const ITEMS_PER_PAGE = 50;
 
+function getEffectiveCategory(
+  item: ProductItem,
+  productOverrides?: Record<string, string>
+): { category: string; isCustom: boolean } {
+  if (productOverrides && Object.keys(productOverrides).length > 0) {
+    const codes = [item.kodeBarang, item.kodeOracle, item.kodeAccurate]
+      .filter(Boolean)
+      .map((c) => String(c).trim());
+
+    for (const c of codes) {
+      if (productOverrides[c]) return { category: productOverrides[c].toUpperCase(), isCustom: true };
+      const num = c.replace(/[^0-9]/g, "");
+      if (num && productOverrides[num]) return { category: productOverrides[num].toUpperCase(), isCustom: true };
+    }
+    const norm = normalize(item.namaBarang);
+    if (productOverrides[norm]) return { category: productOverrides[norm].toUpperCase(), isCustom: true };
+    const rawTrim = item.namaBarang.trim();
+    if (productOverrides[rawTrim]) return { category: productOverrides[rawTrim].toUpperCase(), isCustom: true };
+  }
+
+  return { category: (item.kategori || "FARMA").toUpperCase(), isCustom: false };
+}
+
 export default function MasterProductModal({
   isOpen,
   onClose,
+  productOverrides,
+  onUpdateCategory,
+  isReadOnly,
   isDarkMode,
 }: {
   isOpen: boolean;
   onClose: () => void;
+  productOverrides?: Record<string, string>;
+  onUpdateCategory?: (code: string, name: string, newCategory: string) => void;
+  isReadOnly?: boolean;
   isDarkMode?: boolean;
 }) {
   const [search, setSearch] = useState("");
@@ -34,9 +64,10 @@ export default function MasterProductModal({
     let list = productData;
 
     if (catFilter !== "all") {
-      list = list.filter(
-        (item) => String(item.kategori || "").toUpperCase() === catFilter
-      );
+      list = list.filter((item) => {
+        const { category } = getEffectiveCategory(item, productOverrides);
+        return category === catFilter;
+      });
     }
 
     if (search.trim()) {
@@ -51,7 +82,7 @@ export default function MasterProductModal({
     }
 
     return list;
-  }, [productData, catFilter, search]);
+  }, [productData, catFilter, search, productOverrides]);
 
   const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
   const pageData = filtered.slice(page * ITEMS_PER_PAGE, (page + 1) * ITEMS_PER_PAGE);
@@ -81,7 +112,7 @@ export default function MasterProductModal({
                 </span>
               </h2>
               <p className={`text-xs ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>
-                Database Klasifikasi Kategori Produk (FARMA / ALKES / CCP / PREKURSOR / OOT)
+                Database Klasifikasi Kategori Produk (FARMA / ALKES / CCP / PREKURSOR / OOT) — Ubah & Simpan Permanen
               </p>
             </div>
           </div>
@@ -147,7 +178,7 @@ export default function MasterProductModal({
                 <th className="py-2 px-3">Kode Barang</th>
                 <th className="py-2 px-3">Nama Barang</th>
                 <th className="py-2 px-3 text-center">Kategori</th>
-                <th className="py-2 px-3">Klasifikasi</th>
+                <th className="py-2 px-3">Klasifikasi Asli</th>
               </tr>
             </thead>
             <tbody className={`divide-y ${isDarkMode ? "divide-slate-800/80" : "divide-slate-100"}`}>
@@ -159,7 +190,9 @@ export default function MasterProductModal({
                 </tr>
               ) : (
                 pageData.map((item, idx) => {
-                  const cat = String(item.kategori || "FARMA").toUpperCase();
+                  const { category: cat, isCustom } = getEffectiveCategory(item, productOverrides);
+                  const primaryCode = String(item.kodeBarang || item.kodeOracle || item.kodeAccurate || "").trim();
+
                   return (
                     <tr key={idx} className={`transition-colors ${isDarkMode ? "hover:bg-[#142038]/70" : "hover:bg-slate-50"}`}>
                       <td className="py-2 px-3 text-center text-slate-400 font-mono text-[11px]">
@@ -175,21 +208,55 @@ export default function MasterProductModal({
                         {item.namaBarang}
                       </td>
                       <td className="py-2 px-3 text-center">
-                        <span
-                          className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold border ${
-                            cat === "ALKES"
-                              ? (isDarkMode ? "bg-teal-950/80 text-teal-300 border-teal-700/60" : "bg-teal-50 text-teal-800 border-teal-200")
-                              : cat === "CCP"
-                              ? (isDarkMode ? "bg-sky-950/80 text-sky-300 border-sky-700/60" : "bg-sky-50 text-sky-800 border-sky-200")
-                              : cat === "PREKURSOR"
-                              ? (isDarkMode ? "bg-amber-950/80 text-amber-300 border-amber-700/60" : "bg-amber-50 text-amber-900 border-amber-200")
-                              : cat === "OOT"
-                              ? (isDarkMode ? "bg-purple-950/80 text-purple-300 border-purple-700/60" : "bg-purple-50 text-purple-900 border-purple-200")
-                              : (isDarkMode ? "bg-indigo-950/80 text-indigo-300 border-indigo-700/60" : "bg-indigo-50 text-indigo-700 border-indigo-200")
-                          }`}
-                        >
-                          {cat}
-                        </span>
+                        {isReadOnly ? (
+                          <span
+                            className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold border ${
+                              cat === "ALKES"
+                                ? (isDarkMode ? "bg-teal-950/80 text-teal-300 border-teal-700/60" : "bg-teal-50 text-teal-800 border-teal-200")
+                                : cat === "CCP"
+                                ? (isDarkMode ? "bg-sky-950/80 text-sky-300 border-sky-700/60" : "bg-sky-50 text-sky-800 border-sky-200")
+                                : cat === "PREKURSOR"
+                                ? (isDarkMode ? "bg-amber-950/80 text-amber-300 border-amber-700/60" : "bg-amber-50 text-amber-900 border-amber-200")
+                                : cat === "OOT"
+                                ? (isDarkMode ? "bg-purple-950/80 text-purple-300 border-purple-700/60" : "bg-purple-50 text-purple-900 border-purple-200")
+                                : (isDarkMode ? "bg-indigo-950/80 text-indigo-300 border-indigo-700/60" : "bg-indigo-50 text-indigo-700 border-indigo-200")
+                            }`}
+                          >
+                            {cat}
+                          </span>
+                        ) : (
+                          <div className="inline-flex items-center gap-1.5 justify-center">
+                            <select
+                              value={cat}
+                              onChange={(e) => {
+                                const newKat = e.target.value;
+                                onUpdateCategory?.(primaryCode, item.namaBarang, newKat);
+                              }}
+                              className={`text-[11px] font-bold py-1 px-2 rounded-lg border cursor-pointer focus:outline-none focus:ring-2 focus:ring-teal-500/30 transition-all ${
+                                cat === "ALKES"
+                                  ? (isDarkMode ? "bg-teal-950/80 text-teal-300 border-teal-700/70" : "bg-teal-50 text-teal-800 border-teal-300")
+                                  : cat === "CCP"
+                                  ? (isDarkMode ? "bg-sky-950/80 text-sky-300 border-sky-700/70" : "bg-sky-50 text-sky-800 border-sky-300")
+                                  : cat === "PREKURSOR"
+                                  ? (isDarkMode ? "bg-amber-950/80 text-amber-300 border-amber-700/70" : "bg-amber-50 text-amber-800 border-amber-300")
+                                  : cat === "OOT"
+                                  ? (isDarkMode ? "bg-purple-950/80 text-purple-300 border-purple-700/70" : "bg-purple-50 text-purple-800 border-purple-300")
+                                  : (isDarkMode ? "bg-[#142038] text-slate-200 border-slate-700" : "bg-white text-slate-800 border-slate-300")
+                              }`}
+                            >
+                              <option value="FARMA">FARMA</option>
+                              <option value="ALKES">ALKES</option>
+                              <option value="CCP">CCP</option>
+                              <option value="PREKURSOR">PREKURSOR</option>
+                              <option value="OOT">OOT</option>
+                            </select>
+                            {isCustom && (
+                              <span className="text-[9px] px-1.5 py-0.5 rounded font-bold bg-teal-500/20 text-teal-400 border border-teal-500/30 whitespace-nowrap">
+                                Kustom
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </td>
                       <td className={`py-2 px-3 text-[11px] ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>
                         {item.klasifikasi || item.kategoriWarehouse || "-"}

@@ -20,6 +20,7 @@ import {
   updateFakturPrintStatus,
   updateFaktursPrintStatusBatch,
   updateFakturCategory,
+  updateProductCategoryOverride,
   clearAllFakturs,
   updateUserPresence,
   removeUserPresence,
@@ -80,7 +81,10 @@ function formatPrintTime(dStr?: string | null): string {
   }
 }
 
-function dbRowsToFakturRecords(rows: Array<Record<string, unknown>>): {
+function dbRowsToFakturRecords(
+  rows: Array<Record<string, unknown>>,
+  productOverrides?: Record<string, string>
+): {
   records: FakturRecord[];
   printedSet: Set<string>;
   printedAtMap: Record<string, string>;
@@ -120,8 +124,13 @@ function dbRowsToFakturRecords(rows: Array<Record<string, unknown>>): {
         const it = items[idx];
         const itemCode = String(it.item_code || "");
         const itemDesc = String(it.item_description || "");
-        const katProd = getProductCategory(itemCode, itemDesc);
-        const klasObat = getPrekursorOOTClassification(itemDesc, itemCode) || undefined;
+        const katProd = getProductCategory(itemCode, itemDesc, productOverrides) || (it.kategori_produk as string) || "FARMA";
+        const klasObat =
+          katProd === "PREKURSOR"
+            ? "Prekursor"
+            : katProd === "OOT"
+            ? "OOT"
+            : getPrekursorOOTClassification(itemDesc, itemCode) || undefined;
         const validSO = String(it.order_number || r.no_sales_order || "-").trim();
 
         records.push({
@@ -320,6 +329,8 @@ export default function Home() {
   const [selectedColIdx, setSelectedColIdx] = useState(3); // Default to No Invoice column
   const [categoryOverrides, setCategoryOverrides] = useState<Record<string, "1P" | "2P" | "3P">>({});
   const categoryOverridesRef = useRef<Record<string, "1P" | "2P" | "3P">>({});
+  const [productOverrides, setProductOverrides] = useState<Record<string, string>>({});
+  const productOverridesRef = useRef<Record<string, string>>({});
   const printedInvoicesRef = useRef<Set<string>>(new Set());
   const printedAtMapRef = useRef<Record<string, string>>({});
   const printedByMapRef = useRef<Record<string, string>>({});
@@ -331,6 +342,10 @@ export default function Home() {
   useEffect(() => {
     categoryOverridesRef.current = categoryOverrides;
   }, [categoryOverrides]);
+
+  useEffect(() => {
+    productOverridesRef.current = productOverrides;
+  }, [productOverrides]);
 
   useEffect(() => {
     printedInvoicesRef.current = printedInvoices;
@@ -401,14 +416,70 @@ export default function Home() {
         console.warn("Update category error:", err);
       }
     },
-    []
+    [showToast]
+  );
+
+  const handleUpdateProductCategory = useCallback(
+    async (productCode: string, productName: string, newKat: string) => {
+      if (currentUser?.role === "readonly") return;
+
+      const cleanCode = productCode ? productCode.trim() : "";
+      const numOnly = cleanCode ? cleanCode.replace(/[^0-9]/g, "") : "";
+      const cleanName = productName ? productName.trim() : "";
+      const normName = cleanName ? normalize(cleanName) : "";
+
+      // 1. Optimistically update productOverrides state and ref
+      const newOverrides = { ...productOverridesRef.current };
+      if (cleanCode && cleanCode !== "-") newOverrides[cleanCode] = newKat;
+      if (numOnly) newOverrides[numOnly] = newKat;
+      if (cleanName && cleanName !== "-") newOverrides[cleanName] = newKat;
+      if (normName) newOverrides[normName] = newKat;
+
+      productOverridesRef.current = newOverrides;
+      setProductOverrides(newOverrides);
+
+      // 2. Optimistically update all records matching product in state
+      setRecords((prev) =>
+        prev.map((r) => {
+          const rCode = String(r.itemCode || "").trim();
+          const rDesc = String(r.itemDescription || "").trim();
+          const rNorm = rDesc ? normalize(rDesc) : "";
+
+          const isMatch =
+            (cleanCode && cleanCode !== "-" && rCode === cleanCode) ||
+            (cleanName && cleanName !== "-" && rDesc === cleanName) ||
+            (normName && rNorm === normName);
+
+          if (isMatch) {
+            const klasObat =
+              newKat === "PREKURSOR" ? "Prekursor" : newKat === "OOT" ? "OOT" : undefined;
+            return {
+              ...r,
+              kategoriProduk: newKat,
+              klasifikasiObat: klasObat,
+            };
+          }
+          return r;
+        })
+      );
+
+      showToast(`✓ Kategori produk "${cleanName || cleanCode}" disimpan ke ${newKat}`);
+
+      // 3. Persist to Firestore chunk & product_category_overrides doc
+      try {
+        await updateProductCategoryOverride(productCode, productName, newKat);
+      } catch (err) {
+        console.warn("Update product category error:", err);
+      }
+    },
+    [currentUser, showToast]
   );
 
   // Real-time Firestore Subscription
   useEffect(() => {
     setLoading(true);
     const unsubscribe = subscribeToFakturs(
-      (docs, prog, printState, overrides, uploadNotif, reason) => {
+      (docs, prog, printState, overrides, uploadNotif, reason, prodOverrides) => {
         if (isUploadingRef.current) return;
 
         if (prog) setInvoiceProgression(prog);
@@ -416,6 +487,11 @@ export default function Home() {
         if (overrides) {
           setCategoryOverrides(overrides);
           categoryOverridesRef.current = overrides;
+        }
+
+        if (prodOverrides) {
+          setProductOverrides(prodOverrides);
+          productOverridesRef.current = prodOverrides;
         }
 
         if (printState && (printState.printedKeys?.length || 0) > 0) {
@@ -453,7 +529,8 @@ export default function Home() {
         if (docs.length > 0) {
           currentFakturDocsRef.current = docs;
           const { records: recs, printedSet: docPrintedSet, printedAtMap: docPrintedAtMap, printedByMap: docPrintedByMap } = dbRowsToFakturRecords(
-            docs as unknown as Array<Record<string, unknown>>
+            docs as unknown as Array<Record<string, unknown>>,
+            prodOverrides || productOverridesRef.current
           );
           setRecords(recs);
 
@@ -507,19 +584,24 @@ export default function Home() {
     );
 
     return () => unsubscribe();
-  }, []);
+  }, [showToast]);
 
   const handleManualRefresh = useCallback(async () => {
     setLoading(true);
     try {
-      const { docs, progression: prog, printState, categoryOverrides: overrides } = await getExistingFakturs();
+      const { docs, progression: prog, printState, categoryOverrides: overrides, productCategoryOverrides: prodOverrides } = await getExistingFakturs();
       if (prog) setInvoiceProgression(prog);
       if (overrides) {
         setCategoryOverrides(overrides);
         categoryOverridesRef.current = overrides;
       }
+      if (prodOverrides) {
+        setProductOverrides(prodOverrides);
+        productOverridesRef.current = prodOverrides;
+      }
       const { records: recs, printedSet: docPrintedSet, printedAtMap: docPrintedAtMap, printedByMap: docPrintedByMap } = dbRowsToFakturRecords(
-        docs as unknown as Array<Record<string, unknown>>
+        docs as unknown as Array<Record<string, unknown>>,
+        prodOverrides || productOverridesRef.current
       );
       const unifiedPrintedKeys = new Set([
         ...(printState?.printedKeys || []),
@@ -663,7 +745,7 @@ export default function Home() {
       if (r.isDoubleInv) g.isDoubleInv = true;
       if (r.isRetur || r.totalHarga < 0) g.isRetur = true;
 
-      const kat = (r.kategoriProduk || getProductCategory(r.itemCode, r.itemDescription) || "FARMA").toUpperCase();
+      const kat = (getProductCategory(r.itemCode, r.itemDescription, productOverrides) || r.kategoriProduk || "FARMA").toUpperCase();
       if (kat === "PREKURSOR" || r.klasifikasiObat === "Prekursor") g.hasPrekursor = true;
       if (kat === "OOT" || r.klasifikasiObat === "OOT") g.hasOOT = true;
       if (kat === "CCP") g.hasCCP = true;
@@ -686,7 +768,7 @@ export default function Home() {
       const nb = parseInvNum(b.invoiceNumber);
       return nb - na; // Descending
     });
-  }, [records, printedInvoices, printedAtMap, printedByMap]);
+  }, [records, printedInvoices, printedAtMap, printedByMap, productOverrides]);
 
   // Max Invoice KPIs
   const highestInvoices = useMemo(() => {
@@ -1016,7 +1098,7 @@ export default function Home() {
 
         for (const file of files) {
           fileNames.push(file.name);
-          const p = await parseExcelFile(file);
+          const p = await parseExcelFile(file, productOverridesRef.current);
           parsed.push(...p);
         }
 
@@ -1308,7 +1390,7 @@ export default function Home() {
 
           if (r.itemCode && r.itemCode !== "-") {
             if (!Array.isArray(entry.extra.items)) entry.extra.items = [];
-            const katProd = getProductCategory(r.itemCode, r.itemDescription) || r.kategoriProduk || "FARMA";
+            const katProd = getProductCategory(r.itemCode, r.itemDescription, productOverridesRef.current) || r.kategoriProduk || "FARMA";
             const isDup = entry.extra.items.some(
               (it) => it.item_code === r.itemCode && it.lot_number === r.lotNumber && it.qty === r.qty
             );
@@ -2656,11 +2738,37 @@ export default function Home() {
                                       <tr key={idx} className={isDarkMode ? "hover:bg-[#141e33]" : "hover:bg-slate-50"}>
                                         <td className={`py-1.5 px-2 font-mono ${isDarkMode ? "text-slate-400" : "text-slate-600"}`}>{it.itemCode}</td>
                                         <td className="py-1.5 px-2">
-                                          <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded ${
-                                            isDarkMode ? "bg-[#182542] text-slate-300 border border-slate-700/60" : "bg-slate-100 text-slate-700"
-                                          }`}>
-                                            {it.kategoriProduk || "FARMA"}
-                                          </span>
+                                          {currentUser?.role === "readonly" ? (
+                                            <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded ${
+                                              isDarkMode ? "bg-[#182542] text-slate-300 border border-slate-700/60" : "bg-slate-100 text-slate-700"
+                                            }`}>
+                                              {it.kategoriProduk || "FARMA"}
+                                            </span>
+                                          ) : (
+                                            <select
+                                              value={(it.kategoriProduk || "FARMA").toUpperCase()}
+                                              onChange={(e) => {
+                                                handleUpdateProductCategory(it.itemCode, it.itemDescription, e.target.value);
+                                              }}
+                                              className={`text-[10px] font-bold py-0.5 px-1.5 rounded border cursor-pointer focus:outline-none focus:ring-1 focus:ring-teal-500 transition-all ${
+                                                (it.kategoriProduk || "FARMA").toUpperCase() === "ALKES"
+                                                  ? (isDarkMode ? "bg-teal-950/70 text-teal-200 border-teal-700/70" : "bg-teal-50 text-teal-800 border-teal-300")
+                                                  : (it.kategoriProduk || "FARMA").toUpperCase() === "CCP"
+                                                  ? (isDarkMode ? "bg-sky-950/70 text-sky-200 border-sky-700/70" : "bg-sky-50 text-sky-800 border-sky-300")
+                                                  : (it.kategoriProduk || "FARMA").toUpperCase() === "PREKURSOR"
+                                                  ? (isDarkMode ? "bg-amber-950/70 text-amber-200 border-amber-700/70" : "bg-amber-50 text-amber-800 border-amber-300")
+                                                  : (it.kategoriProduk || "FARMA").toUpperCase() === "OOT"
+                                                  ? (isDarkMode ? "bg-purple-950/70 text-purple-200 border-purple-700/70" : "bg-purple-50 text-purple-800 border-purple-300")
+                                                  : (isDarkMode ? "bg-[#182542] text-slate-200 border-slate-700" : "bg-slate-50 text-slate-800 border-slate-200")
+                                              }`}
+                                            >
+                                              <option value="FARMA">FARMA</option>
+                                              <option value="ALKES">ALKES</option>
+                                              <option value="CCP">CCP</option>
+                                              <option value="PREKURSOR">PREKURSOR</option>
+                                              <option value="OOT">OOT</option>
+                                            </select>
+                                          )}
                                         </td>
                                         <td className={`py-1.5 px-2 font-medium ${isDarkMode ? "text-slate-200" : "text-slate-800"}`}>{it.itemDescription}</td>
                                         <td className={`py-1.5 px-2 text-right font-mono font-semibold ${isDarkMode ? "text-white" : "text-slate-900"}`}>{it.qty}</td>
@@ -2738,6 +2846,9 @@ export default function Home() {
       <MasterProductModal
         isOpen={showProductModal}
         onClose={() => setShowProductModal(false)}
+        productOverrides={productOverrides}
+        onUpdateCategory={handleUpdateProductCategory}
+        isReadOnly={currentUser?.role === "readonly"}
         isDarkMode={isDarkMode}
       />
       <LoginModal

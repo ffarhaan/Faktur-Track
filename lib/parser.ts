@@ -147,7 +147,26 @@ export function getPrekursorOOTClassification(itemDescription?: string, itemCode
   return null;
 }
 
-export function getProductCategory(itemCode?: string, itemDescription?: string): string {
+export function getProductCategory(
+  itemCode?: string,
+  itemDescription?: string,
+  productOverrides?: Record<string, string>
+): string {
+  if (productOverrides && Object.keys(productOverrides).length > 0) {
+    if (itemCode) {
+      const cleanCode = String(itemCode).trim();
+      if (productOverrides[cleanCode]) return productOverrides[cleanCode].toUpperCase();
+      const numOnly = cleanCode.replace(/[^0-9]/g, "");
+      if (numOnly && productOverrides[numOnly]) return productOverrides[numOnly].toUpperCase();
+    }
+    if (itemDescription) {
+      const normDesc = normalize(itemDescription);
+      if (productOverrides[normDesc]) return productOverrides[normDesc].toUpperCase();
+      const trimmed = itemDescription.trim();
+      if (productOverrides[trimmed]) return productOverrides[trimmed].toUpperCase();
+    }
+  }
+
   if (itemCode) {
     const cleanCode = String(itemCode).trim();
     if (productCodeMap[cleanCode]) return productCodeMap[cleanCode];
@@ -306,7 +325,11 @@ export function normalizeDateStr(v: unknown): string {
   return s;
 }
 
-function parseXXCUST(data: unknown[][], headerIdx: number): FakturRecord[] {
+function parseXXCUST(
+  data: unknown[][],
+  headerIdx: number,
+  productOverrides?: Record<string, string>
+): FakturRecord[] {
   const header = data[headerIdx] as string[];
   const colMap: Record<string, number> = {};
   header.forEach((h: string, i: number) => {
@@ -364,8 +387,13 @@ function parseXXCUST(data: unknown[][], headerIdx: number): FakturRecord[] {
 
     const itemCode = val(idx.itemCode);
     const itemDescription = val(idx.itemDescription);
-    const kategoriProduk = getProductCategory(itemCode, itemDescription) || undefined;
-    const klasifikasiObat = getPrekursorOOTClassification(itemDescription, itemCode) || undefined;
+    const kategoriProduk = getProductCategory(itemCode, itemDescription, productOverrides) || undefined;
+    const klasifikasiObat =
+      kategoriProduk === "PREKURSOR"
+        ? "Prekursor"
+        : kategoriProduk === "OOT"
+        ? "OOT"
+        : getPrekursorOOTClassification(itemDescription, itemCode) || undefined;
 
     records.push({
       orderDate: normalizeDateStr(rawVal(idx.orderDate) ?? val(idx.orderDate)),
@@ -567,7 +595,10 @@ function parseExportArray(data: unknown[][], headerIdx: number): FakturRecord[] 
   return records;
 }
 
-export async function parseExcelFile(file: File): Promise<FakturRecord[]> {
+export async function parseExcelFile(
+  file: File,
+  productOverrides?: Record<string, string>
+): Promise<FakturRecord[]> {
   const buffer = await file.arrayBuffer();
 
   // 1. Try HTML format for Oracle .xls exports
@@ -612,7 +643,7 @@ export async function parseExcelFile(file: File): Promise<FakturRecord[]> {
     );
 
     if (headerIdx !== -1) {
-      return parseXXCUST(data, headerIdx);
+      return parseXXCUST(data, headerIdx, productOverrides);
     }
 
     // Find generic Oracle export header

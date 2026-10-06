@@ -50,6 +50,8 @@ export interface FirestoreFakturDoc {
       lot_number: string;
       total_harga: number;
       order_number?: string;
+      klasifikasi_obat?: string;
+      [key: string]: unknown;
     }>;
     [key: string]: unknown;
   };
