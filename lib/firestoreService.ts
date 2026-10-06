@@ -1443,7 +1443,7 @@ export function subscribeToOnlinePresence(
  * Verify user password (default "123" if not yet changed in cloud)
  */
 export async function verifyUserPassword(userName: string, inputPass: string): Promise<boolean> {
-  if (userName.toLowerCase() === "stranger") return true;
+  if (String(userName || "").toLowerCase() === "stranger") return true;
   try {
     const credRef = doc(db, APP_DATA_COLLECTION, USER_CREDENTIALS_DOC);
     const snap = await getDoc(credRef);
@@ -1468,7 +1468,7 @@ export async function changeUserPassword(
   oldPass: string,
   newPass: string
 ): Promise<{ success: boolean; message: string }> {
-  if (userName.toLowerCase() === "stranger") {
+  if (String(userName || "").toLowerCase() === "stranger") {
     return { success: false, message: "Pengguna stranger tidak memiliki password." };
   }
   if (!newPass || newPass.trim().length < 3) {

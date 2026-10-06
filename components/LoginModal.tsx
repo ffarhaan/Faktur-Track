@@ -51,14 +51,14 @@ export default function LoginModal({
   }, [isOpen, currentUser]);
 
   useEffect(() => {
-    if (selectedName.toLowerCase() !== "stranger") {
+    if (selectedName && String(selectedName).toLowerCase() !== "stranger") {
       passwordInputRef.current?.focus();
     }
   }, [selectedName]);
 
   if (!isOpen) return null;
 
-  const isStranger = selectedName.toLowerCase() === "stranger";
+  const isStranger = String(selectedName || "").toLowerCase() === "stranger";
 
   const handleSelectUser = (name: string) => {
     setSelectedName(name);

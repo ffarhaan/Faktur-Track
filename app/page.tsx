@@ -242,6 +242,22 @@ export default function Home() {
     currentUserRef.current = currentUser;
   }, [currentUser]);
 
+  // Auto-reload on chunk load mismatch from new Vercel deployments
+  useEffect(() => {
+    const handleChunkError = (e: ErrorEvent) => {
+      const msg = e?.message || "";
+      if (
+        msg.includes("ChunkLoadError") ||
+        msg.includes("Loading chunk") ||
+        msg.includes("Failed to fetch dynamically imported module")
+      ) {
+        window.location.reload();
+      }
+    };
+    window.addEventListener("error", handleChunkError);
+    return () => window.removeEventListener("error", handleChunkError);
+  }, []);
+
   // Subscribe to real-time online presence
   useEffect(() => {
     const unsub = subscribeToOnlinePresence((users) => {
@@ -271,25 +287,33 @@ export default function Home() {
   }, [currentUser]);
 
   useEffect(() => {
-    const saved = typeof window !== "undefined" ? sessionStorage.getItem("faktur_tracker_user") : null;
-    if (saved) {
-      try {
+    try {
+      const saved = typeof window !== "undefined" ? sessionStorage.getItem("faktur_tracker_user") : null;
+      if (saved) {
         const u = JSON.parse(saved);
-        setCurrentUser(u);
-        setShowLoginModal(false);
-      } catch {
-        setShowLoginModal(true);
+        if (u && typeof u === "object" && typeof u.name === "string" && (u.role === "admin" || u.role === "readonly")) {
+          setCurrentUser(u);
+          setShowLoginModal(false);
+          return;
+        } else {
+          sessionStorage.removeItem("faktur_tracker_user");
+        }
       }
-    } else {
-      setShowLoginModal(true);
+    } catch {
+      // ignore
     }
+    setShowLoginModal(true);
   }, []);
 
   const handleLogin = (user: AppUser) => {
     setCurrentUser(user);
     currentUserRef.current = user;
-    if (typeof window !== "undefined") {
-      sessionStorage.setItem("faktur_tracker_user", JSON.stringify(user));
+    try {
+      if (typeof window !== "undefined") {
+        sessionStorage.setItem("faktur_tracker_user", JSON.stringify(user));
+      }
+    } catch {
+      // ignore
     }
     updateUserPresence(user, deviceIdRef.current);
     setShowLoginModal(false);
@@ -363,10 +387,10 @@ export default function Home() {
     invoiceProgressionRef.current = invoiceProgression;
   }, [invoiceProgression]);
 
-  const showToast = (msg: string) => {
+  const showToast = useCallback((msg: string) => {
     setToastMsg(msg);
     setTimeout(() => setToastMsg(null), 3500);
-  };
+  }, []);
 
 
   const handleUpdateCategory = useCallback(
@@ -584,7 +608,7 @@ export default function Home() {
     );
 
     return () => unsubscribe();
-  }, [showToast]);
+  }, []);
 
   const handleManualRefresh = useCallback(async () => {
     setLoading(true);
