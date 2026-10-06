@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
+import { verifyUserPassword } from "@/lib/firestoreService";
 
 export interface AppUser {
   name: string;
@@ -65,8 +66,11 @@ export default function LoginModal({
     setPassword("");
   };
 
-  const handleSubmit = (e?: React.FormEvent) => {
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
+    if (submitting) return;
     setErrorMsg("");
 
     if (isStranger) {
@@ -75,12 +79,26 @@ export default function LoginModal({
       return;
     }
 
-    if (password === "123") {
-      onLogin({ name: selectedName, role: "admin" });
-      setPassword("");
-    } else {
-      setErrorMsg("Password salah! Silakan coba lagi.");
+    if (!password) {
+      setErrorMsg("Ketik password Anda.");
       passwordInputRef.current?.focus();
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const isValid = await verifyUserPassword(selectedName, password);
+      if (isValid) {
+        onLogin({ name: selectedName, role: "admin" });
+        setPassword("");
+      } else {
+        setErrorMsg("Password salah! Silakan coba lagi.");
+        passwordInputRef.current?.focus();
+      }
+    } catch {
+      setErrorMsg("Gagal memeriksa password, coba lagi.");
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -206,14 +224,23 @@ export default function LoginModal({
             )}
             <button
               type="submit"
+              disabled={submitting}
               className={`flex-1 py-1.5 text-xs font-bold rounded-lg text-white shadow-xs transition-all flex items-center justify-center gap-1 cursor-pointer ${
-                isStranger
+                submitting
+                  ? "opacity-60 cursor-not-allowed bg-slate-500"
+                  : isStranger
                   ? "bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500"
                   : "bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500"
               }`}
             >
-              <span>{isStranger ? "👁️ Masuk Stranger" : `🟢 Masuk (${selectedName})`}</span>
-              <span>➔</span>
+              <span>
+                {submitting
+                  ? "Memeriksa..."
+                  : isStranger
+                  ? "👁️ Masuk Stranger"
+                  : `🟢 Masuk (${selectedName})`}
+              </span>
+              {!submitting && <span>➔</span>}
             </button>
           </div>
         </form>

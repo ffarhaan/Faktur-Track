@@ -28,6 +28,7 @@ import {
 import MasterApotekModal from "@/components/MasterApotekModal";
 import MasterProductModal from "@/components/MasterProductModal";
 import LoginModal, { AppUser } from "@/components/LoginModal";
+import ChangePasswordModal from "@/components/ChangePasswordModal";
 
 type Filter = "belum" | "sudah" | "all" | "double" | "retur";
 type KatFilter = "all" | "1P" | "2P" | "3P";
@@ -222,6 +223,7 @@ export default function Home() {
   const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
   const currentUserRef = useRef<AppUser | null>(null);
   const [showLoginModal, setShowLoginModal] = useState(true);
+  const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
 
   // Real-time Online Users Presence
   const [onlineUsers, setOnlineUsers] = useState<ActiveUserPresence[]>([]);
@@ -1855,26 +1857,43 @@ export default function Home() {
                 </button>
               )}
 
-              {/* Current User Pill & Switch */}
-              <button
-                onClick={() => setShowLoginModal(true)}
-                className={`px-2 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1 border shadow-xs ${
-                  !currentUser
-                    ? "bg-rose-500 text-white animate-pulse"
-                    : currentUser?.role === "readonly"
-                    ? isDarkMode
-                      ? "bg-amber-950/60 border-amber-800/80 text-amber-300 hover:bg-amber-900/60"
-                      : "bg-amber-50 border-amber-300 text-amber-800 hover:bg-amber-100"
-                    : isDarkMode
-                    ? "bg-blue-950/60 border-blue-700/80 text-blue-300 hover:bg-blue-900/60"
-                    : "bg-blue-50 border-blue-300 text-blue-800 hover:bg-blue-100"
-                }`}
-                title="Ganti Pengguna yang Sedang ON"
-              >
-                <span>👤</span>
-                <span className="font-bold">{currentUser ? currentUser.name : "Pilih User"}</span>
-                <span className="text-[9px] underline opacity-70">Ganti</span>
-              </button>
+              {/* Current User Pill, Switch & Change Password */}
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setShowLoginModal(true)}
+                  className={`px-2 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1 border shadow-xs cursor-pointer ${
+                    !currentUser
+                      ? "bg-rose-500 text-white animate-pulse"
+                      : currentUser?.role === "readonly"
+                      ? isDarkMode
+                        ? "bg-amber-950/60 border-amber-800/80 text-amber-300 hover:bg-amber-900/60"
+                        : "bg-amber-50 border-amber-300 text-amber-800 hover:bg-amber-100"
+                      : isDarkMode
+                      ? "bg-blue-950/60 border-blue-700/80 text-blue-300 hover:bg-blue-900/60"
+                      : "bg-blue-50 border-blue-300 text-blue-800 hover:bg-blue-100"
+                  }`}
+                  title="Ganti Pengguna yang Sedang ON"
+                >
+                  <span>👤</span>
+                  <span className="font-bold">{currentUser ? currentUser.name : "Pilih User"}</span>
+                  <span className="text-[9px] underline opacity-70">Ganti</span>
+                </button>
+
+                {currentUser && currentUser.role !== "readonly" && (
+                  <button
+                    onClick={() => setShowChangePasswordModal(true)}
+                    className={`px-1.5 py-1 rounded-lg text-xs font-semibold transition-colors border flex items-center gap-1 cursor-pointer ${
+                      isDarkMode
+                        ? "bg-[#182542] hover:bg-[#223359] border-slate-700/80 text-slate-300"
+                        : "bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-700"
+                    }`}
+                    title={`Ganti Password untuk ${currentUser.name}`}
+                  >
+                    <span>🔑</span>
+                    <span className="hidden lg:inline text-[10px]">Password</span>
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -2728,6 +2747,15 @@ export default function Home() {
         currentUser={currentUser}
         isDarkMode={isDarkMode}
       />
+      {showChangePasswordModal && currentUser && currentUser.role !== "readonly" && (
+        <ChangePasswordModal
+          isOpen={showChangePasswordModal}
+          onClose={() => setShowChangePasswordModal(false)}
+          userName={currentUser.name}
+          isDarkMode={isDarkMode}
+          onSuccess={(msg) => showToast(`✓ ${msg}`)}
+        />
+      )}
     </div>
   );
 }

@@ -23,6 +23,7 @@ const PRINT_PARTITIONS_COLLECTION = "print_state_partitions";
 const CATEGORY_OVERRIDES_DOC = "category_overrides";
 const CHUNKS_COLLECTION = "faktur_chunks";
 const PRESENCE_DOC = "online_presence";
+const USER_CREDENTIALS_DOC = "user_credentials";
 
 export type SubscribeChangeReason = "chunks" | "print" | "meta";
 
@@ -1289,3 +1290,63 @@ export function subscribeToOnlinePresence(
     }
   );
 }
+
+/**
+ * Verify user password (default "123" if not yet changed in cloud)
+ */
+export async function verifyUserPassword(userName: string, inputPass: string): Promise<boolean> {
+  if (userName.toLowerCase() === "stranger") return true;
+  try {
+    const credRef = doc(db, APP_DATA_COLLECTION, USER_CREDENTIALS_DOC);
+    const snap = await getDoc(credRef);
+    if (snap.exists()) {
+      const data = snap.data() as Record<string, string>;
+      const storedPass = data[userName];
+      if (storedPass !== undefined && storedPass !== null) {
+        return String(storedPass) === inputPass;
+      }
+    }
+  } catch (err) {
+    console.warn("Could not fetch remote credentials, fallback to default:", err);
+  }
+  return inputPass === "123";
+}
+
+/**
+ * Change user password in Cloud Firestore
+ */
+export async function changeUserPassword(
+  userName: string,
+  oldPass: string,
+  newPass: string
+): Promise<{ success: boolean; message: string }> {
+  if (userName.toLowerCase() === "stranger") {
+    return { success: false, message: "Pengguna stranger tidak memiliki password." };
+  }
+  if (!newPass || newPass.trim().length < 3) {
+    return { success: false, message: "Password baru minimal 3 karakter." };
+  }
+
+  try {
+    const credRef = doc(db, APP_DATA_COLLECTION, USER_CREDENTIALS_DOC);
+    const snap = await getDoc(credRef);
+    let currentPass = "123";
+    if (snap.exists()) {
+      const data = snap.data() as Record<string, string>;
+      if (data[userName] !== undefined && data[userName] !== null) {
+        currentPass = String(data[userName]);
+      }
+    }
+
+    if (oldPass !== currentPass) {
+      return { success: false, message: "Password lama salah!" };
+    }
+
+    await setDoc(credRef, { [userName]: newPass.trim() }, { merge: true });
+    return { success: true, message: `Password untuk ${userName} berhasil diperbarui!` };
+  } catch (err) {
+    console.error("Failed to update password:", err);
+    return { success: false, message: "Gagal menyimpan password ke database cloud." };
+  }
+}
+
