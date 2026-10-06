@@ -97,22 +97,71 @@ Dokumen ini adalah acuan baku dan permanen untuk seluruh pengembangan, pemelihar
 
 ---
 
+#### H. Master Produk & Category Overrides Retention (LOCKED TOTAL)
+1. **Fitur Master Produk**:
+   - Pengguna admin dapat mencari, memfilter, dan mengubah kategori produk (`FARMA`, `ALKES`, `CCP`, `PREKURSOR`, `OOT`) langsung melalui modal Master Produk atau inline dropdown pada baris detail faktur.
+   - Perubahan disimpan permanen ke dokumen `app_data/product_category_overrides` di Firestore.
+2. **Jaminan Anti-Kembali ke Awal Saat Upload File Baru**:
+   - Fungsi `getProductCategory`, `parseXXCUST`, dan `parseExcelFile` WAJIB selalu membaca dan memprioritaskan pemetaan dari `product_category_overrides`.
+   - Kategori produk yang telah diubah secara kustom oleh pengguna TIDAK BOLEH kembali ke nilai default saat file excel baru diunggah di kemudian hari.
+
+#### I. Sistem Hak Akses Pengguna & Keamanan Password (User Roles & Auth - LOCKED)
+1. **Daftar Pengguna Resmi**:
+   - Pengguna Admin (Full Access): `Farhan`, `Rendy`, `Afuan`, `Aqsal`, `Wibi`, `Andre`, `Melin`, `Mahendra`.
+   - Pengguna Tamu: `stranger` (Akses Read Only).
+2. **Pengamanan Password Mandiri**:
+   - Verifikasi password tersimpan aman di Firestore `app_data/user_credentials`.
+   - Pengguna admin dapat mengganti password masing-masing kapan saja melalui tombol **Password** (`🔑`).
+   - Sesi pengguna tersimpan di `sessionStorage` sehingga saat tab direfresh tidak perlu login ulang.
+3. **Pembatasan Ketat Akses Stranger (Read Only Protection)**:
+   - Pengguna `stranger` dilarang keras melakukan aksi operasional: dilarang upload file, dilarang menandai cetak (Done Print), dilarang mereset data, dan dilarang mengubah kategori apotek/produk.
+
+#### J. Fitur Reset Data Terkendali (Admin Safe Reset)
+- Tombol **Reset Data** (`🗑️ Reset Data`) tersedia khusus untuk pengguna Admin dengan dialog konfirmasi keamanan bertingkat.
+- Saat reset disetujui, seluruh dokumen faktur di cloud dan memori lokal dibersihkan serentak secara bersih tanpa sisa (*clean slate*).
+
+#### K. Aturan Baku Urutan Hook React (React Hook Order & Anti-Crash Guarantee - LOCKED MUTLAK)
+- **LARANGAN MUTLAK KONDISIONAL HOOK**: DILARANG KERAS menempatkan `useState`, `useEffect`, `useMemo`, `useCallback`, atau `useRef` setelah pernyataan `if (...) return null;` atau di dalam blok kondisional apa pun.
+- Seluruh hooks WAJIB dideklarasikan di level teratas (*top-level*) fungsi komponen. Pelanggaran aturan ini memicu *React Error #300 ("Rendered fewer hooks than expected")* yang membuat aplikasi crash menjadi tampilan error biru di browser pengguna.
+
+#### L. Arsitektur Performa Super Cepat & Eliminasi Spinner Palsu (Performance Lock - LOCKED)
+1. **Pemisahan `baseGroups` vs `grouped` (<1ms Action Speed)**:
+   - Pengelompokan baris data, kalkulasi harga, dan penyusunan string pencarian (`searchStr`) WAJIB diisolasi dalam `baseGroups` yang hanya dieksekusi saat `records` berubah.
+   - Proyeksi status cetak (`grouped`) dilakukan secara *shallow* (<1ms), sehingga aksi klik tombol cetak (*Done Print*) berjalan seketika tanpa jeda dan tanpa mengulang proses berat.
+2. **Pencarian Kilat (Precomputed Search Index)**:
+   - Setiap grup faktur memiliki atribut `searchStr` huruf kecil yang sudah dihitung sebelumnya. Pencarian mencocokkan string tunggal ini sehingga respon pencarian instan tanpa lag.
+3. **Kalkulasi Kartu & Tab Berbasis `stats` (O(N) Precomputed Stats)**:
+   - DILARANG menaruh pemanggilan `.filter()` berulang kali di dalam JSX render body. Seluruh angka kartu KPI dan filter tab dihitung dalam 1 putaran ringkas `stats` di memori.
+4. **Eliminasi Spinner Loading Berputar yang Macet**:
+   - Indikator spinner "Memuat data faktur..." HANYA boleh muncul jika `records.length === 0` (saat awal membuka web ketika data belum masuk ke memori).
+   - Begitu data ada di memori (`records.length > 0`), tabel DILARANG menampilkan spinner loading, melainkan langsung menampilkan data atau keterangan kosong yang ramah jika tidak ada data yang sesuai filter (contoh pada tab Belum Terprint: `🎉 Semua faktur sudah dicetak`).
+
+---
+
 ### 2. ARSITEKTUR DATABASE & ZERO LOCALSTORAGE
 
 - **DILARANG MENGGUNAKAN `localStorage`** untuk menyimpan records, progression, ataupun status cetak, agar sinkronisasi 100% konsisten multi-device.
 - **Skema Koleksi Firestore**:
-  1. `app_data/metadata`: Menyimpan `invoiceProgression`, `totalInvoices`, `totalChunks`, `chunkIds`, `updatedAt`.
-  2. `app_data/print_state_part_{idx}`: Status cetak dipecah per partisi (1.000 key per partisi) untuk menjamin kapasitas puluhan ribu faktur tanpa melanggar batas 1 MB per dokumen Firestore.
-  3. `app_data/category_overrides`: Menyimpan pemetaan nama apotek / invoice ke kategori kustom (`1P`, `2P`, `3P`).
-  4. `faktur_chunks/chunk_{idx}`: Menyimpan data faktur yang dipecah per chunk (<500 KB per chunk). Masing-masing item di chunk menyertakan `status_cetak` dan `printed_at` sebagai cadangan redundan permanen.
-- **Perlindungan Data dari Penghapusan**:
-  - Tombol reset/hapus semua data telah ditiadakan dari antarmuka pengguna (UI) guna mencegah penghapusan data secara tidak sengaja.
-
+  1. `app_data/metadata`: Menyimpan `invoiceProgression`, `totalInvoices`, `totalChunks`, `chunkIds`, `updatedAt`, `lastUploadNotification`.
+  2. `app_data/print_state_partitions`: Status cetak dipecah per partisi (5.000 key per partisi) untuk menjamin kapasitas puluhan ribu faktur tanpa batas limit Firestore.
+  3. `app_data/category_overrides`: Menyimpan pemetaan kustom kategori apotek/faktur (`1P`, `2P`, `3P`).
+  4. `app_data/product_category_overrides`: Menyimpan pemetaan kustom kategori produk (`FARMA`, `ALKES`, `CCP`, `PREKURSOR`, `OOT`).
+  5. `app_data/user_credentials`: Menyimpan password pengguna terenkripsi.
+  6. `app_data/active_presence`: Menyimpan heartbeat real-time siapa saja pengguna yang sedang ON.
+  7. `faktur_chunks/chunk_{idx}`: Menyimpan data faktur yang dipecah per chunk (<500 KB per chunk).
 
 ---
 
 ### 3. KLAUSUL INTEGRITAS MUTLAK (INVIOLABILITY CLAUSE)
 
 > **DILARANG MERUBAH LOGIKA DASAR PADA PERMINTAAN FITUR BARU APAPUN:**
-> Setiap penambahan fitur, perubahan tampilan, atau optimasi di masa mendatang **WAJIB** tunduk pada dokumen `LOCKED_RULES.md` ini dan **TIDAK BOLEH** merusak atau mengubah logika isolasi DOO vs ORA, anti-reappearance faktur tercetak, real-time sync Firestore, dual source of truth status cetak, jaminan anti-flash, penyimpanan kustom kategori apotek, dan arsitektur non-localStorage.
+> Setiap penambahan fitur, perubahan tampilan, atau optimasi di masa mendatang **WAJIB** tunduk pada dokumen `LOCKED_RULES.md` ini dan **TIDAK BOLEH** merusak atau mengubah:
+> 1. Isolasi mutlak DOO vs ORA
+> 2. Jaminan anti-reappearance faktur yang sudah dicetak
+> 3. Jaminan faktur baru masuk ke Belum Terprint
+> 4. Real-time sync multi-device Firestore
+> 5. Retensi kustom kategori apotek dan produk
+> 6. Aturan baku urutan Hook React (Top-Level Hooks Only)
+> 7. Arsitektur performa kilat `baseGroups` dan eliminasi loading palsu
+> 8. Sistem hak akses role pengguna dan proteksi stranger.
 
