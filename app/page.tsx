@@ -2083,17 +2083,17 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Filter and Search Bar Section */}
-        <div className={`border rounded-xl p-2.5 sm:p-3 shadow-xs space-y-2 transition-colors ${
+        {/* Filter and Search Bar Section - Ultra Compact */}
+        <div className={`border rounded-xl px-2.5 py-1.5 shadow-xs space-y-1.5 transition-colors ${
           isDarkMode ? "bg-[#111c33]/90 border-slate-700/60 shadow-black/20" : "bg-white border-slate-200"
         }`}>
           {/* Top Row Filters */}
-          <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-1.5">
             {/* Status Filter Tabs */}
-            <div className={`flex items-center p-0.5 rounded-lg ${isDarkMode ? "bg-[#0b1220] border border-slate-800" : "bg-slate-100"}`}>
+            <div className={`flex flex-wrap items-center p-0.5 rounded-lg ${isDarkMode ? "bg-[#0b1220] border border-slate-800" : "bg-slate-100"}`}>
               <button
                 onClick={() => { setFilter("belum"); setPage(0); }}
-                className={`px-2.5 py-1 rounded-md text-xs font-bold transition-all ${
+                className={`px-2 py-0.5 rounded-md text-xs font-bold transition-all ${
                   filter === "belum"
                     ? (isDarkMode ? "bg-[#1e2c4a] text-blue-300 shadow-xs border border-blue-500/30" : "bg-white text-slate-900 shadow-xs")
                     : (isDarkMode ? "text-slate-400 hover:text-white" : "text-slate-600 hover:text-slate-900")
@@ -2103,7 +2103,7 @@ export default function Home() {
               </button>
               <button
                 onClick={() => { setFilter("sudah"); setPage(0); }}
-                className={`px-2.5 py-1 rounded-md text-xs font-bold transition-all ${
+                className={`px-2 py-0.5 rounded-md text-xs font-bold transition-all ${
                   filter === "sudah"
                     ? (isDarkMode ? "bg-[#1e2c4a] text-blue-300 shadow-xs border border-blue-500/30" : "bg-white text-slate-900 shadow-xs")
                     : (isDarkMode ? "text-slate-400 hover:text-white" : "text-slate-600 hover:text-slate-900")
@@ -2113,7 +2113,7 @@ export default function Home() {
               </button>
               <button
                 onClick={() => { setFilter("all"); setPage(0); }}
-                className={`px-2.5 py-1 rounded-md text-xs font-bold transition-all ${
+                className={`px-2 py-0.5 rounded-md text-xs font-bold transition-all ${
                   filter === "all"
                     ? (isDarkMode ? "bg-[#1e2c4a] text-blue-300 shadow-xs border border-blue-500/30" : "bg-white text-slate-900 shadow-xs")
                     : (isDarkMode ? "text-slate-400 hover:text-white" : "text-slate-600 hover:text-slate-900")
@@ -2123,7 +2123,7 @@ export default function Home() {
               </button>
               <button
                 onClick={() => { setFilter("double"); setPage(0); }}
-                className={`px-2.5 py-1 rounded-md text-xs font-bold transition-all ${
+                className={`px-2 py-0.5 rounded-md text-xs font-bold transition-all ${
                   filter === "double"
                     ? (isDarkMode ? "bg-rose-950 text-rose-300 shadow-xs border border-rose-800" : "bg-white text-rose-700 shadow-xs")
                     : (isDarkMode ? "text-rose-400 hover:text-rose-300" : "text-rose-600 hover:text-rose-800")
@@ -2133,7 +2133,7 @@ export default function Home() {
               </button>
               <button
                 onClick={() => { setFilter("retur"); setPage(0); }}
-                className={`px-2.5 py-1 rounded-md text-xs font-bold transition-all ${
+                className={`px-2 py-0.5 rounded-md text-xs font-bold transition-all ${
                   filter === "retur"
                     ? (isDarkMode ? "bg-amber-950 text-amber-300 shadow-xs border border-amber-800" : "bg-white text-amber-700 shadow-xs")
                     : (isDarkMode ? "text-amber-400 hover:text-amber-300" : "text-amber-600 hover:text-amber-800")
@@ -2147,7 +2147,7 @@ export default function Home() {
             {unprintedCountInFiltered > 0 && currentUser?.role !== "readonly" && (
               <button
                 onClick={handleMarkAllPrinted}
-                className="px-3 py-1 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-lg text-xs font-bold transition-colors flex items-center gap-1 shadow-xs shadow-emerald-900/30"
+                className="px-2.5 py-1 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-lg text-xs font-bold transition-colors flex items-center gap-1 shadow-xs shadow-emerald-900/30"
               >
                 <span>✓</span>
                 <span>Tandai Semua Selesai ({unprintedCountInFiltered})</span>
@@ -2156,22 +2156,22 @@ export default function Home() {
           </div>
 
           {/* Secondary Dropdown Filters & Search */}
-          <div className={`grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-2 pt-1.5 border-t ${
+          <div className={`grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-1.5 pt-1 border-t ${
             isDarkMode ? "border-slate-800" : "border-slate-100"
           }`}>
             {/* Global Search Input */}
             <div className="relative md:col-span-1">
-              <span className="absolute left-2.5 top-2 text-xs text-slate-400">🔍</span>
+              <span className="absolute left-2 top-1.5 text-xs text-slate-400">🔍</span>
               <input
                 ref={searchInputRef}
                 type="text"
                 placeholder="Cari SO / Invoice / Obat... ('/' atau 'f')"
                 value={search}
                 onChange={(e) => { setSearch(e.target.value); setPage(0); }}
-                className={`w-full pl-7 pr-2.5 py-1 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-colors ${
+                className={`w-full pl-6 pr-2 py-1 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-blue-500/50 transition-colors ${
                   isDarkMode
                     ? "bg-[#0b1220] border border-slate-700/80 text-slate-100 placeholder:text-slate-500"
-                    : "bg-slate-50 border-slate-200 text-slate-800 focus:bg-white"
+                    : "bg-slate-50 border border-slate-200 text-slate-800 focus:bg-white"
                 }`}
               />
             </div>
@@ -2180,7 +2180,7 @@ export default function Home() {
             <select
               value={katFilter}
               onChange={(e) => { setKatFilter(e.target.value as KatFilter); setPage(0); }}
-              className={`w-full px-2.5 py-1 rounded-lg text-xs font-medium focus:outline-none focus:border-blue-500 transition-colors ${
+              className={`w-full px-2 py-1 rounded-lg text-xs font-medium focus:outline-none transition-colors ${
                 isDarkMode
                   ? "bg-[#0b1220] border border-slate-700/80 text-slate-200"
                   : "bg-slate-50 border border-slate-200 text-slate-700"
@@ -2196,7 +2196,7 @@ export default function Home() {
             <select
               value={jenisFilter}
               onChange={(e) => { setJenisFilter(e.target.value as JenisFilter); setPage(0); }}
-              className={`w-full px-2.5 py-1 rounded-lg text-xs font-medium focus:outline-none focus:border-blue-500 transition-colors ${
+              className={`w-full px-2 py-1 rounded-lg text-xs font-medium focus:outline-none transition-colors ${
                 isDarkMode
                   ? "bg-[#0b1220] border border-slate-700/80 text-slate-200"
                   : "bg-slate-50 border border-slate-200 text-slate-700"
@@ -2211,7 +2211,7 @@ export default function Home() {
             <select
               value={klasFilter}
               onChange={(e) => { setKlasFilter(e.target.value as KlasFilter); setPage(0); }}
-              className={`w-full px-2.5 py-1 rounded-lg text-xs font-medium focus:outline-none focus:border-blue-500 transition-colors ${
+              className={`w-full px-2 py-1 rounded-lg text-xs font-medium focus:outline-none transition-colors ${
                 isDarkMode
                   ? "bg-[#0b1220] border border-slate-700/80 text-slate-200"
                   : "bg-slate-50 border border-slate-200 text-slate-700"
@@ -2229,7 +2229,7 @@ export default function Home() {
             <select
               value={dateFilter}
               onChange={(e) => { setDateFilter(e.target.value); setPage(0); }}
-              className={`w-full px-2.5 py-1 rounded-lg text-xs font-medium focus:outline-none focus:border-blue-500 transition-colors ${
+              className={`w-full px-2 py-1 rounded-lg text-xs font-medium focus:outline-none transition-colors ${
                 isDarkMode
                   ? "bg-[#0b1220] border border-slate-700/80 text-slate-200"
                   : "bg-slate-50 border border-slate-200 text-slate-700"
