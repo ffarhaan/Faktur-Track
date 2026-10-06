@@ -98,10 +98,8 @@ function dbRowsToFakturRecords(rows: Array<Record<string, unknown>>): {
 
     if (r.status_cetak) {
       printedSet.add(invKey);
-      if (isOra) printedSet.add(cleanInv);
       if (pAt) {
         printedAtMap[invKey] = pAt;
-        if (isOra) printedAtMap[cleanInv] = pAt;
       }
     }
 
@@ -946,15 +944,12 @@ export default function Home() {
 
           const isDocPrinted = Boolean(
             row.status_cetak ||
-            livePrintedKeys.has(targetKey) ||
-            (isOra && livePrintedKeys.has(cleanInv))
+            livePrintedKeys.has(targetKey)
           );
           if (isDocPrinted) {
             livePrintedKeys.add(targetKey);
-            if (isOra) livePrintedKeys.add(cleanInv);
-            const pTime = (row.printed_at as string) || livePrintedAtMap[targetKey] || (isOra ? livePrintedAtMap[cleanInv] : null) || new Date().toISOString();
+            const pTime = (row.printed_at as string) || livePrintedAtMap[targetKey] || new Date().toISOString();
             livePrintedAtMap[targetKey] = pTime;
-            if (isOra) livePrintedAtMap[cleanInv] = pTime;
           }
           const docPrintedAt = isDocPrinted
             ? (livePrintedAtMap[targetKey] || (row.printed_at as string) || null)
@@ -968,31 +963,21 @@ export default function Home() {
           };
 
           existingStatusMap.set(targetKey, statusInfo);
-          if (isOra) {
-            existingStatusMap.set(cleanInv, statusInfo);
-          }
         });
 
         // 2. Pre-populate invMap with existing records
         const invMap = new Map<string, FirestoreFakturDoc>();
         existingDBDocsUnified.forEach((doc) => {
           const k = doc.id || doc.no_faktur;
-          const isOraDoc = Boolean(doc.jenis_transaksi === "ORA" || isOraCustomer(String(doc.customer_name || "")) || k.endsWith("-1P"));
-          const cleanK = k.replace(/-1P$/i, "");
           const isDocPrinted = Boolean(
             doc.status_cetak ||
-            livePrintedKeys.has(k) ||
-            (isOraDoc && (livePrintedKeys.has(cleanK) || livePrintedKeys.has(`${cleanK}-1P`)))
+            livePrintedKeys.has(k)
           );
           if (isDocPrinted) {
             livePrintedKeys.add(k);
-            if (isOraDoc) {
-              livePrintedKeys.add(cleanK);
-              livePrintedKeys.add(`${cleanK}-1P`);
-            }
           }
           const docPAt = isDocPrinted
-            ? (livePrintedAtMap[k] || (isOraDoc ? livePrintedAtMap[cleanK] || livePrintedAtMap[`${cleanK}-1P`] : null) || doc.printed_at || null)
+            ? (livePrintedAtMap[k] || doc.printed_at || null)
             : null;
 
           invMap.set(k, {
@@ -1008,12 +993,9 @@ export default function Home() {
         const newUnprintedKeysSet = new Set<string>();
         // Preserve all existing unprinted invoices from database ONLY if not printed!
         invMap.forEach((doc, k) => {
-          const isOraDoc = Boolean(doc.jenis_transaksi === "ORA" || isOraCustomer(String(doc.customer_name || "")) || k.endsWith("-1P"));
-          const cleanK = k.replace(/-1P$/i, "");
           const isPrinted = Boolean(
             doc.status_cetak ||
-            mergedPrintedSet.has(k) ||
-            (isOraDoc && (mergedPrintedSet.has(cleanK) || mergedPrintedSet.has(`${cleanK}-1P`)))
+            mergedPrintedSet.has(k)
           );
           if (!isPrinted) {
             newUnprintedKeysSet.add(k);
@@ -1028,8 +1010,8 @@ export default function Home() {
           if (!cleanInv || cleanInv === "-" || cleanInv === "0") continue;
 
           const targetKey = isOra ? `${cleanInv}-1P` : cleanInv;
-          const prevInfo = existingStatusMap.get(targetKey) || (isOra ? existingStatusMap.get(cleanInv) : undefined);
-          const existingEntry = invMap.get(targetKey) || (isOra ? invMap.get(cleanInv) : undefined);
+          const prevInfo = existingStatusMap.get(targetKey);
+          const existingEntry = invMap.get(targetKey);
 
           // Determine if this invoice already exists in the database
           const isExistingInDB = existingEntry !== undefined || prevInfo !== undefined;
@@ -1042,7 +1024,6 @@ export default function Home() {
             const wasPrinted = Boolean(
               (existingEntry && existingEntry.status_cetak) ||
               mergedPrintedSet.has(targetKey) ||
-              (isOra && (mergedPrintedSet.has(cleanInv) || mergedPrintedSet.has(`${cleanInv}-1P`))) ||
               (prevInfo && prevInfo.status_cetak)
             );
 
@@ -1051,20 +1032,11 @@ export default function Home() {
               isPrinted = true;
               printedAt = (existingEntry && existingEntry.printed_at) ||
                 mergedPrintedAtMap[targetKey] ||
-                (isOra ? mergedPrintedAtMap[cleanInv] || mergedPrintedAtMap[`${cleanInv}-1P`] : null) ||
                 (prevInfo && prevInfo.printed_at) ||
                 new Date().toISOString();
               mergedPrintedSet.add(targetKey);
-              if (isOra) {
-                mergedPrintedSet.add(cleanInv);
-                mergedPrintedSet.add(`${cleanInv}-1P`);
-              }
               mergedPrintedAtMap[targetKey] = printedAt;
               newUnprintedKeysSet.delete(targetKey);
-              if (isOra) {
-                newUnprintedKeysSet.delete(cleanInv);
-                newUnprintedKeysSet.delete(`${cleanInv}-1P`);
-              }
             } else {
               // Already in database but unprinted: keep unprinted
               isPrinted = false;
@@ -1079,10 +1051,6 @@ export default function Home() {
             newUnprintedKeysSet.add(targetKey);
             // Ensure clean state: purge any accidental partition key for this brand new invoice
             mergedPrintedSet.delete(targetKey);
-            if (isOra) {
-              mergedPrintedSet.delete(cleanInv);
-              mergedPrintedSet.delete(`${cleanInv}-1P`);
-            }
           }
 
           const rawCust = String(r.customerName || "-").trim();
@@ -1092,15 +1060,6 @@ export default function Home() {
             categoryOverridesRef.current[rawCust] ||
             categoryOverridesRef.current[cleanInv] ||
             (prevInfo && (prevInfo.extra?.kategori as ("1P" | "2P" | "3P") | undefined));
-
-          if (isOra && invMap.has(cleanInv) && cleanInv !== targetKey) {
-            const oldBare = invMap.get(cleanInv)!;
-            if (oldBare.status_cetak) {
-              isPrinted = true;
-              if (!printedAt) printedAt = oldBare.printed_at || null;
-            }
-            invMap.delete(cleanInv);
-          }
 
           if (!invMap.has(targetKey)) {
             const kategori = isOra

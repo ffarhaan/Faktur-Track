@@ -60,16 +60,6 @@ function registerPrintKeyVariants(
   if (!k) return;
   keysSet.add(k);
   if (pAt && !atMap[k]) atMap[k] = pAt;
-
-  if (k.endsWith("-1P")) {
-    const bare = k.replace(/-1P$/i, "");
-    keysSet.add(bare);
-    if (pAt && !atMap[bare]) atMap[bare] = pAt;
-  } else {
-    const oraK = `${k}-1P`;
-    keysSet.add(oraK);
-    if (pAt && !atMap[oraK]) atMap[oraK] = pAt;
-  }
 }
 
 /**
@@ -295,15 +285,9 @@ export function subscribeToFakturs(
       const key = d.id || d.no_faktur;
       if (!key) continue;
       const cleanKey = key.replace(/-1P$/i, "");
-      const isOra = d.jenis_transaksi === "ORA" || key.endsWith("-1P");
-      const isPrinted = Boolean(
-        d.status_cetak ||
-        printedSet.has(key) ||
-        printedSet.has(cleanKey) ||
-        (isOra && printedSet.has(`${cleanKey}-1P`))
-      );
+      const isPrinted = Boolean(d.status_cetak || printedSet.has(key));
       d.status_cetak = isPrinted;
-      d.printed_at = isPrinted ? (pMap[key] || pMap[cleanKey] || (isOra ? pMap[`${cleanKey}-1P`] : null) || d.printed_at || null) : null;
+      d.printed_at = isPrinted ? (pMap[key] || d.printed_at || null) : null;
 
       // Apply customer/invoice category override if available
       const cust = String(d.customer_name || d.extra?.nama_pelanggan || "").trim();
@@ -679,22 +663,16 @@ export async function saveFaktursBatch(
       const cleanKey = key.replace(/-1P$/i, "");
       const isOra = item.jenis_transaksi === "ORA" || key.endsWith("-1P");
 
-      const isExplicitlyNewUnprinted = newUnprintedSet.has(key) ||
-        newUnprintedSet.has(cleanKey) ||
-        (isOra && newUnprintedSet.has(`${cleanKey}-1P`));
+      const isExplicitlyNewUnprinted = newUnprintedSet.has(key);
 
       const isPrinted = !isExplicitlyNewUnprinted && Boolean(
         item.status_cetak ||
-        unifiedPrintedSet.has(key) ||
-        unifiedPrintedSet.has(cleanKey) ||
-        (isOra && unifiedPrintedSet.has(`${cleanKey}-1P`))
+        unifiedPrintedSet.has(key)
       );
 
       if (isPrinted) {
         item.status_cetak = true;
         item.printed_at = unifiedPrintedAtMap[key] ||
-          unifiedPrintedAtMap[cleanKey] ||
-          (isOra ? unifiedPrintedAtMap[`${cleanKey}-1P`] : null) ||
           item.printed_at ||
           new Date().toISOString();
         registerPrintKeyVariants(key, item.printed_at, unifiedPrintedSet, unifiedPrintedAtMap);
@@ -703,8 +681,6 @@ export async function saveFaktursBatch(
         item.printed_at = null;
         if (isExplicitlyNewUnprinted) {
           unifiedPrintedSet.delete(key);
-          unifiedPrintedSet.delete(cleanKey);
-          if (isOra) unifiedPrintedSet.delete(`${cleanKey}-1P`);
         }
       }
     }
