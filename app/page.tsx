@@ -20,9 +20,11 @@ import {
   updateFakturPrintStatus,
   updateFaktursPrintStatusBatch,
   updateFakturCategory,
+  clearAllFakturs,
 } from "@/lib/firestoreService";
 import MasterApotekModal from "@/components/MasterApotekModal";
 import MasterProductModal from "@/components/MasterProductModal";
+import LoginModal, { AppUser } from "@/components/LoginModal";
 
 type Filter = "belum" | "sudah" | "all" | "double" | "retur";
 type KatFilter = "all" | "1P" | "2P" | "3P";
@@ -204,6 +206,68 @@ export default function Home() {
   const deviceIdRef = useRef<string>(Math.random().toString(36).substring(2, 9));
   const [uploadNotification, setUploadNotification] = useState<UploadNotification | null>(null);
 
+  // User Authentication & Role State
+  const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
+  const currentUserRef = useRef<AppUser | null>(null);
+  const [showLoginModal, setShowLoginModal] = useState(false);
+
+  useEffect(() => {
+    currentUserRef.current = currentUser;
+  }, [currentUser]);
+
+  useEffect(() => {
+    const saved = typeof window !== "undefined" ? localStorage.getItem("faktur_tracker_user") : null;
+    if (saved) {
+      try {
+        const u = JSON.parse(saved);
+        setCurrentUser(u);
+      } catch {
+        setShowLoginModal(true);
+      }
+    } else {
+      setShowLoginModal(true);
+    }
+  }, []);
+
+  const handleLogin = (user: AppUser) => {
+    setCurrentUser(user);
+    currentUserRef.current = user;
+    if (typeof window !== "undefined") {
+      localStorage.setItem("faktur_tracker_user", JSON.stringify(user));
+    }
+    setShowLoginModal(false);
+    showToast(`✓ Masuk sebagai ${user.name}${user.role === "readonly" ? " (Hanya Lihat)" : ""}`);
+  };
+
+  // Clear / Reset All Data
+  const handleClearAll = async () => {
+    if (currentUserRef.current?.role === "readonly") {
+      alert("⚠️ Akses Stranger: Anda hanya memiliki izin melihat data (Read Only).");
+      return;
+    }
+    if (!confirm("⚠️ YAKIN INGIN MENGHAPUS SEMUA DATA?\\n\\nSemua data faktur dan riwayat status cetak di database cloud akan direset seperti semula.")) {
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await clearAllFakturs();
+      setRecords([]);
+      setPrintedInvoices(new Set());
+      setPrintedAtMap({});
+      setInvoiceProgression(null);
+      setUploadNotification(null);
+      setExpandedInvoices(new Set());
+      setPage(0);
+      showToast("✓ Seluruh data berhasil direset.");
+    } catch (err) {
+      console.error("Clear error:", err);
+      alert("Gagal mereset data di database.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const [selectedRowIndex, setSelectedRowIndex] = useState(0);
   const [selectedColIdx, setSelectedColIdx] = useState(3); // Default to No Invoice column
   const [categoryOverrides, setCategoryOverrides] = useState<Record<string, "1P" | "2P" | "3P">>({});
@@ -239,6 +303,10 @@ export default function Home() {
 
   const handleUpdateCategory = useCallback(
     async (invoiceKey: string, newKat: "1P" | "2P" | "3P", customerName?: string) => {
+      if (currentUserRef.current?.role === "readonly") {
+        showToast("⚠️ Akses Stranger: Anda hanya memiliki izin melihat data (Read Only).");
+        return;
+      }
       const cleanInv = invoiceKey.replace(/-1P$/i, "");
       const cleanCust = (customerName || "").trim();
       const normCust = cleanCust ? normalize(cleanCust) : "";
@@ -404,6 +472,10 @@ export default function Home() {
   // Toggle Print Status (Immediate Firestore write & real-time sync)
   const togglePrint = useCallback(
     async (group: FakturGroup) => {
+      if (currentUserRef.current?.role === "readonly") {
+        showToast("⚠️ Akses Stranger: Anda hanya memiliki izin melihat data (Read Only).");
+        return;
+      }
       const willBePrinted = !group.allPrinted;
       const targetKey = group.invoiceKey;
       const nowIso = new Date().toISOString();
@@ -630,6 +702,10 @@ export default function Home() {
 
   // Batch Done Print: Mark All Visible As Printed
   const handleMarkAllPrinted = useCallback(async () => {
+    if (currentUserRef.current?.role === "readonly") {
+      showToast("⚠️ Akses Stranger: Anda hanya memiliki izin melihat data (Read Only).");
+      return;
+    }
     const unprinted = filtered.filter((g) => !g.allPrinted);
     if (unprinted.length === 0) {
       alert("Semua faktur yang sedang tampil sudah selesai dicetak.");
@@ -819,6 +895,11 @@ export default function Home() {
         : [filesInput as File];
 
       if (files.length === 0) return;
+
+      if (currentUserRef.current?.role === "readonly") {
+        showToast("⚠️ Akses Stranger: Anda tidak dapat mengunggah file (Read Only).");
+        return;
+      }
 
       if (isUploadingRef.current) {
         showToast("⚠️ Sedang memproses dan menyimpan file sebelumnya. Mohon tunggu beberapa detik...");
@@ -1423,18 +1504,34 @@ export default function Home() {
           <div className="flex flex-wrap items-center gap-1.5 w-full md:w-auto">
             {/* Upload File Button */}
             <label
-              onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+              onDragOver={(e) => {
+                if (currentUser?.role === "readonly") return;
+                e.preventDefault();
+                setDragOver(true);
+              }}
               onDragLeave={() => setDragOver(false)}
               onDrop={(e) => {
                 e.preventDefault();
                 setDragOver(false);
+                if (currentUser?.role === "readonly") {
+                  showToast("⚠️ Akses Stranger: Anda hanya dapat melihat data (Read Only).");
+                  return;
+                }
                 const files = Array.from(e.dataTransfer.files || []);
                 if (files.length > 0) handleUpload(files);
               }}
-              className={`cursor-pointer px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 shadow-xs ${
-                dragOver
-                  ? "bg-blue-100 text-blue-700 border-2 border-dashed border-blue-500"
-                  : "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-blue-600/30"
+              onClick={(e) => {
+                if (currentUser?.role === "readonly") {
+                  e.preventDefault();
+                  showToast("⚠️ Akses Stranger: Anda hanya dapat melihat data (Read Only).");
+                }
+              }}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 shadow-xs ${
+                currentUser?.role === "readonly"
+                  ? "opacity-50 cursor-not-allowed bg-slate-300 text-slate-500"
+                  : dragOver
+                  ? "cursor-pointer bg-blue-100 text-blue-700 border-2 border-dashed border-blue-500"
+                  : "cursor-pointer bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-blue-600/30"
               }`}
             >
               <span>📤</span>
@@ -1442,9 +1539,11 @@ export default function Home() {
               <input
                 type="file"
                 multiple
+                disabled={currentUser?.role === "readonly"}
                 accept=".xls,.xlsx"
                 className="hidden"
                 onChange={(e) => {
+                  if (currentUser?.role === "readonly") return;
                   const files = e.target.files ? Array.from(e.target.files) : [];
                   if (files.length > 0) handleUpload(files);
                   e.target.value = "";
@@ -1521,6 +1620,43 @@ export default function Home() {
             >
               <span>📥</span>
               <span className="hidden sm:inline">Ekspor Excel</span>
+            </button>
+
+            {/* Reset / Hapus Semua Data Button */}
+            {currentUser?.role !== "readonly" && (
+              <button
+                onClick={handleClearAll}
+                className={`px-2.5 py-1.5 border rounded-lg text-xs font-semibold transition-colors flex items-center gap-1 ${
+                  isDarkMode
+                    ? "bg-rose-950/40 hover:bg-rose-900/50 text-rose-300 border-rose-800/60"
+                    : "bg-rose-50 hover:bg-rose-100 text-rose-700 border-rose-200"
+                }`}
+                title="Hapus Semua Data & Reset Database"
+              >
+                <span className="text-rose-400">🗑️</span>
+                <span className="hidden sm:inline">Reset Data</span>
+              </button>
+            )}
+
+            {/* User Profile & Switch Account Button */}
+            <button
+              onClick={() => setShowLoginModal(true)}
+              className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 border ${
+                currentUser?.role === "readonly"
+                  ? isDarkMode
+                    ? "bg-amber-950/40 border-amber-800/60 text-amber-300 hover:bg-amber-900/50"
+                    : "bg-amber-50 border-amber-300 text-amber-800 hover:bg-amber-100"
+                  : isDarkMode
+                  ? "bg-emerald-950/40 border-emerald-800/60 text-emerald-300 hover:bg-emerald-900/50"
+                  : "bg-emerald-50 border-emerald-300 text-emerald-800 hover:bg-emerald-100"
+              }`}
+              title="Ganti Pengguna / Profil"
+            >
+              <span>{currentUser?.role === "readonly" ? "👀" : "👤"}</span>
+              <span>{currentUser ? currentUser.name : "Pilih Pengguna"}</span>
+              {currentUser?.role === "readonly" && (
+                <span className="text-[10px] opacity-80">(Read Only)</span>
+              )}
             </button>
           </div>
         </div>
@@ -1790,7 +1926,7 @@ export default function Home() {
             </div>
 
             {/* Batch Done Print Button */}
-            {unprintedCountInFiltered > 0 && (
+            {unprintedCountInFiltered > 0 && currentUser?.role !== "readonly" && (
               <button
                 onClick={handleMarkAllPrinted}
                 className="px-3 py-1 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-lg text-xs font-bold transition-colors flex items-center gap-1 shadow-xs shadow-emerald-900/30"
@@ -1993,14 +2129,25 @@ export default function Home() {
                           >
                             <button
                               type="button"
+                              disabled={currentUser?.role === "readonly"}
                               className={`w-5 h-5 rounded flex items-center justify-center text-[11px] font-bold transition-all shadow-xs ${
+                                currentUser?.role === "readonly"
+                                  ? "cursor-not-allowed opacity-50"
+                                  : ""
+                              } ${
                                 g.allPrinted
                                   ? "bg-emerald-600 text-white hover:bg-orange-500"
                                   : isDarkMode
                                   ? "bg-[#182542] text-slate-400 border border-slate-700/80 hover:bg-emerald-600 hover:text-white"
                                   : "bg-slate-200 text-slate-600 hover:bg-emerald-500 hover:text-white"
                               }`}
-                              title={g.allPrinted ? "Klik untuk UNPRINT" : "Klik untuk TANDAI PRINT"}
+                              title={
+                                currentUser?.role === "readonly"
+                                  ? "Akses Stranger (Hanya Lihat)"
+                                  : g.allPrinted
+                                  ? "Klik untuk UNPRINT"
+                                  : "Klik untuk TANDAI PRINT"
+                              }
                             >
                               {g.allPrinted ? "✓" : "○"}
                             </button>
@@ -2129,10 +2276,13 @@ export default function Home() {
                           >
                             <select
                               value={g.kategori}
+                              disabled={currentUser?.role === "readonly"}
                               onChange={(e) => {
                                 handleUpdateCategory(g.invoiceKey, e.target.value as "1P" | "2P" | "3P", g.customerName);
                               }}
-                              className={`cursor-pointer px-1.5 py-0.2 rounded text-[10px] font-bold border transition-colors ${
+                              className={`px-1.5 py-0.2 rounded text-[10px] font-bold border transition-colors ${
+                                currentUser?.role === "readonly" ? "cursor-not-allowed opacity-70" : "cursor-pointer"
+                              } ${
                                 isDarkMode
                                   ? g.kategori === "1P"
                                     ? "bg-[#182a4d] text-blue-300 border-blue-600/60"
@@ -2145,7 +2295,11 @@ export default function Home() {
                                   ? "bg-emerald-100 text-emerald-700 border-transparent hover:border-slate-300"
                                   : "bg-purple-100 text-purple-700 border-transparent hover:border-slate-300"
                               }`}
-                              title="Klik untuk ubah Kategori (1P / 2P / 3P)"
+                              title={
+                                currentUser?.role === "readonly"
+                                  ? "Akses Stranger (Hanya Lihat)"
+                                  : "Klik untuk ubah Kategori (1P / 2P / 3P)"
+                              }
                             >
                               <option value="1P">1P</option>
                               <option value="2P">2P</option>
@@ -2338,6 +2492,13 @@ export default function Home() {
       <MasterProductModal
         isOpen={showProductModal}
         onClose={() => setShowProductModal(false)}
+        isDarkMode={isDarkMode}
+      />
+      <LoginModal
+        isOpen={showLoginModal}
+        onClose={currentUser ? () => setShowLoginModal(false) : undefined}
+        onLogin={handleLogin}
+        currentUser={currentUser}
         isDarkMode={isDarkMode}
       />
     </div>

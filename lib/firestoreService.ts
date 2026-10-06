@@ -320,7 +320,7 @@ export function subscribeToFakturs(
     if (chunkEmitTimer) clearTimeout(chunkEmitTimer);
     chunkEmitTimer = setTimeout(() => {
       emitData("chunks");
-    }, 120);
+    }, 30);
   };
 
   let printEmitTimer: NodeJS.Timeout | null = null;
