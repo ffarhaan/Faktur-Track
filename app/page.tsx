@@ -10,7 +10,7 @@ import {
   getPrekursorOOTClassification,
   normalize,
 } from "@/lib/parser";
-import { FakturRecord, FirestoreFakturDoc, InvoiceProgression, FakturGroup, UploadNotification } from "@/lib/types";
+import { FakturRecord, FirestoreFakturDoc, InvoiceProgression, FakturGroup, UploadNotification, ActiveUserPresence } from "@/lib/types";
 import {
   subscribeToFakturs,
   getExistingFakturs,
@@ -21,6 +21,9 @@ import {
   updateFaktursPrintStatusBatch,
   updateFakturCategory,
   clearAllFakturs,
+  updateUserPresence,
+  removeUserPresence,
+  subscribeToOnlinePresence,
 } from "@/lib/firestoreService";
 import MasterApotekModal from "@/components/MasterApotekModal";
 import MasterProductModal from "@/components/MasterProductModal";
@@ -220,8 +223,40 @@ export default function Home() {
   const currentUserRef = useRef<AppUser | null>(null);
   const [showLoginModal, setShowLoginModal] = useState(true);
 
+  // Real-time Online Users Presence
+  const [onlineUsers, setOnlineUsers] = useState<ActiveUserPresence[]>([]);
+  const [showOnlinePopover, setShowOnlinePopover] = useState(false);
+
   useEffect(() => {
     currentUserRef.current = currentUser;
+  }, [currentUser]);
+
+  // Subscribe to real-time online presence
+  useEffect(() => {
+    const unsub = subscribeToOnlinePresence((users) => {
+      setOnlineUsers(users);
+    });
+    return () => unsub();
+  }, []);
+
+  // Heartbeat reporter for current user
+  useEffect(() => {
+    if (!currentUser) return;
+    updateUserPresence(currentUser, deviceIdRef.current);
+
+    const timer = setInterval(() => {
+      updateUserPresence(currentUser, deviceIdRef.current);
+    }, 20000);
+
+    const handleUnload = () => {
+      removeUserPresence(deviceIdRef.current);
+    };
+    window.addEventListener("beforeunload", handleUnload);
+
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener("beforeunload", handleUnload);
+    };
   }, [currentUser]);
 
   useEffect(() => {
@@ -245,6 +280,7 @@ export default function Home() {
     if (typeof window !== "undefined") {
       sessionStorage.setItem("faktur_tracker_user", JSON.stringify(user));
     }
+    updateUserPresence(user, deviceIdRef.current);
     setShowLoginModal(false);
     showToast(`✓ Pengguna aktif (ON): ${user.name}${user.role === "readonly" ? " (Hanya Lihat)" : ""}`);
   };
@@ -1541,190 +1577,305 @@ export default function Home() {
 
       {/* Main Container */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-2.5 sm:p-4 space-y-2.5">
-        {/* Top Header Card */}
-        <div className={`border rounded-xl p-2.5 sm:p-3 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-2.5 transition-colors ${
+        {/* Top Header Card - Compact, Space-saving & Live Active Users */}
+        <div className={`border rounded-xl px-3 py-2 shadow-xs transition-colors ${
           isDarkMode ? "bg-[#111c33]/90 border-slate-700/60 text-slate-100 shadow-black/20" : "bg-white border-slate-200 text-slate-900"
         }`}>
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-blue-600 to-indigo-500 text-white flex items-center justify-center font-bold shadow-sm shadow-blue-500/30 text-base">
-              🖨️
-            </div>
-            <div>
-              <h1 className={`text-base font-bold flex items-center gap-1.5 ${isDarkMode ? "text-white" : "text-slate-900"}`}>
-                <span>Faktur Tracker</span>
-                <span className={`text-[10px] px-1.5 py-0.2 rounded font-semibold border ${
-                  isDarkMode ? "bg-blue-950/80 text-blue-300 border-blue-700/60" : "bg-blue-50 text-blue-700 border-blue-200"
-                }`}>
-                  v2.0
-                </span>
-              </h1>
-              <p className={`text-[11px] leading-tight ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>
-                Sistem Pelacak Status Cetak Faktur Farmasi Oracle ERP
-              </p>
-            </div>
-          </div>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            {/* Left: Brand & Live Online Users Widget */}
+            <div className="flex items-center gap-2.5 sm:gap-3">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-gradient-to-tr from-blue-600 to-indigo-500 text-white flex items-center justify-center font-bold shadow-sm shadow-blue-500/30 text-sm">
+                  🖨️
+                </div>
+                <div>
+                  <div className="flex items-center gap-1.5 leading-tight">
+                    <span className="font-bold text-sm tracking-tight">Faktur Tracker</span>
+                    <span className={`text-[9px] px-1 py-0.2 rounded font-semibold border ${
+                      isDarkMode ? "bg-blue-950/80 text-blue-300 border-blue-700/60" : "bg-blue-50 text-blue-700 border-blue-200"
+                    }`}>
+                      v2.0
+                    </span>
+                  </div>
+                  <span className={`text-[10px] hidden md:inline leading-none ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>
+                    Oracle ERP Live Tracker
+                  </span>
+                </div>
+              </div>
 
-          {/* Header Action Buttons */}
-          <div className="flex flex-wrap items-center gap-1.5 w-full md:w-auto">
-            {/* Upload File Button */}
-            <label
-              onDragOver={(e) => {
-                if (currentUser?.role === "readonly") return;
-                e.preventDefault();
-                setDragOver(true);
-              }}
-              onDragLeave={() => setDragOver(false)}
-              onDrop={(e) => {
-                e.preventDefault();
-                setDragOver(false);
-                if (currentUser?.role === "readonly") {
-                  showToast("⚠️ Akses Stranger: Anda hanya dapat melihat data (Read Only).");
-                  return;
-                }
-                const files = Array.from(e.dataTransfer.files || []);
-                if (files.length > 0) handleUpload(files);
-              }}
-              onClick={(e) => {
-                if (currentUser?.role === "readonly") {
-                  e.preventDefault();
-                  showToast("⚠️ Akses Stranger: Anda hanya dapat melihat data (Read Only).");
-                }
-              }}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 shadow-xs ${
-                currentUser?.role === "readonly"
-                  ? "opacity-50 cursor-not-allowed bg-slate-300 text-slate-500"
-                  : dragOver
-                  ? "cursor-pointer bg-blue-100 text-blue-700 border-2 border-dashed border-blue-500"
-                  : "cursor-pointer bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-blue-600/30"
-              }`}
-            >
-              <span>📤</span>
-              <span>Upload Export (.xls / .xlsx)</span>
-              <input
-                type="file"
-                multiple
-                disabled={currentUser?.role === "readonly"}
-                accept=".xls,.xlsx"
-                className="hidden"
-                onChange={(e) => {
+              {/* 🟢 Live Online Users Presence Button & Dropdown */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setShowOnlinePopover((prev) => !prev)}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 border transition-all shadow-xs ${
+                    isDarkMode
+                      ? "bg-emerald-950/40 hover:bg-emerald-900/60 border-emerald-700/60 text-emerald-300"
+                      : "bg-emerald-50 hover:bg-emerald-100 border-emerald-300 text-emerald-800"
+                  }`}
+                  title="Klik untuk melihat siapa saja yang sedang ON & melihat sistem ini"
+                >
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                  </span>
+                  <span>Online ({onlineUsers.length}):</span>
+                  <span className="font-bold max-w-[120px] sm:max-w-[200px] truncate text-left">
+                    {onlineUsers.length > 0
+                      ? onlineUsers
+                          .map((u) => (u.name === currentUser?.name ? `${u.name} (Anda)` : u.name))
+                          .join(", ")
+                      : currentUser?.name || "Menghubungkan..."}
+                  </span>
+                  <span className="text-[9px] opacity-70">▼</span>
+                </button>
+
+                {/* Popover Card */}
+                {showOnlinePopover && (
+                  <>
+                    <div
+                      className="fixed inset-0 z-40"
+                      onClick={() => setShowOnlinePopover(false)}
+                    />
+                    <div className={`absolute left-0 mt-1.5 w-72 sm:w-80 rounded-xl shadow-xl border p-3 z-50 transition-all ${
+                      isDarkMode ? "bg-[#131f38] border-slate-700 text-slate-100" : "bg-white border-slate-200 text-slate-800 shadow-slate-300/50"
+                    }`}>
+                      <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-200 dark:border-slate-700/60">
+                        <div className="flex items-center gap-1.5 font-bold text-xs">
+                          <span className="relative flex h-2 w-2">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                          </span>
+                          <span>Pengguna Sedang ON ({onlineUsers.length})</span>
+                        </div>
+                        <button
+                          onClick={() => setShowOnlinePopover(false)}
+                          className="text-xs px-1.5 py-0.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                        >
+                          ✕
+                        </button>
+                      </div>
+
+                      <div className="space-y-1.5 max-h-60 overflow-y-auto pr-1">
+                        {onlineUsers.length === 0 ? (
+                          <div className="text-xs text-slate-500 py-2 text-center">
+                            Memeriksa pengguna online...
+                          </div>
+                        ) : (
+                          onlineUsers.map((u) => {
+                            const isMe = u.name === currentUser?.name;
+                            return (
+                              <div
+                                key={u.deviceId || u.name}
+                                className={`flex items-center justify-between p-2 rounded-lg text-xs ${
+                                  isMe
+                                    ? isDarkMode
+                                      ? "bg-blue-950/50 border border-blue-800/60"
+                                      : "bg-blue-50 border border-blue-200"
+                                    : isDarkMode
+                                    ? "bg-slate-800/40 hover:bg-slate-800/70"
+                                    : "bg-slate-50 hover:bg-slate-100"
+                                }`}
+                              >
+                                <div className="flex items-center gap-2">
+                                  <span className="w-2 h-2 rounded-full bg-emerald-500 shadow-xs shadow-emerald-500/50"></span>
+                                  <div>
+                                    <div className="font-bold flex items-center gap-1">
+                                      <span>{u.name}</span>
+                                      {isMe && (
+                                        <span className="text-[10px] text-blue-500 font-semibold">(Anda)</span>
+                                      )}
+                                    </div>
+                                    <span className="text-[10px] opacity-70">
+                                      {u.role === "readonly" ? "Hanya Lihat (Stranger)" : "Pencetak Aktif"}
+                                    </span>
+                                  </div>
+                                </div>
+                                <span className="text-[10px] px-1.5 py-0.5 rounded font-mono bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-semibold border border-emerald-500/20">
+                                  Online
+                                </span>
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+
+                      <div className="mt-2.5 pt-2 border-t border-slate-200 dark:border-slate-700/60 text-[11px] text-slate-500 dark:text-slate-400 flex items-center justify-between">
+                        <span>Realtime terdeteksi otomatis</span>
+                        <button
+                          onClick={() => {
+                            if (currentUser) updateUserPresence(currentUser, deviceIdRef.current);
+                            showToast("✓ Status kehadiran diperbarui");
+                          }}
+                          className="text-blue-500 hover:underline font-semibold"
+                        >
+                          Ping Status
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Right: Actions Toolbar & User Switch */}
+            <div className="flex flex-wrap items-center gap-1.5 ml-auto">
+              {/* Upload Button */}
+              <label
+                onDragOver={(e) => {
                   if (currentUser?.role === "readonly") return;
-                  const files = e.target.files ? Array.from(e.target.files) : [];
-                  if (files.length > 0) handleUpload(files);
-                  e.target.value = "";
+                  e.preventDefault();
+                  setDragOver(true);
                 }}
-              />
-            </label>
-
-            {/* Refresh Button */}
-            <button
-              onClick={handleManualRefresh}
-              disabled={loading}
-              className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1 ${
-                isDarkMode
-                  ? "bg-[#182542] hover:bg-[#223359] border border-slate-700/70 text-slate-200"
-                  : "bg-slate-100 hover:bg-slate-200 text-slate-700"
-              }`}
-              title="Refresh Data dari Server"
-            >
-              <span className={loading ? "animate-spin" : ""}>🔄</span>
-              <span className="hidden sm:inline">Refresh</span>
-            </button>
-
-            {/* Dark Mode Toggle */}
-            <button
-              onClick={() => setIsDarkMode((prev) => !prev)}
-              className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1 border ${
-                isDarkMode
-                  ? "bg-[#182542] hover:bg-[#223359] text-amber-300 border-slate-700/80 shadow-xs shadow-amber-500/10"
-                  : "bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200"
-              }`}
-              title={isDarkMode ? "Ganti ke Mode Terang (Light)" : "Ganti ke Mode Gelap (Dark)"}
-            >
-              <span>{isDarkMode ? "☀️" : "🌙"}</span>
-              <span className="hidden sm:inline">{isDarkMode ? "Light" : "Dark"}</span>
-            </button>
-
-            {/* Master Apotek Button */}
-            <button
-              onClick={() => setShowApotekModal(true)}
-              className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1 ${
-                isDarkMode
-                  ? "bg-[#182542] hover:bg-[#223359] border border-slate-700/70 text-slate-200"
-                  : "bg-slate-100 hover:bg-slate-200 text-slate-700"
-              }`}
-              title="Lihat Database Master Apotek (1P / 2P / 3P)"
-            >
-              <span>🏢</span>
-              <span className="hidden sm:inline">Master Apotek</span>
-            </button>
-
-            {/* Master Produk Button */}
-            <button
-              onClick={() => setShowProductModal(true)}
-              className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1 ${
-                isDarkMode
-                  ? "bg-[#182542] hover:bg-[#223359] border border-slate-700/70 text-slate-200"
-                  : "bg-slate-100 hover:bg-slate-200 text-slate-700"
-              }`}
-              title="Lihat Database Master Produk (Farma / Alkes / Prekursor / OOT / CCP)"
-            >
-              <span>💊</span>
-              <span className="hidden sm:inline">Master Produk</span>
-            </button>
-
-            {/* Export Excel Button */}
-            <button
-              onClick={handleExportExcel}
-              className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1 ${
-                isDarkMode
-                  ? "bg-[#182542] hover:bg-[#223359] border border-slate-700/70 text-slate-200"
-                  : "bg-slate-100 hover:bg-slate-200 text-slate-700"
-              }`}
-              title="Ekspor Data ke Excel (Ascending)"
-            >
-              <span>📥</span>
-              <span className="hidden sm:inline">Ekspor Excel</span>
-            </button>
-
-            {/* Reset / Hapus Semua Data Button */}
-            {currentUser?.role !== "readonly" && (
-              <button
-                onClick={handleClearAll}
-                className={`px-2.5 py-1.5 border rounded-lg text-xs font-semibold transition-colors flex items-center gap-1 ${
-                  isDarkMode
-                    ? "bg-rose-950/40 hover:bg-rose-900/50 text-rose-300 border-rose-800/60"
-                    : "bg-rose-50 hover:bg-rose-100 text-rose-700 border-rose-200"
+                onDragLeave={() => setDragOver(false)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setDragOver(false);
+                  if (currentUser?.role === "readonly") {
+                    showToast("⚠️ Akses Stranger: Anda hanya dapat melihat data (Read Only).");
+                    return;
+                  }
+                  const files = Array.from(e.dataTransfer.files || []);
+                  if (files.length > 0) handleUpload(files);
+                }}
+                onClick={(e) => {
+                  if (currentUser?.role === "readonly") {
+                    e.preventDefault();
+                    showToast("⚠️ Akses Stranger: Anda hanya dapat melihat data (Read Only).");
+                  }
+                }}
+                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1 shadow-xs ${
+                  currentUser?.role === "readonly"
+                    ? "opacity-50 cursor-not-allowed bg-slate-300 text-slate-500"
+                    : dragOver
+                    ? "cursor-pointer bg-blue-100 text-blue-700 border-2 border-dashed border-blue-500"
+                    : "cursor-pointer bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-blue-600/30"
                 }`}
-                title="Hapus Semua Data & Reset Database"
+                title="Upload file export Oracle (.xls / .xlsx)"
               >
-                <span className="text-rose-400">🗑️</span>
-                <span className="hidden sm:inline">Reset Data</span>
-              </button>
-            )}
+                <span>📤</span>
+                <span>Upload</span>
+                <input
+                  type="file"
+                  multiple
+                  disabled={currentUser?.role === "readonly"}
+                  accept=".xls,.xlsx"
+                  className="hidden"
+                  onChange={(e) => {
+                    if (currentUser?.role === "readonly") return;
+                    const files = e.target.files ? Array.from(e.target.files) : [];
+                    if (files.length > 0) handleUpload(files);
+                    e.target.value = "";
+                  }}
+                />
+              </label>
 
-            {/* User Profile & Switch Account Button */}
-            <button
-              onClick={() => setShowLoginModal(true)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 border shadow-xs ${
-                !currentUser
-                  ? "bg-rose-500 text-white animate-pulse"
-                  : currentUser?.role === "readonly"
-                  ? isDarkMode
-                    ? "bg-amber-950/60 border-amber-800/80 text-amber-300 hover:bg-amber-900/60"
-                    : "bg-amber-50 border-amber-300 text-amber-800 hover:bg-amber-100"
-                  : isDarkMode
-                  ? "bg-emerald-950/60 border-emerald-700/80 text-emerald-300 hover:bg-emerald-900/60"
-                  : "bg-emerald-50 border-emerald-300 text-emerald-800 hover:bg-emerald-100"
-              }`}
-              title="Klik untuk Ganti Pengguna yang Sedang ON"
-            >
-              <span>{currentUser?.role === "readonly" ? "👀" : "🟢"}</span>
-              <span>ON: <strong>{currentUser ? currentUser.name : "Pilih Pengguna"}</strong></span>
-              {currentUser?.role === "readonly" && (
-                <span className="text-[10px] opacity-80">(Read Only)</span>
+              {/* Master Apotek */}
+              <button
+                onClick={() => setShowApotekModal(true)}
+                className={`px-2 py-1 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1 border ${
+                  isDarkMode
+                    ? "bg-[#182542] hover:bg-[#223359] border-slate-700/70 text-slate-200"
+                    : "bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-700"
+                }`}
+                title="Lihat Database Master Apotek (1P / 2P / 3P)"
+              >
+                <span>🏢</span>
+                <span className="hidden sm:inline">Apotek</span>
+              </button>
+
+              {/* Master Produk */}
+              <button
+                onClick={() => setShowProductModal(true)}
+                className={`px-2 py-1 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1 border ${
+                  isDarkMode
+                    ? "bg-[#182542] hover:bg-[#223359] border-slate-700/70 text-slate-200"
+                    : "bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-700"
+                }`}
+                title="Lihat Database Master Produk (Farma / Alkes / Prekursor / OOT / CCP)"
+              >
+                <span>💊</span>
+                <span className="hidden sm:inline">Produk</span>
+              </button>
+
+              {/* Ekspor Excel */}
+              <button
+                onClick={handleExportExcel}
+                className={`px-2 py-1 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1 border ${
+                  isDarkMode
+                    ? "bg-[#182542] hover:bg-[#223359] border-slate-700/70 text-slate-200"
+                    : "bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-700"
+                }`}
+                title="Ekspor Data ke Excel"
+              >
+                <span>📥</span>
+                <span className="hidden sm:inline">Excel</span>
+              </button>
+
+              {/* Refresh */}
+              <button
+                onClick={handleManualRefresh}
+                disabled={loading}
+                className={`p-1 sm:px-2 sm:py-1 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1 border ${
+                  isDarkMode
+                    ? "bg-[#182542] hover:bg-[#223359] border-slate-700/70 text-slate-200"
+                    : "bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-700"
+                }`}
+                title="Refresh Data dari Server"
+              >
+                <span className={loading ? "animate-spin" : ""}>🔄</span>
+              </button>
+
+              {/* Dark Mode */}
+              <button
+                onClick={() => setIsDarkMode((prev) => !prev)}
+                className={`p-1 sm:px-2 sm:py-1 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1 border ${
+                  isDarkMode
+                    ? "bg-[#182542] hover:bg-[#223359] text-amber-300 border-slate-700/80 shadow-xs shadow-amber-500/10"
+                    : "bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200"
+                }`}
+                title={isDarkMode ? "Mode Terang" : "Mode Gelap"}
+              >
+                <span>{isDarkMode ? "☀️" : "🌙"}</span>
+              </button>
+
+              {/* Reset Data */}
+              {currentUser?.role !== "readonly" && (
+                <button
+                  onClick={handleClearAll}
+                  className={`px-2 py-1 border rounded-lg text-xs font-semibold transition-colors flex items-center gap-1 ${
+                    isDarkMode
+                      ? "bg-rose-950/40 hover:bg-rose-900/50 text-rose-300 border-rose-800/60"
+                      : "bg-rose-50 hover:bg-rose-100 text-rose-700 border-rose-200"
+                  }`}
+                  title="Hapus Semua Data & Reset Database"
+                >
+                  <span className="text-rose-400">🗑️</span>
+                  <span className="hidden sm:inline">Reset</span>
+                </button>
               )}
-              <span className="text-[10px] underline ml-1 opacity-70">Ganti</span>
-            </button>
+
+              {/* Current User Pill & Switch */}
+              <button
+                onClick={() => setShowLoginModal(true)}
+                className={`px-2 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1 border shadow-xs ${
+                  !currentUser
+                    ? "bg-rose-500 text-white animate-pulse"
+                    : currentUser?.role === "readonly"
+                    ? isDarkMode
+                      ? "bg-amber-950/60 border-amber-800/80 text-amber-300 hover:bg-amber-900/60"
+                      : "bg-amber-50 border-amber-300 text-amber-800 hover:bg-amber-100"
+                    : isDarkMode
+                    ? "bg-blue-950/60 border-blue-700/80 text-blue-300 hover:bg-blue-900/60"
+                    : "bg-blue-50 border-blue-300 text-blue-800 hover:bg-blue-100"
+                }`}
+                title="Ganti Pengguna yang Sedang ON"
+              >
+                <span>👤</span>
+                <span className="font-bold">{currentUser ? currentUser.name : "Pilih User"}</span>
+                <span className="text-[9px] underline opacity-70">Ganti</span>
+              </button>
+            </div>
           </div>
         </div>
 

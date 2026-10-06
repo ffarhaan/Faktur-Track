@@ -126,3 +126,10 @@ export interface UploadNotification {
   time: string;
   uploaderId?: string;
 }
+
+export interface ActiveUserPresence {
+  name: string;
+  role: "admin" | "readonly";
+  lastActive: number;
+  deviceId: string;
+}

@@ -11,10 +11,10 @@ import {
   Unsubscribe,
 } from "firebase/firestore";
 import { db } from "./firebase";
-import { FirestoreFakturDoc, PrintState, InvoiceProgression, UploadNotification } from "./types";
+import { FirestoreFakturDoc, PrintState, InvoiceProgression, UploadNotification, ActiveUserPresence } from "./types";
 import { normalize } from "./parser";
 
-export type { FirestoreFakturDoc, PrintState, InvoiceProgression, UploadNotification };
+export type { FirestoreFakturDoc, PrintState, InvoiceProgression, UploadNotification, ActiveUserPresence };
 
 const APP_DATA_COLLECTION = "app_data";
 const METADATA_DOC = "metadata";
@@ -22,6 +22,7 @@ const PRINT_STATE_DOC = "print_state";
 const PRINT_PARTITIONS_COLLECTION = "print_state_partitions";
 const CATEGORY_OVERRIDES_DOC = "category_overrides";
 const CHUNKS_COLLECTION = "faktur_chunks";
+const PRESENCE_DOC = "online_presence";
 
 export type SubscribeChangeReason = "chunks" | "print" | "meta";
 
@@ -1195,4 +1196,96 @@ export async function clearAllFakturs(): Promise<void> {
       updatedAt: nowIso,
     }),
   ]);
+}
+
+/**
+ * Report user heartbeat presence to Firestore
+ */
+export async function updateUserPresence(
+  user: { name: string; role: "admin" | "readonly" },
+  deviceId: string
+): Promise<void> {
+  if (!user || !user.name || !deviceId) return;
+  try {
+    const presenceRef = doc(db, APP_DATA_COLLECTION, PRESENCE_DOC);
+    await setDoc(
+      presenceRef,
+      {
+        [deviceId]: {
+          name: user.name,
+          role: user.role,
+          lastActive: Date.now(),
+          deviceId,
+        },
+      },
+      { merge: true }
+    );
+  } catch (err) {
+    console.warn("Failed to update user presence:", err);
+  }
+}
+
+/**
+ * Remove or mark inactive on logout/tab close
+ */
+export async function removeUserPresence(deviceId: string): Promise<void> {
+  if (!deviceId) return;
+  try {
+    const presenceRef = doc(db, APP_DATA_COLLECTION, PRESENCE_DOC);
+    await setDoc(
+      presenceRef,
+      {
+        [deviceId]: {
+          lastActive: 0,
+        },
+      },
+      { merge: true }
+    );
+  } catch (err) {
+    console.warn("Failed to clear user presence:", err);
+  }
+}
+
+/**
+ * Real-time listener for active users currently viewing the system
+ */
+export function subscribeToOnlinePresence(
+  onUpdate: (activeUsers: ActiveUserPresence[]) => void
+): Unsubscribe {
+  const presenceRef = doc(db, APP_DATA_COLLECTION, PRESENCE_DOC);
+  return onSnapshot(
+    presenceRef,
+    (snap) => {
+      if (!snap.exists()) {
+        onUpdate([]);
+        return;
+      }
+      const data = snap.data() as Record<string, Partial<ActiveUserPresence>>;
+      const now = Date.now();
+      const cutoff = 60000; // active within the last 60 seconds
+
+      // Filter active entries and deduplicate by user name (keep latest active)
+      const userMap = new Map<string, ActiveUserPresence>();
+      Object.entries(data).forEach(([devId, info]) => {
+        if (!info || !info.name || !info.lastActive) return;
+        if (now - info.lastActive <= cutoff) {
+          const existing = userMap.get(info.name);
+          if (!existing || info.lastActive > existing.lastActive) {
+            userMap.set(info.name, {
+              name: info.name,
+              role: (info.role as "admin" | "readonly") || "admin",
+              lastActive: info.lastActive,
+              deviceId: devId,
+            });
+          }
+        }
+      });
+
+      const list = Array.from(userMap.values()).sort((a, b) => b.lastActive - a.lastActive);
+      onUpdate(list);
+    },
+    (err) => {
+      console.warn("Error subscribing to online presence:", err);
+    }
+  );
 }
