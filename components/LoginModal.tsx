@@ -79,7 +79,7 @@ export default function LoginModal({
       onLogin({ name: selectedName, role: "admin" });
       setPassword("");
     } else {
-      setErrorMsg("Password salah! (Gunakan 123)");
+      setErrorMsg("Password salah! Silakan coba lagi.");
       passwordInputRef.current?.focus();
     }
   };
@@ -174,12 +174,11 @@ export default function LoginModal({
                 <label className="text-xs font-semibold">
                   Password untuk <strong className="text-blue-500">{selectedName}</strong>
                 </label>
-                <span className="text-[10px] text-slate-400 font-mono">(pw: 123)</span>
               </div>
               <input
                 ref={passwordInputRef}
                 type="password"
-                placeholder="Ketik password (123)"
+                placeholder="Masukkan password"
                 value={password}
                 onChange={(e) => {
                   setPassword(e.target.value);
