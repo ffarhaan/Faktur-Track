@@ -242,62 +242,6 @@ export default function Home() {
     currentUserRef.current = currentUser;
   }, [currentUser]);
 
-  // Auto-reload on chunk load mismatch from new Vercel deployments
-  useEffect(() => {
-    const handleChunkError = (e: ErrorEvent) => {
-      const msg = e?.message || "";
-      if (
-        msg.includes("ChunkLoadError") ||
-        msg.includes("Loading chunk") ||
-        msg.includes("Failed to fetch dynamically imported module")
-      ) {
-        window.location.reload();
-      }
-    };
-    const handleRejection = (e: PromiseRejectionEvent) => {
-      const reason = String(e?.reason || "");
-      if (
-        reason.includes("ChunkLoadError") ||
-        reason.includes("Loading chunk") ||
-        reason.includes("Failed to fetch dynamically imported module")
-      ) {
-        window.location.reload();
-      }
-    };
-    window.addEventListener("error", handleChunkError);
-    window.addEventListener("unhandledrejection", handleRejection);
-    return () => {
-      window.removeEventListener("error", handleChunkError);
-      window.removeEventListener("unhandledrejection", handleRejection);
-    };
-  }, []);
-
-  // Poll for new Vercel deployments and auto-refresh seamlessly
-  useEffect(() => {
-    const initialBuildId = process.env.NEXT_PUBLIC_APP_BUILD_ID;
-    if (!initialBuildId || initialBuildId === "dev") return;
-
-    const interval = setInterval(async () => {
-      if (isUploadingRef.current) return;
-      try {
-        const res = await fetch(`/api/version?t=${Date.now()}`, {
-          cache: "no-store",
-          headers: { "Cache-Control": "no-cache" },
-        });
-        if (res.ok) {
-          const data = await res.json();
-          if (data.buildId && data.buildId !== initialBuildId && data.buildId !== "dev") {
-            window.location.reload();
-          }
-        }
-      } catch {
-        // silent
-      }
-    }, 15000);
-
-    return () => clearInterval(interval);
-  }, []);
-
   // Subscribe to real-time online presence
   useEffect(() => {
     const unsub = subscribeToOnlinePresence((users) => {
