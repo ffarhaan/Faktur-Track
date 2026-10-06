@@ -112,6 +112,7 @@ export interface FakturGroup {
   allPrinted: boolean;
   printedAt: string | null;
   printedBy?: string | null;
+  searchStr?: string;
 }
 
 export interface UploadNotification {

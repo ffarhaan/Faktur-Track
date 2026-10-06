@@ -424,7 +424,7 @@ export function subscribeToFakturs(
           if (!initialEmitTimer) {
             initialEmitTimer = setTimeout(() => {
               if (!hasEmittedInitialPayload) emitData("chunks");
-            }, 2500);
+            }, 100);
           }
         }
       } else {
@@ -972,16 +972,18 @@ export async function updateFakturPrintStatus(
   let partMap: Record<string, string> = { ...(cached?.printedAtMap || {}) };
   let partByMap: Record<string, string> = { ...(cached?.printedByMap || {}) };
 
-  try {
-    const pSnap = await getDoc(partRef);
-    if (pSnap.exists()) {
-      const data = pSnap.data();
-      ((data.printedKeys as string[]) || []).forEach((k) => partKeys.add(k));
-      Object.assign(partMap, (data.printedAtMap as Record<string, string>) || {});
-      Object.assign(partByMap, (data.printedByMap as Record<string, string>) || {});
+  if (!cached) {
+    try {
+      const pSnap = await getDoc(partRef);
+      if (pSnap.exists()) {
+        const data = pSnap.data();
+        ((data.printedKeys as string[]) || []).forEach((k) => partKeys.add(k));
+        Object.assign(partMap, (data.printedAtMap as Record<string, string>) || {});
+        Object.assign(partByMap, (data.printedByMap as Record<string, string>) || {});
+      }
+    } catch (err) {
+      console.warn("Could not read partition before update:", err);
     }
-  } catch (err) {
-    console.warn("Could not read partition before update:", err);
   }
 
   if (status) {
