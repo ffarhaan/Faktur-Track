@@ -646,42 +646,32 @@ export default function Home() {
         return;
       }
       const willBePrinted = !group.allPrinted;
+      // Strict Key Isolation: use group.invoiceKey directly (DOO uses '20078', ORA uses '20078-1P')
       const targetKey = group.invoiceKey;
-      const cleanInv = String(group.invoiceNumber || "").trim().replace(/-1P$/i, "");
-      const keyVariants = Array.from(new Set([targetKey, cleanInv, `${cleanInv}-1P`, group.key].filter(Boolean)));
       const nowIso = new Date().toISOString();
       const currentUserName = currentUserRef.current?.name || "Admin";
 
-      // 1. Optimistic Local Update
+      // 1. Optimistic Local Update - strictly targetKey only
       setPrintedInvoices((prev) => {
         const next = new Set(prev);
-        if (willBePrinted) {
-          keyVariants.forEach((k) => next.add(k));
-        } else {
-          keyVariants.forEach((k) => next.delete(k));
-        }
+        if (willBePrinted) next.add(targetKey);
+        else next.delete(targetKey);
         printedInvoicesRef.current = next;
         return next;
       });
 
       setPrintedAtMap((prev) => {
         const next = { ...prev };
-        if (willBePrinted) {
-          keyVariants.forEach((k) => { next[k] = nowIso; });
-        } else {
-          keyVariants.forEach((k) => { delete next[k]; });
-        }
+        if (willBePrinted) next[targetKey] = nowIso;
+        else delete next[targetKey];
         printedAtMapRef.current = next;
         return next;
       });
 
       setPrintedByMap((prev) => {
         const next = { ...prev };
-        if (willBePrinted) {
-          keyVariants.forEach((k) => { next[k] = currentUserName; });
-        } else {
-          keyVariants.forEach((k) => { delete next[k]; });
-        }
+        if (willBePrinted) next[targetKey] = currentUserName;
+        else delete next[targetKey];
         printedByMapRef.current = next;
         return next;
       });
@@ -689,7 +679,7 @@ export default function Home() {
       if (currentFakturDocsRef.current) {
         currentFakturDocsRef.current.forEach((d) => {
           const k = d.id || d.no_faktur;
-          if (k && keyVariants.includes(k)) {
+          if (k === targetKey) {
             d.status_cetak = willBePrinted;
             d.printed_at = willBePrinted ? nowIso : null;
             d.printed_by = willBePrinted ? currentUserName : null;
@@ -697,7 +687,7 @@ export default function Home() {
         });
       }
 
-      // 2. Firestore Sync
+      // 2. Firestore Sync - strictly updates targetKey and its chunk
       try {
         await updateFakturPrintStatus(
           targetKey,
@@ -707,8 +697,8 @@ export default function Home() {
         );
         showToast(
           willBePrinted
-            ? `✓ Faktur ${cleanInv} ditandai SUDAH dicetak.`
-            : `↩ Faktur ${cleanInv} dikembalikan ke BELUM dicetak.`
+            ? `✓ Faktur ${targetKey} ditandai SUDAH dicetak.`
+            : `↩ Faktur ${targetKey} dikembalikan ke BELUM dicetak.`
         );
       } catch (err) {
         console.error("Print toggle sync error:", err);
@@ -857,12 +847,12 @@ export default function Home() {
   // 4. Dynamic Print-Aware Groups (Lightning-fast shallow projection, takes <1ms)
   const grouped = useMemo<FakturGroup[]>(() => {
     return baseGroups.map((g) => {
-      const isPrinted = printedInvoices.has(g.key) || printedInvoices.has(g.invoiceNumber);
+      const isPrinted = printedInvoices.has(g.key);
       return {
         ...g,
         allPrinted: isPrinted,
-        printedAt: isPrinted ? (printedAtMap[g.key] || printedAtMap[g.invoiceNumber] || null) : null,
-        printedBy: isPrinted ? (printedByMap[g.key] || printedByMap[g.invoiceNumber] || null) : null,
+        printedAt: isPrinted ? (printedAtMap[g.key] || null) : null,
+        printedBy: isPrinted ? (printedByMap[g.key] || null) : null,
       };
     });
   }, [baseGroups, printedInvoices, printedAtMap, printedByMap]);
@@ -958,14 +948,7 @@ export default function Home() {
 
     const nowIso = new Date().toISOString();
     const currentUserName = currentUserRef.current?.name || "Admin";
-    const targetKeysSet = new Set<string>();
-    unprinted.forEach((g) => {
-      const clean = String(g.invoiceNumber || "").trim().replace(/-1P$/i, "");
-      targetKeysSet.add(g.invoiceKey);
-      targetKeysSet.add(clean);
-      targetKeysSet.add(`${clean}-1P`);
-    });
-    const targetKeys = Array.from(targetKeysSet).filter(Boolean);
+    const targetKeys = unprinted.map((g) => g.invoiceKey);
 
     setPrintedInvoices((prev) => {
       const next = new Set(prev);

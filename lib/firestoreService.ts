@@ -1042,8 +1042,6 @@ export async function updateFakturPrintStatus(
   printedAt: string | null,
   printedBy?: string | null
 ): Promise<void> {
-  const cleanInv = invoiceKey.replace(/-1P$/i, "");
-  const keysToUpdate = Array.from(new Set([invoiceKey, cleanInv, `${cleanInv}-1P`].filter(Boolean)));
   const partId = getPrintPartitionId(invoiceKey);
   const partRef = doc(db, PRINT_PARTITIONS_COLLECTION, partId);
   const legacyRef = doc(db, APP_DATA_COLLECTION, PRINT_STATE_DOC);
@@ -1067,17 +1065,15 @@ export async function updateFakturPrintStatus(
     }
   }
 
-  keysToUpdate.forEach((k) => {
-    if (status) {
-      partKeys.add(k);
-      if (printedAt) partMap[k] = printedAt;
-      if (printedBy) partByMap[k] = printedBy;
-    } else {
-      partKeys.delete(k);
-      delete partMap[k];
-      delete partByMap[k];
-    }
-  });
+  if (status) {
+    partKeys.add(invoiceKey);
+    if (printedAt) partMap[invoiceKey] = printedAt;
+    if (printedBy) partByMap[invoiceKey] = printedBy;
+  } else {
+    partKeys.delete(invoiceKey);
+    delete partMap[invoiceKey];
+    delete partByMap[invoiceKey];
+  }
 
   const nowIso = new Date().toISOString();
 
@@ -1087,7 +1083,7 @@ export async function updateFakturPrintStatus(
     let chunkModified = false;
     items.forEach((item) => {
       const k = item.id || item.no_faktur;
-      if (k && keysToUpdate.includes(k)) {
+      if (k === invoiceKey) {
         item.status_cetak = status;
         item.printed_at = status ? printedAt : null;
         item.printed_by = status ? (printedBy || null) : null;
@@ -1134,17 +1130,15 @@ export async function updateFakturPrintStatus(
         const liveKeys = new Set(legData.printedKeys || []);
         const liveMap = { ...(legData.printedAtMap || {}) };
         const liveByMap = { ...(legData.printedByMap || {}) };
-        keysToUpdate.forEach((k) => {
-          if (status) {
-            liveKeys.add(k);
-            if (printedAt) liveMap[k] = printedAt;
-            if (printedBy) liveByMap[k] = printedBy;
-          } else {
-            liveKeys.delete(k);
-            delete liveMap[k];
-            delete liveByMap[k];
-          }
-        });
+        if (status) {
+          liveKeys.add(invoiceKey);
+          if (printedAt) liveMap[invoiceKey] = printedAt;
+          if (printedBy) liveByMap[invoiceKey] = printedBy;
+        } else {
+          liveKeys.delete(invoiceKey);
+          delete liveMap[invoiceKey];
+          delete liveByMap[invoiceKey];
+        }
         await setDoc(legacyRef, {
           printedKeys: Array.from(liveKeys),
           printedAtMap: liveMap,
@@ -1175,14 +1169,8 @@ export async function updateFaktursPrintStatusBatch(
   printedAt: string | null,
   printedBy?: string | null
 ): Promise<void> {
-  const expandedKeysSet = new Set<string>();
-  keys.forEach((k) => {
-    const clean = k.replace(/-1P$/i, "");
-    expandedKeysSet.add(k);
-    expandedKeysSet.add(clean);
-    expandedKeysSet.add(`${clean}-1P`);
-  });
-  const allKeys = Array.from(expandedKeysSet).filter(Boolean);
+  const allKeys = Array.from(new Set(keys)).filter(Boolean);
+  const targetKeySet = new Set(allKeys);
 
   const keysByPartition: Record<string, string[]> = {};
   for (const k of allKeys) {
@@ -1199,7 +1187,7 @@ export async function updateFaktursPrintStatusBatch(
     let chunkModified = false;
     items.forEach((item) => {
       const k = item.id || item.no_faktur;
-      if (k && expandedKeysSet.has(k)) {
+      if (k && targetKeySet.has(k)) {
         item.status_cetak = status;
         item.printed_at = status ? printedAt : null;
         item.printed_by = status ? (printedBy || null) : null;
