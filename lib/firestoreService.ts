@@ -60,7 +60,17 @@ export function isStalePrintTimestamp(
   printedAt: string | null | undefined,
   orderDate: string | null | undefined
 ): boolean {
-  if (!printedAt || !orderDate || orderDate === "-") return false;
+  if (!printedAt) return false;
+  // Any legacy dummy print from Oct 1st 2026 is unconditionally stale
+  if (
+    printedAt === "2026-10-01T15:42:48.544Z" ||
+    printedAt.startsWith("2026-10-01") ||
+    printedAt.includes("2026-10-01") ||
+    printedAt.includes("01/10/2026")
+  ) {
+    return true;
+  }
+  if (!orderDate || orderDate === "-") return false;
   const pDate = new Date(printedAt);
   if (isNaN(pDate.getTime())) return false;
 
@@ -92,6 +102,11 @@ function registerPrintKeyVariants(
   atMap: Record<string, string>
 ) {
   if (!k) return;
+  // Anti-Ghost Guard: Block October 1st ghost collision keys in 20000-24999 range
+  if (pAt && (pAt === "2026-10-01T15:42:48.544Z" || pAt.startsWith("2026-10-01") || pAt.includes("2026-10-01") || pAt.includes("01/10/2026"))) {
+    const num = parseInt(k.replace(/\D/g, ""), 10);
+    if (num >= 20000 && num <= 24999) return;
+  }
   keysSet.add(k);
   if (pAt && !atMap[k]) atMap[k] = pAt;
 }
@@ -112,25 +127,31 @@ export function getLivePrintState(): {
     globalPartitionMap.forEach((p) => {
       const pMap = p.printedAtMap || {};
       const pBy = p.printedByMap || {};
-      (p.printedKeys || []).forEach((k) => registerPrintKeyVariants(k, pMap[k], gatheredKeys, gatheredMap));
-      Object.assign(gatheredMap, pMap);
-      Object.assign(gatheredByMap, pBy);
+      (p.printedKeys || []).forEach((k) => {
+        registerPrintKeyVariants(k, pMap[k], gatheredKeys, gatheredMap);
+        if (gatheredKeys.has(k) && pBy[k]) gatheredByMap[k] = pBy[k];
+      });
     });
   }
   if (globalLegacyPrintState) {
     const lMap = globalLegacyPrintState.printedAtMap || {};
     const lBy = globalLegacyPrintState.printedByMap || {};
-    (globalLegacyPrintState.printedKeys || []).forEach((k) => registerPrintKeyVariants(k, lMap[k], gatheredKeys, gatheredMap));
-    Object.assign(gatheredMap, lMap);
-    Object.assign(gatheredByMap, lBy);
+    (globalLegacyPrintState.printedKeys || []).forEach((k) => {
+      registerPrintKeyVariants(k, lMap[k], gatheredKeys, gatheredMap);
+      if (gatheredKeys.has(k) && lBy[k]) gatheredByMap[k] = lBy[k];
+    });
   }
 
   globalChunksMap.forEach((items) => {
     items.forEach((item) => {
       const k = item.id || item.no_faktur;
       if (k && item.status_cetak) {
-        registerPrintKeyVariants(k, item.printed_at || undefined, gatheredKeys, gatheredMap);
-        if (item.printed_by && !gatheredByMap[k]) gatheredByMap[k] = item.printed_by;
+        if (!isStalePrintTimestamp(item.printed_at, item.order_date)) {
+          registerPrintKeyVariants(k, item.printed_at || undefined, gatheredKeys, gatheredMap);
+          if (gatheredKeys.has(k) && item.printed_by && !gatheredByMap[k]) {
+            gatheredByMap[k] = item.printed_by;
+          }
+        }
       }
     });
   });
@@ -901,8 +922,12 @@ export async function saveFaktursBatch(
     };
   });
 
-  // Sync print state across partitions + dual write legacy doc in parallel
-  const printStatePromise = updatePrintState(Array.from(unifiedPrintedSet), unifiedPrintedAtMap);
+  // Sync print state across partitions + dual write legacy doc in parallel (purging unprinted keys)
+  const printStatePromise = updatePrintState(
+    Array.from(unifiedPrintedSet),
+    unifiedPrintedAtMap,
+    Array.from(newUnprintedSet)
+  );
 
   // Execute ALL writes in parallel for atomic, instantaneous sync across devices (< 500ms total)
   await Promise.all([
@@ -919,7 +944,8 @@ export async function saveFaktursBatch(
  */
 export async function updatePrintState(
   printedKeys: string[],
-  printedAtMap: Record<string, string>
+  printedAtMap: Record<string, string>,
+  unprintedKeys?: string[]
 ): Promise<void> {
   const nowIso = new Date().toISOString();
 
@@ -936,14 +962,36 @@ export async function updatePrintState(
     }
   }
 
-  // Non-destructive partition update:
-  // For each partition bucket, union incoming keys with existing partition keys to ensure zero data loss
+  // Non-destructive partition update with explicit unprint & ghost purge support:
   const partitionWrites = Object.entries(partitionBuckets).map(async ([partId, data]) => {
     const existing = globalPartitionMap.get(partId);
     const existingKeys = existing ? existing.printedKeys : [];
     const mergedKeysSet = new Set<string>([...existingKeys, ...data.keys]);
-    const mergedKeys = Array.from(mergedKeysSet);
     const mergedMap = { ...(existing ? existing.printedAtMap : {}), ...data.map };
+
+    // Explicitly unprint keys if specified
+    if (unprintedKeys && unprintedKeys.length > 0) {
+      unprintedKeys.forEach((k) => {
+        mergedKeysSet.delete(k);
+        mergedKeysSet.delete(k.replace(/-1P$/i, ""));
+        mergedKeysSet.delete(`${k.replace(/-1P$/i, "")}-1P`);
+        delete mergedMap[k];
+        delete mergedMap[k.replace(/-1P$/i, "")];
+        delete mergedMap[`${k.replace(/-1P$/i, "")}-1P`];
+      });
+    }
+
+    // Anti-Ghost Guard: Purge all Oct 1 ghost collision keys from part_20000_24999
+    if (partId === "part_20000_24999") {
+      Array.from(mergedKeysSet).forEach((k) => {
+        if (mergedMap[k] === "2026-10-01T15:42:48.544Z") {
+          mergedKeysSet.delete(k);
+          delete mergedMap[k];
+        }
+      });
+    }
+
+    const mergedKeys = Array.from(mergedKeysSet);
 
     if (existing && existing.printedKeys.length === mergedKeys.length) {
       const allPresent = existing.printedKeys.every((k) => mergedKeysSet.has(k));

@@ -196,6 +196,9 @@ export function getProductCategory(
     }
 
     const s = " " + String(itemDescription).toUpperCase() + " ";
+    if (/\b(TABLET|TAB\b|KAPSUL|CAPSUL|CAP\b|SIRUP|SYRUP|DROP|INJEKSI|INJ\b|CREAM|KRIM|SALEP|OINTMENT|SUSPENSI|EMULSI|SUSP\b|LARUTAN|INFUS\b|PULVIS|SACHET)\b/.test(s)) {
+      return "FARMA";
+    }
     if (/\b(ALCOHOL|ALKOHOL|KASA|SPUIT|SYRINGE|JARUM|UNDERPAD|MASKER|INFUSION\s+SET|IV\s+CATHETER|HANDSCOON|GLOVES|TEST\s+PACK|URINE\s+BAG|THERMOMETER|TENSIMETER|SURGICAL|COTTON\s+BALL|KAPAS\s+PEMBALUT|SAFETY\s+BOX|ABOCATH|WINGS\s+NEEDLE|SURGICAL\s+TAPE|DERMAFIX|HYPAFIX|MICROPORE)\b/.test(s)) {
       return "ALKES";
     }
@@ -364,6 +367,8 @@ function parseXXCUST(
     uom: getCol("uom", "satuan", "unit"),
     lotNumber: getCol("lot number", "batch number", "lot", "batch"),
     totalHarga: getCol("total harga", "total amount", "amount", "total"),
+    segmentation: getCol("segmentation", "segmen", "segmentasi"),
+    kategoriPPIC: getCol("nama kategori product", "kategori product", "kategori produk"),
   };
 
   const records: FakturRecord[] = [];
@@ -387,7 +392,27 @@ function parseXXCUST(
 
     const itemCode = val(idx.itemCode);
     const itemDescription = val(idx.itemDescription);
-    const kategoriProduk = getProductCategory(itemCode, itemDescription, productOverrides) || undefined;
+    const rawSeg = val(idx.segmentation).toUpperCase();
+    const rawPPIC = val(idx.kategoriPPIC).toUpperCase();
+    let kategoriProduk = getProductCategory(itemCode, itemDescription, productOverrides) || undefined;
+
+    // Official Oracle PPIC Category Mapping
+    if (rawPPIC.includes("CCP") || rawSeg.includes("CCP")) {
+      kategoriProduk = "CCP";
+    } else if (rawSeg.includes("ALAT KESEHATAN") || rawSeg.includes("MEDIS HABIS PAKAI")) {
+      kategoriProduk = "ALKES";
+    } else if (
+      rawSeg.includes("OBAT") ||
+      rawSeg.includes("HERBAL") ||
+      rawSeg.includes("VITAMIN") ||
+      rawSeg.includes("SUPLEMEN") ||
+      rawSeg.includes("KONSUMEN")
+    ) {
+      if (kategoriProduk !== "PREKURSOR" && kategoriProduk !== "OOT") {
+        kategoriProduk = "FARMA";
+      }
+    }
+
     const klasifikasiObat =
       kategoriProduk === "PREKURSOR"
         ? "Prekursor"

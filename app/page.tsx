@@ -751,16 +751,35 @@ export default function Home() {
       if (kat === "CCP") g.hasCCP = true;
       if (kat === "ALKES") g.hasAlkes = true;
       if (kat === "FARMA") g.hasFarma = true;
-
-      if (g.hasCCP) g.kategoriProduk = "CCP";
-      else if (g.hasPrekursor) g.kategoriProduk = "PREKURSOR";
-      else if (g.hasOOT) g.kategoriProduk = "OOT";
-      else if (g.hasAlkes) g.kategoriProduk = "ALKES";
-      else g.kategoriProduk = "FARMA";
     }
 
     for (const g of map.values()) {
       if (g.totalHarga < 0) g.isRetur = true;
+
+      // Calculate DOMINANT Category across all items in this invoice
+      const katCounts: Record<string, number> = {};
+      for (const item of g.items) {
+        const k = (getProductCategory(item.itemCode, item.itemDescription, productOverrides) || item.kategoriProduk || "FARMA").toUpperCase();
+        katCounts[k] = (katCounts[k] || 0) + 1;
+      }
+
+      let dominantKat = "FARMA";
+      let maxCount = -1;
+      const priorityOrder = ["CCP", "PREKURSOR", "OOT", "FARMA", "ALKES"];
+      for (const [k, count] of Object.entries(katCounts)) {
+        if (count > maxCount) {
+          maxCount = count;
+          dominantKat = k;
+        } else if (count === maxCount) {
+          const currIdx = priorityOrder.indexOf(dominantKat);
+          const newIdx = priorityOrder.indexOf(k);
+          if (newIdx !== -1 && (currIdx === -1 || newIdx < currIdx)) {
+            dominantKat = k;
+          }
+        }
+      }
+      g.kategoriProduk = dominantKat;
+
       // Precompute lowercase search string for blazing fast instant search
       const itemText = g.items.map((i) => `${i.itemCode} ${i.itemDescription}`).join(" ");
       g.searchStr = `${g.so} ${g.invoiceNumber} ${g.customerName} ${g.kategoriProduk} ${g.isRetur ? "retur" : ""} ${itemText}`.toLowerCase();
@@ -1241,13 +1260,15 @@ export default function Home() {
             }
           }
 
-          const isDocPrinted = Boolean(
+          const pCandidate = (row.printed_at as string) || livePrintedAtMap[targetKey];
+          const isStale = isStalePrintTimestamp(pCandidate, (row.order_date as string) || (extra.order_date as string));
+          const isDocPrinted = !isStale && Boolean(
             row.status_cetak ||
             livePrintedKeys.has(targetKey)
           );
           if (isDocPrinted) {
             livePrintedKeys.add(targetKey);
-            const pTime = (row.printed_at as string) || livePrintedAtMap[targetKey] || new Date().toISOString();
+            const pTime = pCandidate || new Date().toISOString();
             livePrintedAtMap[targetKey] = pTime;
           }
           const docPrintedAt = isDocPrinted
@@ -1268,7 +1289,9 @@ export default function Home() {
         const invMap = new Map<string, FirestoreFakturDoc>();
         existingDBDocsUnified.forEach((doc) => {
           const k = doc.id || doc.no_faktur;
-          const isDocPrinted = Boolean(
+          const pCandidate = doc.printed_at || livePrintedAtMap[k];
+          const isStale = isStalePrintTimestamp(pCandidate, doc.order_date || (doc.extra && (doc.extra.order_date as string)));
+          const isDocPrinted = !isStale && Boolean(
             doc.status_cetak ||
             livePrintedKeys.has(k)
           );
@@ -1290,6 +1313,7 @@ export default function Home() {
         const mergedPrintedAtMap = livePrintedAtMap;
 
         const newUnprintedKeysSet = new Set<string>();
+        const brandNewUnprintedKeysSet = new Set<string>();
         // Preserve all existing unprinted invoices from database ONLY if not printed!
         invMap.forEach((doc, k) => {
           const isPrinted = Boolean(
@@ -1350,6 +1374,7 @@ export default function Home() {
             isPrinted = false;
             printedAt = null;
             newUnprintedKeysSet.add(targetKey);
+            brandNewUnprintedKeysSet.add(targetKey);
             // Ensure clean state: purge any accidental partition key for this brand new invoice
             mergedPrintedSet.delete(targetKey);
           }
@@ -1443,6 +1468,33 @@ export default function Home() {
                 order_number: r.orderNumber,
               });
             }
+          }
+        }
+
+        // Calculate DOMINANT Category for each invoice document
+        for (const entry of invMap.values()) {
+          if (entry.extra && Array.isArray(entry.extra.items) && entry.extra.items.length > 0) {
+            const katCounts: Record<string, number> = {};
+            for (const it of entry.extra.items) {
+              const k = (it.kategori_produk || "FARMA").toUpperCase();
+              katCounts[k] = (katCounts[k] || 0) + 1;
+            }
+            let dominantKat = "FARMA";
+            let maxCount = -1;
+            const priorityOrder = ["CCP", "PREKURSOR", "OOT", "FARMA", "ALKES"];
+            for (const [k, count] of Object.entries(katCounts)) {
+              if (count > maxCount) {
+                maxCount = count;
+                dominantKat = k;
+              } else if (count === maxCount) {
+                const currIdx = priorityOrder.indexOf(dominantKat);
+                const newIdx = priorityOrder.indexOf(k);
+                if (newIdx !== -1 && (currIdx === -1 || newIdx < currIdx)) {
+                  dominantKat = k;
+                }
+              }
+            }
+            entry.extra.kategori_produk = dominantKat;
           }
         }
 
@@ -1600,7 +1652,7 @@ export default function Home() {
           rangeDoo,
           totalItems: parsed.length,
           totalInvoices: invMap.size,
-          newUnprinted: newUnprintedKeys.length,
+          newUnprinted: brandNewUnprintedKeysSet.size,
           time: new Date().toLocaleTimeString("id-ID"),
           uploaderId: deviceIdRef.current,
         };
@@ -2041,7 +2093,7 @@ export default function Home() {
                   {uploadNotification.rangeDoo && (
                     <span>• <strong>DOO</strong>: {uploadNotification.rangeDoo}</span>
                   )}
-                  <span>• Total Baru: <strong>{uploadNotification.newUnprinted} faktur belum dicetak</strong></span>
+                  <span>• Faktur Baru Masuk: <strong>{uploadNotification.newUnprinted} faktur</strong></span>
                 </div>
               </div>
             </div>
