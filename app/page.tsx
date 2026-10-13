@@ -228,6 +228,7 @@ export default function Home() {
   const [toastMsg, setToastMsg] = useState<string | null>(null);
   const [showApotekModal, setShowApotekModal] = useState(false);
   const [showProductModal, setShowProductModal] = useState(false);
+  const [showChangelogModal, setShowChangelogModal] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const deviceIdRef = useRef<string>(Math.random().toString(36).substring(2, 9));
   const [uploadNotification, setUploadNotification] = useState<UploadNotification | null>(null);
@@ -358,6 +359,7 @@ export default function Home() {
   const totalPagesRef = useRef(1);
   const showApotekModalRef = useRef(false);
   const showProductModalRef = useRef(false);
+  const showChangelogModalRef = useRef(false);
   const togglePrintRef = useRef<(group: FakturGroup) => void>(() => {});
   const toggleExpandRef = useRef<(key: string) => void>(() => {});
   const lastSpaceTimeRef = useRef(0);
@@ -377,6 +379,10 @@ export default function Home() {
   useEffect(() => {
     showProductModalRef.current = showProductModal;
   }, [showProductModal]);
+
+  useEffect(() => {
+    showChangelogModalRef.current = showChangelogModal;
+  }, [showChangelogModal]);
 
   useEffect(() => {
     categoryOverridesRef.current = categoryOverrides;
@@ -1088,11 +1094,12 @@ export default function Home() {
         if (isInput) (target as HTMLElement).blur();
         if (showApotekModalRef.current) setShowApotekModal(false);
         if (showProductModalRef.current) setShowProductModal(false);
+        if (showChangelogModalRef.current) setShowChangelogModal(false);
         return;
       }
 
       if (isInput) return;
-      if (showApotekModalRef.current || showProductModalRef.current) return;
+      if (showApotekModalRef.current || showProductModalRef.current || showChangelogModalRef.current) return;
 
       const currentPages = pageDataRef.current;
       const maxRow = Math.max(0, currentPages.length - 1);
@@ -1871,11 +1878,19 @@ export default function Home() {
                 <div>
                   <div className="flex items-center gap-1.5 leading-tight">
                     <span className="font-bold text-sm tracking-tight">Faktur Tracker</span>
-                    <span className={`text-[9px] px-1 py-0.2 rounded font-semibold border ${
-                      isDarkMode ? "bg-blue-950/80 text-blue-300 border-blue-700/60" : "bg-blue-50 text-blue-700 border-blue-200"
-                    }`}>
-                      v2.0
-                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setShowChangelogModal(true)}
+                      className={`text-[9px] px-1.5 py-0.5 rounded font-semibold border transition-all cursor-pointer flex items-center gap-1 ${
+                        isDarkMode
+                          ? "bg-blue-950/80 text-blue-300 border-blue-700/60 hover:bg-blue-900"
+                          : "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"
+                      }`}
+                      title="Klik untuk melihat catatan pembaruan sistem v2.1"
+                    >
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                      <span>v2.1 • Info Update</span>
+                    </button>
                   </div>
                   <span className={`text-[10px] hidden md:inline leading-none ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>
                     Oracle ERP Live Tracker
@@ -2107,6 +2122,20 @@ export default function Home() {
                 title="Refresh Data dari Server"
               >
                 <span className={loading ? "animate-spin" : ""}>🔄</span>
+              </button>
+
+              {/* Info Pembaruan v2.1 */}
+              <button
+                onClick={() => setShowChangelogModal(true)}
+                className={`p-1 sm:px-2 sm:py-1 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1 border ${
+                  isDarkMode
+                    ? "bg-[#182542] hover:bg-[#223359] border-blue-700/60 text-blue-300"
+                    : "bg-blue-50 hover:bg-blue-100 border-blue-200 text-blue-700"
+                }`}
+                title="Catatan Pembaruan Sistem v2.1"
+              >
+                <span>📢</span>
+                <span className="hidden sm:inline">Info Update</span>
               </button>
 
               {/* Dark Mode */}
@@ -3066,6 +3095,106 @@ export default function Home() {
           isDarkMode={isDarkMode}
           onSuccess={(msg) => showToast(`✓ ${msg}`)}
         />
+      )}
+
+      {/* Catatan Pembaruan Sistem Modal (v2.1) */}
+      {showChangelogModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150">
+          <div
+            className="fixed inset-0"
+            onClick={() => setShowChangelogModal(false)}
+          />
+          <div className={`relative w-full max-w-lg rounded-2xl shadow-2xl border p-5 max-h-[90vh] flex flex-col z-10 transition-all ${
+            isDarkMode ? "bg-[#111c33] border-slate-700 text-slate-100 shadow-black/50" : "bg-white border-slate-200 text-slate-900 shadow-slate-400/30"
+          }`}>
+            {/* Header */}
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-700/60">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center text-base shadow-sm shadow-blue-500/30">
+                  📢
+                </div>
+                <div>
+                  <div className="flex items-center gap-1.5">
+                    <h3 className="font-bold text-sm sm:text-base leading-tight">Pembaruan Sistem</h3>
+                    <span className="text-[10px] px-1.5 py-0.2 rounded font-bold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
+                      v2.1
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">Rangkuman fitur & perbaikan terbaru untuk tim</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowChangelogModal(false)}
+                className="w-7 h-7 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center text-sm font-bold transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Content List */}
+            <div className="space-y-3.5 my-4 overflow-y-auto pr-1 text-xs leading-relaxed">
+              <div className="flex gap-2.5">
+                <span className="text-base shrink-0">🧹</span>
+                <div>
+                  <h4 className="font-bold text-emerald-600 dark:text-emerald-400">1. Database Bersih & Anti-Centang Sendiri</h4>
+                  <p className="text-slate-600 dark:text-slate-300">
+                    Kunci lampau sudah dibersihkan total. Faktur baru (misal tanggal 14 Okt) dijamin 100% masuk ke tab <strong>Belum Terprint</strong> dan tidak akan pernah otomatis tercentang sendiri.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex gap-2.5">
+                <span className="text-base shrink-0">🛡️</span>
+                <div>
+                  <h4 className="font-bold text-blue-600 dark:text-blue-400">2. Isolasi Mutlak ORA vs DOO</h4>
+                  <p className="text-slate-600 dark:text-slate-300">
+                    Faktur ORA (<code>20078-1P</code>) dan Faktur DOO (<code>20078</code>) adalah dua entitas terpisah. Cetak atau unprint salah satunya tidak akan menyenggol faktur lainnya.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex gap-2.5">
+                <span className="text-base shrink-0">⚡</span>
+                <div>
+                  <h4 className="font-bold text-amber-600 dark:text-amber-400">3. Navigasi Keyboard Cepat & Bebas Lag/Crash</h4>
+                  <p className="text-slate-600 dark:text-slate-300">
+                    Tekan <strong>Spasi</strong> untuk cetak kini dilengkapi pengaman anti-repeat (tidak akan lag walau tertahan). Tombol panah atas/bawah mulus otomatis mengikuti baris aktif. Tekan <strong>c</strong> / <strong>Ctrl+C</strong> untuk menyalin data kolom ke clipboard.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex gap-2.5">
+                <span className="text-base shrink-0">🗂️</span>
+                <div>
+                  <h4 className="font-bold text-indigo-600 dark:text-indigo-400">4. Tab Bersih & Urutan Pintar "Semua"</h4>
+                  <p className="text-slate-600 dark:text-slate-300">
+                    Tab difokuskan: <strong>Belum Terprint</strong> (antrean kerja), <strong>Semua</strong>, <strong>Double INV</strong>, dan <strong>Retur</strong>. Di tab Semua: faktur belum cetak selalu di atas, dan di bawahnya mengalir riwayat selesai cetak urut waktu terbaru!
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex gap-2.5">
+                <span className="text-base shrink-0">💊</span>
+                <div>
+                  <h4 className="font-bold text-purple-600 dark:text-purple-400">5. Kategori Produk Dominan Oracle</h4>
+                  <p className="text-slate-600 dark:text-slate-300">
+                    Klasifikasi faktur (FARMA/ALKES/CCP/PREKURSOR/OOT) dihitung otomatis dari mayoritas produk di dalamnya sesuai kolom PPIC resmi Oracle.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="pt-3 border-t border-slate-200 dark:border-slate-700/60 flex justify-end">
+              <button
+                onClick={() => setShowChangelogModal(false)}
+                className="px-4 py-1.5 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white shadow-xs transition-colors"
+              >
+                Mengerti & Tutup
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
