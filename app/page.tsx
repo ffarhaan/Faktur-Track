@@ -647,30 +647,41 @@ export default function Home() {
       }
       const willBePrinted = !group.allPrinted;
       const targetKey = group.invoiceKey;
+      const cleanInv = String(group.invoiceNumber || "").trim().replace(/-1P$/i, "");
+      const keyVariants = Array.from(new Set([targetKey, cleanInv, `${cleanInv}-1P`, group.key].filter(Boolean)));
       const nowIso = new Date().toISOString();
       const currentUserName = currentUserRef.current?.name || "Admin";
 
       // 1. Optimistic Local Update
       setPrintedInvoices((prev) => {
         const next = new Set(prev);
-        if (willBePrinted) next.add(targetKey);
-        else next.delete(targetKey);
+        if (willBePrinted) {
+          keyVariants.forEach((k) => next.add(k));
+        } else {
+          keyVariants.forEach((k) => next.delete(k));
+        }
         printedInvoicesRef.current = next;
         return next;
       });
 
       setPrintedAtMap((prev) => {
         const next = { ...prev };
-        if (willBePrinted) next[targetKey] = nowIso;
-        else delete next[targetKey];
+        if (willBePrinted) {
+          keyVariants.forEach((k) => { next[k] = nowIso; });
+        } else {
+          keyVariants.forEach((k) => { delete next[k]; });
+        }
         printedAtMapRef.current = next;
         return next;
       });
 
       setPrintedByMap((prev) => {
         const next = { ...prev };
-        if (willBePrinted) next[targetKey] = currentUserName;
-        else delete next[targetKey];
+        if (willBePrinted) {
+          keyVariants.forEach((k) => { next[k] = currentUserName; });
+        } else {
+          keyVariants.forEach((k) => { delete next[k]; });
+        }
         printedByMapRef.current = next;
         return next;
       });
@@ -678,7 +689,7 @@ export default function Home() {
       if (currentFakturDocsRef.current) {
         currentFakturDocsRef.current.forEach((d) => {
           const k = d.id || d.no_faktur;
-          if (k === targetKey) {
+          if (k && keyVariants.includes(k)) {
             d.status_cetak = willBePrinted;
             d.printed_at = willBePrinted ? nowIso : null;
             d.printed_by = willBePrinted ? currentUserName : null;
@@ -693,6 +704,11 @@ export default function Home() {
           willBePrinted,
           willBePrinted ? nowIso : null,
           willBePrinted ? currentUserName : null
+        );
+        showToast(
+          willBePrinted
+            ? `✓ Faktur ${cleanInv} ditandai SUDAH dicetak.`
+            : `↩ Faktur ${cleanInv} dikembalikan ke BELUM dicetak.`
         );
       } catch (err) {
         console.error("Print toggle sync error:", err);
@@ -942,7 +958,14 @@ export default function Home() {
 
     const nowIso = new Date().toISOString();
     const currentUserName = currentUserRef.current?.name || "Admin";
-    const targetKeys = unprinted.map((g) => g.invoiceKey);
+    const targetKeysSet = new Set<string>();
+    unprinted.forEach((g) => {
+      const clean = String(g.invoiceNumber || "").trim().replace(/-1P$/i, "");
+      targetKeysSet.add(g.invoiceKey);
+      targetKeysSet.add(clean);
+      targetKeysSet.add(`${clean}-1P`);
+    });
+    const targetKeys = Array.from(targetKeysSet).filter(Boolean);
 
     setPrintedInvoices((prev) => {
       const next = new Set(prev);

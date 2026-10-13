@@ -8,6 +8,7 @@ import {
   getDocFromServer,
   onSnapshot,
   deleteDoc,
+  updateDoc,
   Unsubscribe,
 } from "firebase/firestore";
 import { db } from "./firebase";
@@ -1041,6 +1042,8 @@ export async function updateFakturPrintStatus(
   printedAt: string | null,
   printedBy?: string | null
 ): Promise<void> {
+  const cleanInv = invoiceKey.replace(/-1P$/i, "");
+  const keysToUpdate = Array.from(new Set([invoiceKey, cleanInv, `${cleanInv}-1P`].filter(Boolean)));
   const partId = getPrintPartitionId(invoiceKey);
   const partRef = doc(db, PRINT_PARTITIONS_COLLECTION, partId);
   const legacyRef = doc(db, APP_DATA_COLLECTION, PRINT_STATE_DOC);
@@ -1064,28 +1067,34 @@ export async function updateFakturPrintStatus(
     }
   }
 
-  if (status) {
-    partKeys.add(invoiceKey);
-    if (printedAt) partMap[invoiceKey] = printedAt;
-    if (printedBy) partByMap[invoiceKey] = printedBy;
-  } else {
-    partKeys.delete(invoiceKey);
-    delete partMap[invoiceKey];
-    delete partByMap[invoiceKey];
-  }
+  keysToUpdate.forEach((k) => {
+    if (status) {
+      partKeys.add(k);
+      if (printedAt) partMap[k] = printedAt;
+      if (printedBy) partByMap[k] = printedBy;
+    } else {
+      partKeys.delete(k);
+      delete partMap[k];
+      delete partByMap[k];
+    }
+  });
 
   const nowIso = new Date().toISOString();
 
-  // Update in-memory chunks so active client immediately reflects printed_by
-  globalChunksMap.forEach((items) => {
+  // Update in-memory chunks AND track which chunk documents in Firestore need updating
+  const chunkDocsToSave = new Set<string>();
+  globalChunksMap.forEach((items, chunkId) => {
+    let chunkModified = false;
     items.forEach((item) => {
       const k = item.id || item.no_faktur;
-      if (k === invoiceKey) {
+      if (k && keysToUpdate.includes(k)) {
         item.status_cetak = status;
         item.printed_at = status ? printedAt : null;
         item.printed_by = status ? (printedBy || null) : null;
+        chunkModified = true;
       }
     });
+    if (chunkModified) chunkDocsToSave.add(chunkId);
   });
 
   // Immediately update in-memory cache
@@ -1105,7 +1114,18 @@ export async function updateFakturPrintStatus(
     updatedAt: nowIso,
   });
 
-  // 2. Dual-write to legacy doc for backward compatibility
+  // 2. Persist modified chunks to Firestore
+  const chunkWrites = Array.from(chunkDocsToSave).map(async (cId) => {
+    try {
+      const cRef = doc(db, CHUNKS_COLLECTION, cId);
+      const items = globalChunksMap.get(cId) || [];
+      await updateDoc(cRef, { items, updatedAt: nowIso });
+    } catch (e) {
+      console.warn(`Failed to update chunk doc ${cId}:`, e);
+    }
+  });
+
+  // 3. Dual-write to legacy doc for backward compatibility
   const writeLegacy = (async () => {
     try {
       const legSnap = await getDoc(legacyRef);
@@ -1114,15 +1134,17 @@ export async function updateFakturPrintStatus(
         const liveKeys = new Set(legData.printedKeys || []);
         const liveMap = { ...(legData.printedAtMap || {}) };
         const liveByMap = { ...(legData.printedByMap || {}) };
-        if (status) {
-          liveKeys.add(invoiceKey);
-          if (printedAt) liveMap[invoiceKey] = printedAt;
-          if (printedBy) liveByMap[invoiceKey] = printedBy;
-        } else {
-          liveKeys.delete(invoiceKey);
-          delete liveMap[invoiceKey];
-          delete liveByMap[invoiceKey];
-        }
+        keysToUpdate.forEach((k) => {
+          if (status) {
+            liveKeys.add(k);
+            if (printedAt) liveMap[k] = printedAt;
+            if (printedBy) liveByMap[k] = printedBy;
+          } else {
+            liveKeys.delete(k);
+            delete liveMap[k];
+            delete liveByMap[k];
+          }
+        });
         await setDoc(legacyRef, {
           printedKeys: Array.from(liveKeys),
           printedAtMap: liveMap,
@@ -1141,7 +1163,7 @@ export async function updateFakturPrintStatus(
     }
   })();
 
-  await Promise.all([writePart, writeLegacy]);
+  await Promise.all([writePart, ...chunkWrites, writeLegacy]);
 }
 
 /**
@@ -1153,8 +1175,17 @@ export async function updateFaktursPrintStatusBatch(
   printedAt: string | null,
   printedBy?: string | null
 ): Promise<void> {
+  const expandedKeysSet = new Set<string>();
+  keys.forEach((k) => {
+    const clean = k.replace(/-1P$/i, "");
+    expandedKeysSet.add(k);
+    expandedKeysSet.add(clean);
+    expandedKeysSet.add(`${clean}-1P`);
+  });
+  const allKeys = Array.from(expandedKeysSet).filter(Boolean);
+
   const keysByPartition: Record<string, string[]> = {};
-  for (const k of keys) {
+  for (const k of allKeys) {
     const partId = getPrintPartitionId(k);
     if (!keysByPartition[partId]) keysByPartition[partId] = [];
     keysByPartition[partId].push(k);
@@ -1162,64 +1193,77 @@ export async function updateFaktursPrintStatusBatch(
 
   const nowIso = new Date().toISOString();
 
-  // Update in-memory chunks
-  const keySet = new Set(keys);
-  globalChunksMap.forEach((items) => {
+  // Update in-memory chunks AND track modified chunk documents
+  const chunkDocsToSave = new Set<string>();
+  globalChunksMap.forEach((items, chunkId) => {
+    let chunkModified = false;
     items.forEach((item) => {
       const k = item.id || item.no_faktur;
-      if (k && keySet.has(k)) {
+      if (k && expandedKeysSet.has(k)) {
         item.status_cetak = status;
         item.printed_at = status ? printedAt : null;
         item.printed_by = status ? (printedBy || null) : null;
+        chunkModified = true;
       }
+    });
+    if (chunkModified) chunkDocsToSave.add(chunkId);
+  });
+
+  const partWrites = Object.entries(keysByPartition).map(async ([partId, targetKeys]) => {
+    const partRef = doc(db, PRINT_PARTITIONS_COLLECTION, partId);
+    const cached = globalPartitionMap.get(partId);
+    const pSnap = await getDoc(partRef).catch(() => null);
+    let pKeys = new Set<string>(cached?.printedKeys || []);
+    let pMap: Record<string, string> = { ...(cached?.printedAtMap || {}) };
+    let pByMap: Record<string, string> = { ...(cached?.printedByMap || {}) };
+
+    if (pSnap && pSnap.exists()) {
+      const data = pSnap.data();
+      ((data.printedKeys as string[]) || []).forEach((k) => pKeys.add(k));
+      Object.assign(pMap, (data.printedAtMap as Record<string, string>) || {});
+      Object.assign(pByMap, (data.printedByMap as Record<string, string>) || {});
+    }
+
+    targetKeys.forEach((k) => {
+      if (status) {
+        pKeys.add(k);
+        if (printedAt) pMap[k] = printedAt;
+        if (printedBy) pByMap[k] = printedBy;
+      } else {
+        pKeys.delete(k);
+        delete pMap[k];
+        delete pByMap[k];
+      }
+    });
+
+    await setDoc(partRef, {
+      partitionId: partId,
+      printedKeys: Array.from(pKeys),
+      printedAtMap: pMap,
+      printedByMap: pByMap,
+      count: pKeys.size,
+      updatedAt: nowIso,
+    });
+
+    // Immediately update in-memory cache
+    globalPartitionMap.set(partId, {
+      printedKeys: Array.from(pKeys),
+      printedAtMap: pMap,
+      printedByMap: pByMap,
     });
   });
 
-  await Promise.all(
-    Object.entries(keysByPartition).map(async ([partId, targetKeys]) => {
-      const partRef = doc(db, PRINT_PARTITIONS_COLLECTION, partId);
-      const cached = globalPartitionMap.get(partId);
-      const pSnap = await getDoc(partRef).catch(() => null);
-      let pKeys = new Set<string>(cached?.printedKeys || []);
-      let pMap: Record<string, string> = { ...(cached?.printedAtMap || {}) };
-      let pByMap: Record<string, string> = { ...(cached?.printedByMap || {}) };
+  const chunkWrites = Array.from(chunkDocsToSave).map(async (cId) => {
+    try {
+      const cRef = doc(db, CHUNKS_COLLECTION, cId);
+      const items = globalChunksMap.get(cId) || [];
+      await updateDoc(cRef, { items, updatedAt: nowIso });
+    } catch (e) {
+      console.warn(`Failed to update chunk doc ${cId}:`, e);
+    }
+  });
 
-      if (pSnap && pSnap.exists()) {
-        const data = pSnap.data();
-        ((data.printedKeys as string[]) || []).forEach((k) => pKeys.add(k));
-        Object.assign(pMap, (data.printedAtMap as Record<string, string>) || {});
-        Object.assign(pByMap, (data.printedByMap as Record<string, string>) || {});
-      }
-
-      targetKeys.forEach((k) => {
-        if (status) {
-          pKeys.add(k);
-          if (printedAt) pMap[k] = printedAt;
-          if (printedBy) pByMap[k] = printedBy;
-        } else {
-          pKeys.delete(k);
-          delete pMap[k];
-          delete pByMap[k];
-        }
-      });
-
-      await setDoc(partRef, {
-        partitionId: partId,
-        printedKeys: Array.from(pKeys),
-        printedAtMap: pMap,
-        printedByMap: pByMap,
-        count: pKeys.size,
-        updatedAt: nowIso,
-      });
-
-      // Immediately update in-memory cache
-      globalPartitionMap.set(partId, {
-        printedKeys: Array.from(pKeys),
-        printedAtMap: pMap,
-        printedByMap: pByMap,
-      });
-    })
-  );
+  await Promise.all([...partWrites, ...chunkWrites]);
 
   // Dual-write batch to legacy doc
   try {
