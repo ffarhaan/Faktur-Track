@@ -228,6 +228,7 @@ export default function Home() {
   const [toastMsg, setToastMsg] = useState<string | null>(null);
   const [showApotekModal, setShowApotekModal] = useState(false);
   const [showProductModal, setShowProductModal] = useState(false);
+  const [showChangelogModal, setShowChangelogModal] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const deviceIdRef = useRef<string>(Math.random().toString(36).substring(2, 9));
   const [uploadNotification, setUploadNotification] = useState<UploadNotification | null>(null);
@@ -358,6 +359,7 @@ export default function Home() {
   const totalPagesRef = useRef(1);
   const showApotekModalRef = useRef(false);
   const showProductModalRef = useRef(false);
+  const showChangelogModalRef = useRef(false);
   const togglePrintRef = useRef<(group: FakturGroup) => void>(() => {});
   const toggleExpandRef = useRef<(key: string) => void>(() => {});
   const lastSpaceTimeRef = useRef(0);
@@ -377,6 +379,10 @@ export default function Home() {
   useEffect(() => {
     showProductModalRef.current = showProductModal;
   }, [showProductModal]);
+
+  useEffect(() => {
+    showChangelogModalRef.current = showChangelogModal;
+  }, [showChangelogModal]);
 
   useEffect(() => {
     categoryOverridesRef.current = categoryOverrides;
@@ -1088,11 +1094,12 @@ export default function Home() {
         if (isInput) (target as HTMLElement).blur();
         if (showApotekModalRef.current) setShowApotekModal(false);
         if (showProductModalRef.current) setShowProductModal(false);
+        if (showChangelogModalRef.current) setShowChangelogModal(false);
         return;
       }
 
       if (isInput) return;
-      if (showApotekModalRef.current || showProductModalRef.current) return;
+      if (showApotekModalRef.current || showProductModalRef.current || showChangelogModalRef.current) return;
 
       const currentPages = pageDataRef.current;
       const maxRow = Math.max(0, currentPages.length - 1);
@@ -1871,11 +1878,19 @@ export default function Home() {
                 <div>
                   <div className="flex items-center gap-1.5 leading-tight">
                     <span className="font-bold text-sm tracking-tight">Faktur Tracker</span>
-                    <span className={`text-[9px] px-1 py-0.2 rounded font-semibold border ${
-                      isDarkMode ? "bg-blue-950/80 text-blue-300 border-blue-700/60" : "bg-blue-50 text-blue-700 border-blue-200"
-                    }`}>
-                      v2.0
-                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setShowChangelogModal(true)}
+                      className={`text-[9px] px-1.5 py-0.5 rounded-full font-semibold border transition-all cursor-pointer inline-flex items-center gap-1 ${
+                        isDarkMode
+                          ? "bg-blue-950/80 hover:bg-blue-900 text-blue-300 border-blue-700/60 shadow-xs"
+                          : "bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-300 shadow-xs"
+                      }`}
+                      title="Klik untuk melihat catatan pembaruan & perbaikan v2.1"
+                    >
+                      <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></span>
+                      v2.1
+                    </button>
                   </div>
                   <span className={`text-[10px] hidden md:inline leading-none ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>
                     Oracle ERP Live Tracker
@@ -2107,6 +2122,20 @@ export default function Home() {
                 title="Refresh Data dari Server"
               >
                 <span className={loading ? "animate-spin" : ""}>🔄</span>
+              </button>
+
+              {/* Info Pembaruan v2.1 */}
+              <button
+                type="button"
+                onClick={() => setShowChangelogModal(true)}
+                className={`p-1 sm:px-2 sm:py-1 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1 border ${
+                  isDarkMode
+                    ? "bg-[#182542] hover:bg-[#223359] border-blue-700/60 text-blue-300"
+                    : "bg-blue-50 hover:bg-blue-100 border-blue-200 text-blue-700"
+                }`}
+                title="Catatan Pembaruan & Peningkatan v2.1"
+              >
+                <span>📢</span>
               </button>
 
 
@@ -3067,6 +3096,125 @@ export default function Home() {
           isDarkMode={isDarkMode}
           onSuccess={(msg) => showToast(`✓ ${msg}`)}
         />
+      )}
+
+      {/* Changelog & System Update Notes Modal (v2.1) */}
+      {showChangelogModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-150"
+          onClick={() => setShowChangelogModal(false)}
+        >
+          <div
+            className={`relative w-full max-w-xl max-h-[88vh] flex flex-col rounded-2xl shadow-2xl overflow-hidden border transition-all ${
+              isDarkMode ? "bg-[#0b1329] border-slate-700/80 text-slate-100" : "bg-white border-slate-200 text-slate-900"
+            }`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className={`px-5 py-4 border-b flex items-center justify-between ${
+              isDarkMode ? "bg-[#0e1935] border-slate-800" : "bg-gradient-to-r from-blue-50 to-indigo-50/50 border-slate-100"
+            }`}>
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-blue-600 text-white flex items-center justify-center text-base shadow-sm shadow-blue-500/30">
+                  📢
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-base font-bold tracking-tight text-slate-900 dark:text-white">
+                      Catatan Pembaruan Sistem
+                    </h2>
+                    <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-blue-600 text-white shadow-xs">
+                      v2.1
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Peningkatan kestabilan sinkronisasi, sorting otomatis, & performa realtime
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowChangelogModal(false)}
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200/60 dark:hover:bg-slate-800 transition-colors"
+                title="Tutup (Esc)"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="overflow-y-auto p-4 sm:p-5 space-y-3.5 text-xs sm:text-sm custom-scrollbar">
+              {/* Item 1 */}
+              <div className={`p-3 rounded-xl border transition-all ${
+                isDarkMode ? "bg-[#0f1b33] border-slate-800 text-slate-200" : "bg-slate-50 border-slate-200/80 text-slate-800"
+              }`}>
+                <div className="flex items-center gap-2 font-bold text-emerald-600 dark:text-emerald-400 mb-1">
+                  <span className="text-sm">🔒</span>
+                  <span>Pembersihan Database & Anti Data Hantu</span>
+                </div>
+                <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
+                  Lebih dari <strong>1.300+ kunci anomali/usang</strong> telah dibersihkan secara tuntas. Diterapkan <strong>Isolasi Mutlak (Strict Key Isolation)</strong> antara faktur reguler (DOO) dan faktur ORA sehingga tidak akan pernah saling menimpa atau tertukar status cetaknya.
+                </p>
+              </div>
+
+              {/* Item 2 */}
+              <div className={`p-3 rounded-xl border transition-all ${
+                isDarkMode ? "bg-[#0f1b33] border-slate-800 text-slate-200" : "bg-slate-50 border-slate-200/80 text-slate-800"
+              }`}>
+                <div className="flex items-center gap-2 font-bold text-blue-600 dark:text-blue-400 mb-1">
+                  <span className="text-sm">⚡</span>
+                  <span>Tab "Semua" Mengalir Otomatis & Tab Sederhana</span>
+                </div>
+                <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
+                  Di tab <strong>Semua</strong>, faktur yang belum terprint selalu berada di posisi teratas. Saat ditandai cetak (Spasi), faktur langsung turun secara kronologis menyambung urutan faktur yang telah selesai dicetak sebelumnya. Tab disederhanakan menjadi <strong>Belum Diprint, Semua, Double, dan Retur</strong>.
+                </p>
+              </div>
+
+              {/* Item 3 */}
+              <div className={`p-3 rounded-xl border transition-all ${
+                isDarkMode ? "bg-[#0f1b33] border-slate-800 text-slate-200" : "bg-slate-50 border-slate-200/80 text-slate-800"
+              }`}>
+                <div className="flex items-center gap-2 font-bold text-indigo-600 dark:text-indigo-400 mb-1">
+                  <span className="text-sm">🛡️</span>
+                  <span>Sinkronisasi Anti-Lag & Antrean Cerdas (Debounced Sync)</span>
+                </div>
+                <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
+                  Penyimpanan perubahan ke server kini menggunakan sistem batch antrean pintar. Menandai banyak faktur secara cepat tidak lagi membebani koneksi internet ataupun membuat browser freeze/lag, dan seluruh perangkat terhubung menerima update secara sinkron.
+                </p>
+              </div>
+
+              {/* Item 4 */}
+              <div className={`p-3 rounded-xl border transition-all ${
+                isDarkMode ? "bg-[#0f1b33] border-slate-800 text-slate-200" : "bg-slate-50 border-slate-200/80 text-slate-800"
+              }`}>
+                <div className="flex items-center gap-2 font-bold text-amber-600 dark:text-amber-400 mb-1">
+                  <span className="text-sm">⌨️</span>
+                  <span>Navigasi Keyboard Halus & Repeat Lock</span>
+                </div>
+                <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
+                  Menekan tombol Spasi kini memiliki perlindungan <em>repeat lock</em> (150ms debounce) untuk mencegah faktur tercentang bolak-balik saat tombol tertahan. Navigasi baris aktif (Panah / J / K) otomatis mengikuti scroll layar dengan mulus.
+                </p>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className={`px-5 py-3 border-t flex items-center justify-between gap-3 ${
+              isDarkMode ? "bg-[#0e1935] border-slate-800" : "bg-slate-50 border-slate-100"
+            }`}>
+              <div className="flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block animate-pulse"></span>
+                <span>Semua sistem beroperasi normal</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowChangelogModal(false)}
+                className="px-4 py-1.5 rounded-xl font-bold text-xs bg-blue-600 hover:bg-blue-700 text-white transition-all shadow-sm shadow-blue-500/20"
+              >
+                Tutup & Mengerti
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
