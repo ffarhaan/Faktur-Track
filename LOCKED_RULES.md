@@ -46,6 +46,10 @@ Dokumen ini adalah acuan baku dan permanen untuk seluruh pengembangan, pemelihar
    - Mencari No Invoice dan No SO baru (khususnya ORA baru) dan mendaftarkannya ke sistem dengan status Belum Terprint.
    - Melengkapi No SO resmi dan rincian obat/item untuk faktur yang sudah ada.
    - Dilarang mereset atau mengutak-atik status cetak faktur apa pun yang sudah ada di database.
+5. **Jaminan Konsistensi Kronologis (Chronological Consistency Guard - LOCKED)**:
+   - Sebuah faktur baru tidak mungkin dicetak berhari-hari sebelum tanggal ordernya (`order_date`) dibuat.
+   - Jika suatu faktur baru dicocokkan dengan stempel `printed_at` di database yang tanggalnya lampau (> 24 jam sebelum `order_date`), sistem secara otomatis mengabaikan stempel lampau tersebut (`isStalePrintTimestamp = true`) dan mewajibkan faktur baru tersebut berstatus murni `Belum Terprint`.
+   - Menjamin 100% tidak ada lagi tabrakan nomor faktur antar siklus waktu yang menyebabkan faktur baru otomatis tercentang.
 
 #### C. Logika Done Print & Realtime Multi-Device Sync
 - **Kecepatan & Keandalan**:
