@@ -159,6 +159,10 @@ Dokumen ini adalah acuan baku dan permanen untuk seluruh pengembangan, pemelihar
 6. **Debounced Background Chunk Persistence & Anti-Echo Guard (LOCKED)**:
    - Penyimpanan dokumen chunk (`faktur_chunks`) pada pengubahan status cetak dijalankan secara *debounced* (1.000ms) di latar belakang agar tidak memblokir thread JavaScript utama.
    - Listener real-time Firestore `unsubChunks` WAJIB mengabaikan echo snapshot dari update chunk internal (`internalChunkWriteInProgress`), mencegah re-parsing rekursif ribuan data yang memicu crash tab browser.
+7. **Pengurutan Tab 'Semua' (Unprinted-First & Chronological Done-Print Stream - LOCKED)**:
+   - Tab 'Sudah Terprint' disederhanakan/dihapus dari bilah filter utama agar tampilan bersih dan fokus pada antrean kerja.
+   - Pada tab 'Semua', faktur yang **Belum Terprint** selalu berada di posisi paling atas (diurutkan nomor invoice terbaru).
+   - Faktur yang **Sudah Terprint** mengalir di bawahnya, diurutkan secara ketat berdasarkan **waktu cetak (Done Print timestamp)** terbaru ke terlama (`timeB - timeA`). Saat faktur selesai dicetak, faktur tersebut langsung turun memimpin daftar riwayat cetak.
 
 ---
 

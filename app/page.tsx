@@ -958,6 +958,32 @@ export default function Home() {
     else if (klasFilter === "alkes") result = result.filter((g) => g.hasAlkes);
     else if (klasFilter === "farma") result = result.filter((g) => g.hasFarma);
 
+    // In tab 'Semua' ('all'):
+    // 1. Invoices that are NOT YET PRINTED stay on top (sorted by invoice number descending)
+    // 2. Invoices that are ALREADY PRINTED flow below, sorted by Done Print timestamp descending (newest print first)
+    if (filter === "all") {
+      result = [...result].sort((a, b) => {
+        if (!a.allPrinted && b.allPrinted) return -1;
+        if (a.allPrinted && !b.allPrinted) return 1;
+
+        if (!a.allPrinted && !b.allPrinted) {
+          const na = parseInvNum(a.invoiceNumber);
+          const nb = parseInvNum(b.invoiceNumber);
+          return nb - na;
+        }
+
+        const timeA = a.printedAt ? parseDateMs(a.printedAt) : 0;
+        const timeB = b.printedAt ? parseDateMs(b.printedAt) : 0;
+        if (timeB !== timeA) {
+          return timeB - timeA;
+        }
+
+        const na = parseInvNum(a.invoiceNumber);
+        const nb = parseInvNum(b.invoiceNumber);
+        return nb - na;
+      });
+    }
+
     return result;
   }, [grouped, filter, katFilter, jenisFilter, klasFilter, dateFilter, search]);
 
@@ -2374,16 +2400,6 @@ export default function Home() {
                 }`}
               >
                 Belum Terprint ({stats.belumCount})
-              </button>
-              <button
-                onClick={() => { setFilter("sudah"); setPage(0); }}
-                className={`px-2 py-0.5 rounded-md text-xs font-bold transition-all ${
-                  filter === "sudah"
-                    ? (isDarkMode ? "bg-[#1e2c4a] text-blue-300 shadow-xs border border-blue-500/30" : "bg-white text-slate-900 shadow-xs")
-                    : (isDarkMode ? "text-slate-400 hover:text-white" : "text-slate-600 hover:text-slate-900")
-                }`}
-              >
-                Sudah Terprint ({stats.sudahCount})
               </button>
               <button
                 onClick={() => { setFilter("all"); setPage(0); }}
