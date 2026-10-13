@@ -80,22 +80,33 @@ Dokumen ini adalah acuan baku dan permanen untuk seluruh pengembangan, pemelihar
 2. **Penyimpanan Kustom User (`category_overrides`)**:
    - Jika pengguna mengubah kategori suatu apotek/faktur (misal Apotek A diubah dari 3P ke 2P), perubahan tersebut disimpan permanen ke dokumen `app_data/category_overrides`.
    - **Saat upload file excel baru di masa depan**, sistem wajib memprioritaskan preferensi yang tersimpan sehingga Apotek A **tetap 2P dan tidak akan kembali ke 3P**.
-3. **Kategori Produk**:
-   - `FARMA`, `ALKES`, `CCP`, `PREKURSOR`, `OOT` berdasarkan lookup `masterProduct.json` dan regex kata kunci obat khusus.
+3. **Kategori Produk Dominan (Dominant Category Majority Rule - LOCKED TOTAL)**:
+   - **Kalkulasi Berbasis Mayoritas**: Kategori produk pada faktur dihitung berdasarkan kategori terbanyak dari seluruh item obat/barang dalam faktur tersebut:
+     - Barang dominan FARMA $\rightarrow$ Kategori Faktur **FARMA**.
+     - Barang dominan ALKES $\rightarrow$ Kategori Faktur **ALKES**.
+     - Begitu juga untuk **CCP**, **PREKURSOR**, dan **OOT**.
+   - **DILARANG KERAS Menghakimi Sepihak**: Dilarang mencap seluruh faktur sebagai ALKES hanya karena terdapat 1 item alkes (misal alkohol/swab) sementara 20 item lainnya adalah obat farmasi.
+   - **Prioritas Tie-Breaker**: Jika jumlah item antar kategori sama persis, urutan penentu adalah `CCP > PREKURSOR > OOT > FARMA > ALKES`.
+   - **Dukungan Resmi Oracle PPIC & Bentuk Sediaan**: Sistem wajib membaca kolom resmi Oracle PPIC (Kolom 16 `Segmentation` & Kolom 13 `Nama Kategori Product`) serta memprioritaskan bentuk sediaan farmasi (`TABLET`, `KAPSUL`, `SIRUP`, `INJEKSI`, `SALEP`, `KRIM`, `INFUS`, dll) agar obat farma tidak salah terbaca alkes.
 
 #### F. Navigasi & Shortcut Keyboard
 - Navigasi tabel penuh: `↓`/`j`, `↑`/`k` (baris), `→`/`l`, `←`/`h` (kolom/sel).
 - Aksi instan: `Space` (toggle print), `Enter` (buka detail obat), `Ctrl+C` / `Cmd+C` / `c` (salin No Invoice / No SO / Pelanggan / Total pada sel aktif ke clipboard), `/` atau `f` (fokus search).
 
 #### G. Dual Source of Truth Status Cetak & Jaminan Anti-Flash (Anti-Glitch / Anti-Race Condition - LOCKED)
-1. **Dual-Check Evaluasi Status Cetak di UI**:
+1. **Strict Key Isolation Evaluasi Status Cetak di UI**:
    - Atribut `status_cetak: boolean` dan `printed_at: string | null` WAJIB ditanamkan langsung pada setiap objek `FakturRecord`.
-   - Logika penentuan status cetak di UI (`grouped`, tabel, dan counter) WAJIB menggunakan evaluasi ganda:
-     `allPrinted: printedInvoices.has(key) || Boolean(r.status_cetak)`
-   - DILARANG KERAS mengecek hanya salah satu sumber saja. Pengecekan ganda ini memastikan status cetak 100% konsisten seketika (zero-latency) dan mencegah angka belum terprint melonjak/berkedip sesaat (seperti kedipan ~9.357) saat partisi data Firestore sedang dimuat.
-2. **Auto-Rescue Status Cetak Dokumen**:
+   - Logika penentuan status cetak di UI (`grouped`, tabel, dan counter) WAJIB menggunakan evaluasi murni kunci masing-masing:
+     `allPrinted: printedInvoices.has(g.key)`
+   - DILARANG KERAS melakukan fallback atau cross-matching ke nomor invoice polos (`g.invoiceNumber`) pada faktur ORA. Faktur ORA `20078-1P` dan faktur DOO `20078` adalah dua entitas terpisah yang 100% mandiri dan dilarang diubah barengan.
+2. **Persistensi Dua Arah ke Dokumen Chunk Firestore (Bidirectional Chunk Persistence - LOCKED)**:
+   - Setiap kali status cetak diubah (baik cetak maupun unprint), sistem WAJIB memperbarui dokumen fisik chunk `faktur_chunks/chunk_{idx}` di Firestore secara langsung selain dokumen partisi `print_state_partitions`.
+   - Menjamin status unprint tersimpan permanen dan tidak akan pernah mental kembali ke status sudah dicetak saat halaman direfresh.
+3. **Penghitungan Notifikasi Banner Upload Akurat (Brand New Counter - LOCKED)**:
+   - Angka `Faktur Baru Masuk` pada banner notifikasi upload WAJIB secara ketat hanya menghitung faktur yang benar-benar baru masuk dari file yang sedang diunggah (`brandNewUnprintedKeysSet`), bukan menghitung seluruh akumulasi antrean lama di database.
+4. **Auto-Rescue Status Cetak Dokumen**:
    - Setiap kali chunk faktur dimuat (`emitData("chunks")` di `firestoreService.ts`), seluruh record yang memiliki `status_cetak: true` wajib secara otomatis digabungkan (*auto-rescue*) ke dalam set cetak di memori (`currentPrintState`).
-3. **Optimistic Instant Upload (< 100ms UI Response)**:
+5. **Optimistic Instant Upload (< 100ms UI Response)**:
    - Saat pengguna mengunggah file (Export / XXCUST), UI wajib langsung menampilkan perubahan dan membuka blokir loading secara instan (< 100ms) setelah file selesai diparsing.
    - Penyimpanan ke Firestore (`saveFaktursBatch`) berjalan di latar belakang (*background persistence*) tanpa menahan UI pengguna.
 
