@@ -51,9 +51,39 @@ export function getPrintPartitionId(invoiceKey: string): string {
 }
 
 /**
- * Universal print key variant resolver: registers both bare key and -1P suffix
- * for any transaction, guaranteeing that neither ORA nor bare variants will ever
- * be missed across partitions or uploads.
+ * Chronological Consistency Guard:
+ * An invoice can NEVER be printed days before its order date was even created!
+ * If a print record has a timestamp > 24 hours prior to the invoice's order date,
+ * it is a stale collision from a previous cycle and must be discarded.
+ */
+export function isStalePrintTimestamp(
+  printedAt: string | null | undefined,
+  orderDate: string | null | undefined
+): boolean {
+  if (!printedAt || !orderDate || orderDate === "-") return false;
+  const pDate = new Date(printedAt);
+  if (isNaN(pDate.getTime())) return false;
+
+  const parts = String(orderDate).trim().split(/[\/\-]/);
+  let oDate: Date | null = null;
+  if (parts.length === 3) {
+    if (parts[0].length === 4) {
+      oDate = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+    } else {
+      oDate = new Date(Number(parts[2]), Number(parts[1]) - 1, Number(parts[0]));
+    }
+  } else {
+    const parsed = new Date(orderDate);
+    if (!isNaN(parsed.getTime())) oDate = parsed;
+  }
+
+  if (!oDate || isNaN(oDate.getTime())) return false;
+  // If printed more than 24 hours before the order date was created
+  return pDate.getTime() < oDate.getTime() - 24 * 60 * 60 * 1000;
+}
+
+/**
+ * Universal print key variant resolver: registers key in cache.
  */
 function registerPrintKeyVariants(
   k: string,
@@ -322,11 +352,13 @@ export function subscribeToFakturs(
 
     for (const d of allDocs) {
       const key = d.id || d.no_faktur;
-      if (!key) continue;
       const cleanKey = key.replace(/-1P$/i, "");
-      const isPrinted = Boolean(d.status_cetak || printedSet.has(key));
+      const orderDate = d.order_date || d.extra?.order_date || d.extra?.accounting_date;
+      const candidatePAt = pMap[key] || d.printed_at || null;
+      const isStale = isStalePrintTimestamp(candidatePAt, orderDate);
+      const isPrinted = !isStale && Boolean(d.status_cetak || printedSet.has(key));
       d.status_cetak = isPrinted;
-      d.printed_at = isPrinted ? (pMap[key] || d.printed_at || null) : null;
+      d.printed_at = isPrinted ? candidatePAt : null;
       d.printed_by = isPrinted ? (pByMap[key] || d.printed_by || null) : null;
 
       // Apply customer/invoice category override if available
@@ -771,10 +803,10 @@ export async function saveFaktursBatch(
   for (const item of fakturs) {
     const key = item.id || item.no_faktur;
     if (key) {
-      const cleanKey = key.replace(/-1P$/i, "");
-      const isOra = item.jenis_transaksi === "ORA" || key.endsWith("-1P");
-
-      const isExplicitlyNewUnprinted = newUnprintedSet.has(key);
+      const orderDate = item.order_date || item.extra?.order_date || item.extra?.accounting_date;
+      const candidatePAt = unifiedPrintedAtMap[key] || item.printed_at;
+      const isStale = isStalePrintTimestamp(candidatePAt, orderDate);
+      const isExplicitlyNewUnprinted = newUnprintedSet.has(key) || isStale;
 
       const isPrinted = !isExplicitlyNewUnprinted && Boolean(
         item.status_cetak ||
@@ -783,9 +815,7 @@ export async function saveFaktursBatch(
 
       if (isPrinted) {
         item.status_cetak = true;
-        item.printed_at = unifiedPrintedAtMap[key] ||
-          item.printed_at ||
-          new Date().toISOString();
+        item.printed_at = candidatePAt || new Date().toISOString();
         registerPrintKeyVariants(key, item.printed_at, unifiedPrintedSet, unifiedPrintedAtMap);
       } else {
         item.status_cetak = false;

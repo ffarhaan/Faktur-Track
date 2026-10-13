@@ -25,6 +25,7 @@ import {
   updateUserPresence,
   removeUserPresence,
   subscribeToOnlinePresence,
+  isStalePrintTimestamp,
 } from "@/lib/firestoreService";
 import MasterApotekModal from "@/components/MasterApotekModal";
 import MasterProductModal from "@/components/MasterProductModal";
@@ -109,7 +110,10 @@ function dbRowsToFakturRecords(
     const pAt = (r.printed_at as string) || null;
     const pBy = (r.printed_by as string) || (extra.printed_by as string) || null;
 
-    if (r.status_cetak) {
+    const isStale = isStalePrintTimestamp(pAt, date);
+    const isPrinted = !isStale && Boolean(r.status_cetak);
+
+    if (isPrinted) {
       printedSet.add(invKey);
       if (pAt) {
         printedAtMap[invKey] = pAt;
@@ -151,9 +155,9 @@ function dbRowsToFakturRecords(
           klasifikasiObat: klasObat,
           isDoubleInv: false,
           isRetur: (typeof it.total_harga === "number" ? it.total_harga : parseFloat(String(it.total_harga || 0)) || 0) < 0 || itemDesc.toUpperCase().includes("RETUR") || cleanInv.toUpperCase().includes("RETUR") || String(extra.jenis_transaksi || "").toUpperCase().includes("RETUR"),
-          status_cetak: Boolean(r.status_cetak),
-          printed_at: pAt,
-          printed_by: pBy,
+          status_cetak: isPrinted,
+          printed_at: isPrinted ? pAt : null,
+          printed_by: isPrinted ? pBy : null,
           rowIndex: idx,
         });
       }
@@ -177,9 +181,9 @@ function dbRowsToFakturRecords(
         kategori,
         isDoubleInv: false,
         isRetur: docAmount < 0 || cleanInv.toUpperCase().includes("RETUR") || String(extra.jenis_transaksi || "").toUpperCase().includes("RETUR"),
-        status_cetak: Boolean(r.status_cetak),
-        printed_at: pAt,
-        printed_by: pBy,
+        status_cetak: isPrinted,
+        printed_at: isPrinted ? pAt : null,
+        printed_by: isPrinted ? pBy : null,
         rowIndex: 0,
       });
     }
@@ -1314,7 +1318,12 @@ export default function Home() {
           let isPrinted = false;
           let printedAt: string | null = null;
 
-          if (isExistingInDB) {
+          const candidatePAt = (existingEntry && existingEntry.printed_at) ||
+            mergedPrintedAtMap[targetKey] ||
+            (prevInfo && prevInfo.printed_at);
+          const isStale = isStalePrintTimestamp(candidatePAt, r.orderDate);
+
+          if (isExistingInDB && !isStale) {
             // Already in database: check if it was marked printed
             const wasPrinted = Boolean(
               (existingEntry && existingEntry.status_cetak) ||
@@ -1325,10 +1334,7 @@ export default function Home() {
             if (wasPrinted) {
               // Permanently preserve printed status (Anti-Reappearance Guaranteed)
               isPrinted = true;
-              printedAt = (existingEntry && existingEntry.printed_at) ||
-                mergedPrintedAtMap[targetKey] ||
-                (prevInfo && prevInfo.printed_at) ||
-                new Date().toISOString();
+              printedAt = candidatePAt || new Date().toISOString();
               mergedPrintedSet.add(targetKey);
               mergedPrintedAtMap[targetKey] = printedAt;
               newUnprintedKeysSet.delete(targetKey);
@@ -1339,7 +1345,7 @@ export default function Home() {
               newUnprintedKeysSet.add(targetKey);
             }
           } else {
-            // BRAND NEW INVOICE NOT YET IN DATABASE:
+            // BRAND NEW INVOICE NOT YET IN DATABASE (OR STALE COLLISION FROM PAST CYCLE):
             // WAJIB masuk ke "Belum Terprint" (Unprinted Guarantee)
             isPrinted = false;
             printedAt = null;
