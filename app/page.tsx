@@ -351,6 +351,33 @@ export default function Home() {
   const isUploadingRef = useRef(false);
   const currentFakturDocsRef = useRef<FirestoreFakturDoc[]>([]);
 
+  // Smooth & lag-free keyboard navigation refs
+  const pageDataRef = useRef<FakturGroup[]>([]);
+  const selectedRowIndexRef = useRef(0);
+  const selectedColIdxRef = useRef(3);
+  const totalPagesRef = useRef(1);
+  const showApotekModalRef = useRef(false);
+  const showProductModalRef = useRef(false);
+  const togglePrintRef = useRef<(group: FakturGroup) => void>(() => {});
+  const toggleExpandRef = useRef<(key: string) => void>(() => {});
+  const lastSpaceTimeRef = useRef(0);
+
+  useEffect(() => {
+    selectedRowIndexRef.current = selectedRowIndex;
+  }, [selectedRowIndex]);
+
+  useEffect(() => {
+    selectedColIdxRef.current = selectedColIdx;
+  }, [selectedColIdx]);
+
+  useEffect(() => {
+    showApotekModalRef.current = showApotekModal;
+  }, [showApotekModal]);
+
+  useEffect(() => {
+    showProductModalRef.current = showProductModal;
+  }, [showProductModal]);
+
   useEffect(() => {
     categoryOverridesRef.current = categoryOverrides;
   }, [categoryOverrides]);
@@ -707,6 +734,15 @@ export default function Home() {
     []
   );
 
+  const toggleExpand = useCallback((key: string) => {
+    setExpandedInvoices((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }, []);
+
   // 1. Base invoice groups (Depends ONLY on records and productOverrides)
   // Pre-groups, calculates line totals, classifications, precomputes searchStr, and sorts ONCE
   const baseGroups = useMemo<FakturGroup[]>(() => {
@@ -928,6 +964,17 @@ export default function Home() {
   const totalPages = Math.ceil(filtered.length / ROWS_PER_PAGE);
   const pageData = filtered.slice(page * ROWS_PER_PAGE, (page + 1) * ROWS_PER_PAGE);
 
+  pageDataRef.current = pageData;
+  totalPagesRef.current = totalPages;
+  togglePrintRef.current = togglePrint;
+  toggleExpandRef.current = toggleExpand;
+
+  useEffect(() => {
+    if (pageData.length > 0 && selectedRowIndex >= pageData.length) {
+      setSelectedRowIndex(pageData.length - 1);
+    }
+  }, [pageData.length, selectedRowIndex]);
+
   const unprintedCountInFiltered = useMemo(() => {
     return filtered.filter((g) => !g.allPrinted).length;
   }, [filtered]);
@@ -999,23 +1046,32 @@ export default function Home() {
     }
   }, [filtered]);
 
-  // Global Keyboard Navigation & Shortcut Controller
+  // Global Keyboard Navigation & Shortcut Controller (Lag-Free & Crash-Proof)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
-      const isInput = target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT");
+      const isInput = target && (
+        target.tagName === "INPUT" ||
+        target.tagName === "TEXTAREA" ||
+        target.tagName === "SELECT" ||
+        target.tagName === "BUTTON" ||
+        (target as HTMLElement).isContentEditable
+      );
 
       if (e.key === "Escape") {
         if (isInput) (target as HTMLElement).blur();
-        if (showApotekModal) setShowApotekModal(false);
-        if (showProductModal) setShowProductModal(false);
+        if (showApotekModalRef.current) setShowApotekModal(false);
+        if (showProductModalRef.current) setShowProductModal(false);
         return;
       }
 
       if (isInput) return;
+      if (showApotekModalRef.current || showProductModalRef.current) return;
 
-      const maxRow = Math.max(0, pageData.length - 1);
-      const currentRow = pageData[selectedRowIndex];
+      const currentPages = pageDataRef.current;
+      const maxRow = Math.max(0, currentPages.length - 1);
+      const curIdx = Math.min(selectedRowIndexRef.current, maxRow);
+      const currentRow = currentPages[curIdx];
 
       // Quick Search Focus: '/' or 'f'
       if (e.key === "/" || e.key === "f" || e.key === "F") {
@@ -1024,29 +1080,53 @@ export default function Home() {
         return;
       }
 
-      // Space: Toggle Print on active row
+      // Space: Toggle Print on active row (with 150ms debounce and repeat lock)
       if (e.key === " " || e.code === "Space") {
         e.preventDefault();
-        if (currentRow) togglePrint(currentRow);
+        if (e.repeat) return; // Prevent repeated toggle storm when holding space
+        const now = Date.now();
+        if (now - lastSpaceTimeRef.current < 150) return; // 150ms debounce
+        lastSpaceTimeRef.current = now;
+
+        if (currentRow) {
+          togglePrintRef.current(currentRow);
+        }
         return;
       }
 
       // Enter: Toggle Expand Detail on active row
       if (e.key === "Enter") {
         e.preventDefault();
-        if (currentRow) toggleExpand(currentRow.key);
+        if (e.repeat) return;
+        if (currentRow) {
+          toggleExpandRef.current(currentRow.key);
+        }
         return;
       }
 
-      // Arrow Navigation
+      // Arrow Navigation (Smooth scroll into view)
       if (e.key === "ArrowDown" || e.key === "j") {
         e.preventDefault();
-        setSelectedRowIndex((prev) => Math.min(maxRow, prev + 1));
+        setSelectedRowIndex((prev) => {
+          const next = Math.min(maxRow, prev + 1);
+          requestAnimationFrame(() => {
+            const el = document.getElementById(`faktur-row-${next}`);
+            el?.scrollIntoView({ block: "nearest", behavior: "auto" });
+          });
+          return next;
+        });
         return;
       }
       if (e.key === "ArrowUp" || e.key === "k") {
         e.preventDefault();
-        setSelectedRowIndex((prev) => Math.max(0, prev - 1));
+        setSelectedRowIndex((prev) => {
+          const next = Math.max(0, prev - 1);
+          requestAnimationFrame(() => {
+            const el = document.getElementById(`faktur-row-${next}`);
+            el?.scrollIntoView({ block: "nearest", behavior: "auto" });
+          });
+          return next;
+        });
         return;
       }
       if (e.key === "ArrowRight" || e.key === "l") {
@@ -1063,12 +1143,14 @@ export default function Home() {
       // Page Navigation
       if (e.key === "PageDown") {
         e.preventDefault();
-        setPage((p) => Math.min(totalPages - 1, p + 1));
+        if (e.repeat) return;
+        setPage((p) => Math.min(totalPagesRef.current - 1, p + 1));
         setSelectedRowIndex(0);
         return;
       }
       if (e.key === "PageUp") {
         e.preventDefault();
+        if (e.repeat) return;
         setPage((p) => Math.max(0, p - 1));
         setSelectedRowIndex(0);
         return;
@@ -1076,6 +1158,7 @@ export default function Home() {
 
       // Copy on 'c' OR 'Ctrl+C' / 'Cmd+C'
       if (e.key === "c" || e.key === "C") {
+        if (e.repeat) return;
         // If user highlighted text with mouse, let default browser copy work for Ctrl+C
         const textSelected = typeof window !== "undefined" && window.getSelection()?.toString();
         if (textSelected && (e.ctrlKey || e.metaKey)) {
@@ -1087,19 +1170,20 @@ export default function Home() {
             e.preventDefault();
           }
 
+          const colIdx = selectedColIdxRef.current;
           let textToCopy = currentRow.invoiceNumber;
           let label = "No Invoice";
 
-          if (selectedColIdx === 2) {
+          if (colIdx === 2) {
             textToCopy = currentRow.so;
             label = "No SO";
-          } else if (selectedColIdx === 3) {
+          } else if (colIdx === 3) {
             textToCopy = currentRow.invoiceNumber;
             label = "No Invoice";
-          } else if (selectedColIdx === 6) {
+          } else if (colIdx === 6) {
             textToCopy = currentRow.customerName;
             label = "Pelanggan";
-          } else if (selectedColIdx === 10) {
+          } else if (colIdx === 10) {
             textToCopy = String(currentRow.totalHarga);
             label = "Total Harga";
           } else {
@@ -1126,7 +1210,7 @@ export default function Home() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [pageData, selectedRowIndex, selectedColIdx, showApotekModal, showProductModal, totalPages, togglePrint]);
+  }, []);
 
   // File Upload Handler
   const handleUpload = useCallback(
@@ -1729,15 +1813,6 @@ export default function Home() {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Faktur Tracker");
     XLSX.writeFile(wb, `Faktur_Tracker_${new Date().toISOString().slice(0, 10)}.xlsx`);
-  };
-
-  const toggleExpand = (key: string) => {
-    setExpandedInvoices((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
   };
 
   return (
@@ -2515,6 +2590,7 @@ export default function Home() {
                     return (
                       <Fragment key={g.key}>
                         <tr
+                          id={`faktur-row-${rowIdx}`}
                           onClick={() => {
                             setSelectedRowIndex(rowIdx);
                             toggleExpand(g.key);

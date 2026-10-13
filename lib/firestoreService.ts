@@ -37,6 +37,38 @@ let globalMetadata: { chunkIds: string[]; invoiceProgression?: InvoiceProgressio
 let globalCategoryOverrides: Record<string, "1P" | "2P" | "3P"> = {};
 let globalProductCategoryOverrides: Record<string, string> = {};
 
+// Background debounced chunk persistence to prevent heavy write locks and UI freeze
+let internalChunkWriteInProgress = false;
+const pendingModifiedChunkIds = new Set<string>();
+let chunkSaveDebounceTimer: NodeJS.Timeout | null = null;
+
+export function scheduleChunkPersistence(chunkIds: Set<string>) {
+  chunkIds.forEach((id) => pendingModifiedChunkIds.add(id));
+  if (chunkSaveDebounceTimer) clearTimeout(chunkSaveDebounceTimer);
+  chunkSaveDebounceTimer = setTimeout(async () => {
+    if (pendingModifiedChunkIds.size === 0) return;
+    const toSave = Array.from(pendingModifiedChunkIds);
+    pendingModifiedChunkIds.clear();
+    const nowIso = new Date().toISOString();
+    internalChunkWriteInProgress = true;
+    try {
+      await Promise.all(
+        toSave.map(async (cId) => {
+          const cRef = doc(db, CHUNKS_COLLECTION, cId);
+          const items = globalChunksMap.get(cId) || [];
+          await updateDoc(cRef, { items, updatedAt: nowIso }).catch((e) =>
+            console.warn(`Failed to update chunk doc ${cId}:`, e)
+          );
+        })
+      );
+    } finally {
+      setTimeout(() => {
+        internalChunkWriteInProgress = false;
+      }, 600);
+    }
+  }, 1000);
+}
+
 /**
  * Deterministically partition an invoice key into a partition bucket document ID
  * (Bucket sizes of 5,000 invoices per partition ensure doc sizes stay under 150 KB, well below 1 MB limit)
@@ -482,6 +514,12 @@ export function subscribeToFakturs(
           }
         }
       } else {
+        // If snapshot change is from our own background print status persistence,
+        // in-memory data and print partitions are already 100% updated.
+        // Skip re-emitting heavy chunks to protect UI from freeze/lag/crash!
+        if (internalChunkWriteInProgress) {
+          return;
+        }
         debouncedEmitChunks();
       }
     },
@@ -1110,16 +1148,10 @@ export async function updateFakturPrintStatus(
     updatedAt: nowIso,
   });
 
-  // 2. Persist modified chunks to Firestore
-  const chunkWrites = Array.from(chunkDocsToSave).map(async (cId) => {
-    try {
-      const cRef = doc(db, CHUNKS_COLLECTION, cId);
-      const items = globalChunksMap.get(cId) || [];
-      await updateDoc(cRef, { items, updatedAt: nowIso });
-    } catch (e) {
-      console.warn(`Failed to update chunk doc ${cId}:`, e);
-    }
-  });
+  // 2. Debounced background persistence of modified chunks to Firestore (prevents UI freeze/crash)
+  if (chunkDocsToSave.size > 0) {
+    scheduleChunkPersistence(chunkDocsToSave);
+  }
 
   // 3. Dual-write to legacy doc for backward compatibility
   const writeLegacy = (async () => {
@@ -1157,7 +1189,7 @@ export async function updateFakturPrintStatus(
     }
   })();
 
-  await Promise.all([writePart, ...chunkWrites, writeLegacy]);
+  await Promise.all([writePart, writeLegacy]);
 }
 
 /**
@@ -1241,17 +1273,12 @@ export async function updateFaktursPrintStatusBatch(
     });
   });
 
-  const chunkWrites = Array.from(chunkDocsToSave).map(async (cId) => {
-    try {
-      const cRef = doc(db, CHUNKS_COLLECTION, cId);
-      const items = globalChunksMap.get(cId) || [];
-      await updateDoc(cRef, { items, updatedAt: nowIso });
-    } catch (e) {
-      console.warn(`Failed to update chunk doc ${cId}:`, e);
-    }
-  });
+  // Debounced background persistence of modified chunks to Firestore
+  if (chunkDocsToSave.size > 0) {
+    scheduleChunkPersistence(chunkDocsToSave);
+  }
 
-  await Promise.all([...partWrites, ...chunkWrites]);
+  await Promise.all(partWrites);
 
   // Dual-write batch to legacy doc
   try {

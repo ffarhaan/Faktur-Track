@@ -150,6 +150,15 @@ Dokumen ini adalah acuan baku dan permanen untuk seluruh pengembangan, pemelihar
 4. **Eliminasi Spinner Loading Berputar yang Macet**:
    - Indikator spinner "Memuat data faktur..." HANYA boleh muncul jika `records.length === 0` (saat awal membuka web ketika data belum masuk ke memori).
    - Begitu data ada di memori (`records.length > 0`), tabel DILARANG menampilkan spinner loading, melainkan langsung menampilkan data atau keterangan kosong yang ramah jika tidak ada data yang sesuai filter (contoh pada tab Belum Terprint: `🎉 Semua faktur sudah dicetak`).
+5. **Navigasi Keyboard Bebas Lag & Anti-Crash (Keyboard Navigation Guard - LOCKED)**:
+   - Handler keyboard (`handleKeyDown`) WAJIB terpasang satu kali saja (*zero listener churn*) dengan dependensi kosong `[]`, memanfaatkan `useRef` untuk membaca state dinamis.
+   - Tombol spasi (`Space`), `Enter`, `PageUp`, `PageDown`, dan `c` WAJIB mengabaikan `e.repeat` untuk mencegah penumpukan eksekusi saat tombol ditahan.
+   - Tombol spasi memiliki *throttle/debounce guard* (150ms) untuk mencegah banjir operasi penulisan concurrent.
+   - Elemen interaktif (`INPUT`, `TEXTAREA`, `SELECT`, `BUTTON`, `contentEditable`) dan modal aktif WAJIB memblokir eksekusi pintasan tabel agar tidak terjadi eksekusi ganda yang memicu crash.
+   - Navigasi panah atas/bawah (`ArrowDown`, `ArrowUp`, `j`, `k`) menggunakan `requestAnimationFrame` dan `scrollIntoView({ block: 'nearest' })` untuk pergerakan baris yang mulus tanpa lag.
+6. **Debounced Background Chunk Persistence & Anti-Echo Guard (LOCKED)**:
+   - Penyimpanan dokumen chunk (`faktur_chunks`) pada pengubahan status cetak dijalankan secara *debounced* (1.000ms) di latar belakang agar tidak memblokir thread JavaScript utama.
+   - Listener real-time Firestore `unsubChunks` WAJIB mengabaikan echo snapshot dari update chunk internal (`internalChunkWriteInProgress`), mencegah re-parsing rekursif ribuan data yang memicu crash tab browser.
 
 ---
 
