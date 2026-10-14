@@ -1561,9 +1561,13 @@ export default function Home() {
           entry.status_cetak = entry.status_cetak || isPrinted;
           entry.printed_at = entry.printed_at || printedAt;
 
-          if (r.transactionDate && (!entry.transaction_date || entry.transaction_date === "-")) {
+          if (r.transactionDate && (r.sourceFile === "XXCUST" || !entry.transaction_date || entry.transaction_date === "-")) {
             entry.transaction_date = r.transactionDate;
             if (entry.extra) entry.extra.transaction_date = r.transactionDate;
+          }
+          if (r.sourceFile === "XXCUST" && r.orderDate && r.orderDate !== "-") {
+            entry.order_date = r.orderDate;
+            if (entry.extra) entry.extra.order_date = r.orderDate;
           }
 
           if (overriddenKat && !isOra) {
