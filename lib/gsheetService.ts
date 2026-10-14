@@ -92,7 +92,7 @@ function toGSheetRow(
     kategoriProduk:
       String(extra.kategoriProduk || extra.klasifikasi_produk || ""),
     itemCount: itemsList.length > 0 ? itemsList.length : 1,
-    totalHarga,
+    totalHarga: Math.round(totalHarga * 1.11 * 100) / 100,
     statusCetak: isPrinted ? "Sudah Dicetak" : "Belum Dicetak",
     printedAt: printMap[key] || String(item.printed_at || "") || "-",
   };

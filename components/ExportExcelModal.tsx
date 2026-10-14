@@ -151,7 +151,7 @@ export default function ExportExcelModal({
     });
 
     const rows = sortedForExport.map((g, idx) => {
-      const dpp = g.totalHarga;
+      const dpp = Math.round((g.totalHarga || 0) * 100) / 100;
       const ppn = Math.round(dpp * 0.11 * 100) / 100;
       const grandTotal = Math.round(dpp * 1.11 * 100) / 100;
 

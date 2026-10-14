@@ -1226,8 +1226,9 @@ export default function Home() {
             textToCopy = currentRow.customerName;
             label = "Pelanggan";
           } else if (colIdx === 10) {
-            textToCopy = String(currentRow.totalHarga);
-            label = "Total Harga";
+            const grandTotal = Math.round(currentRow.totalHarga * 1.11 * 100) / 100;
+            textToCopy = String(grandTotal);
+            label = "Total (+PPN)";
           } else {
             textToCopy = currentRow.invoiceNumber;
             label = "No Invoice";
@@ -2970,10 +2971,10 @@ export default function Home() {
                             }}
                           >
                             <div className="font-mono font-semibold">
-                              {formatRupiah(g.totalHarga * 1.11)}
+                              {formatRupiah(Math.round(g.totalHarga * 1.11 * 100) / 100)}
                             </div>
                             <div className={`text-[10px] font-mono ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>
-                              DPP: {formatRupiah(g.totalHarga)}
+                              DPP: {formatRupiah(Math.round(g.totalHarga * 100) / 100)}
                             </div>
                           </td>
                         </tr>
@@ -3034,7 +3035,7 @@ export default function Home() {
                                       <th className="py-1.5 px-2 text-right">Qty</th>
                                       <th className="py-1.5 px-2">UOM</th>
                                       <th className="py-1.5 px-2">LOT Number</th>
-                                      <th className="py-1.5 px-2 text-right">Total Harga</th>
+                                      <th className="py-1.5 px-2 text-right">Harga (DPP)</th>
                                     </tr>
                                   </thead>
                                   <tbody className={`divide-y ${isDarkMode ? "divide-slate-800/60" : "divide-slate-100"}`}>
@@ -3100,17 +3101,17 @@ export default function Home() {
                                   <div className="flex flex-wrap items-center gap-3 sm:gap-4 font-mono">
                                     <div>
                                       <span className={`text-[11px] mr-1 ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>Subtotal (DPP):</span>
-                                      <span className="font-semibold">Rp {formatRupiah(g.totalHarga)}</span>
+                                      <span className="font-semibold">Rp {formatRupiah(Math.round(g.totalHarga * 100) / 100)}</span>
                                     </div>
                                     <div>
                                       <span className={`text-[11px] mr-1 ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>PPN (11%):</span>
-                                      <span className="font-semibold text-amber-500">Rp {formatRupiah(g.totalHarga * 0.11)}</span>
+                                      <span className="font-semibold text-amber-500">Rp {formatRupiah(Math.round(g.totalHarga * 0.11 * 100) / 100)}</span>
                                     </div>
                                     <div className={`px-2.5 py-1 rounded-md border font-bold ${
                                       isDarkMode ? "bg-blue-950/60 border-blue-800 text-blue-300" : "bg-blue-50 border-blue-200 text-blue-800"
                                     }`}>
                                       <span className="text-[11px] mr-1">Grand Total:</span>
-                                      <span>Rp {formatRupiah(g.totalHarga * 1.11)}</span>
+                                      <span>Rp {formatRupiah(Math.round(g.totalHarga * 1.11 * 100) / 100)}</span>
                                     </div>
                                   </div>
                                 </div>
