@@ -359,7 +359,9 @@ function parseXXCUST(
     customerName: getCol("nama pelanggan", "customer name", "pelanggan", "customer"),
     customerCode: getCol("kode pelanggan", "customer code", "kode cust", "cust code"),
     invoiceNumber: getCol("no invoice ar", "ar number", "ar no", "no ar", "invoice number", "no invoice"),
+    transactionDate: getCol("transaction date", "tanggal transaksi", "tgl transaksi"),
     orderDate: getCol("order date", "tanggal order", "date", "accounting date"),
+    accountingDate: getCol("accounting date", "tanggal akuntansi"),
     orderNumber: getCol("order number", "order no", "no order", "no so", "so number"),
     itemCode: getCol("item code", "kode barang", "kode produk", "item"),
     itemDescription: getCol("item description", "nama barang", "deskripsi barang", "description"),
@@ -422,6 +424,7 @@ function parseXXCUST(
 
     records.push({
       orderDate: normalizeDateStr(rawVal(idx.orderDate) ?? val(idx.orderDate)),
+      transactionDate: idx.transactionDate !== undefined ? normalizeDateStr(rawVal(idx.transactionDate) ?? val(idx.transactionDate)) : undefined,
       orderNumber: orderNumber || "-",
       invoiceNumber: invoiceNumber || "-",
       invoiceKey,
@@ -489,7 +492,8 @@ function parseHTMLTable(html: string): FakturRecord[] {
   const colMap: Record<string, number> = {};
   headerCells.forEach((h, i) => {
     const s = h.toLowerCase().trim();
-    if (s === "accounting date" || s === "transaction date" || (!colMap["date"] && s.includes("date"))) colMap["date"] = i;
+    if (s === "transaction date" || (!colMap["txDate"] && s.includes("transaction date"))) colMap["txDate"] = i;
+    if (s === "accounting date" || (!colMap["date"] && s.includes("date"))) colMap["date"] = i;
     if (s === "reference") colMap["so"] = i;
     if (s === "transaction number" || (!colMap["inv"] && s.includes("transaction number"))) colMap["inv"] = i;
     if (s === "ship-to customer") colMap["customer"] = i;
@@ -526,9 +530,11 @@ function parseHTMLTable(html: string): FakturRecord[] {
     const kategori = isOra ? "1P" : categorize(jenisTransaksi, customerName, jenisTransaksi, shipSite, billSite);
     const invoiceKey = isOra ? `${invVal}-1P` : invVal;
     const finalSO = isOra ? "-" : (soVal || "-");
+    const txVal = colMap["txDate"] !== undefined ? texts[colMap["txDate"]] : undefined;
 
     records.push({
       orderDate: normalizeDateStr(texts[colMap["date"] ?? 0] || ""),
+      transactionDate: txVal ? normalizeDateStr(txVal) : undefined,
       orderNumber: finalSO,
       invoiceNumber: invVal,
       invoiceKey,
@@ -556,7 +562,8 @@ function parseExportArray(data: unknown[][], headerIdx: number): FakturRecord[] 
   const colMap: Record<string, number> = {};
   header.forEach((h, i) => {
     const s = String(h || "").toLowerCase().trim();
-    if (s === "accounting date" || s === "transaction date" || (!colMap["date"] && s.includes("date"))) colMap["date"] = i;
+    if (s === "transaction date" || (!colMap["txDate"] && s.includes("transaction date"))) colMap["txDate"] = i;
+    if (s === "accounting date" || (!colMap["date"] && s.includes("date"))) colMap["date"] = i;
     if (s === "reference") colMap["so"] = i;
     if (s === "transaction number" || (!colMap["inv"] && s.includes("transaction number"))) colMap["inv"] = i;
     if (s === "ship-to customer") colMap["customer"] = i;
@@ -595,9 +602,11 @@ function parseExportArray(data: unknown[][], headerIdx: number): FakturRecord[] 
     const rawAmount = row[colMap["amount"] ?? 11];
     const totalHarga = typeof rawAmount === "number" ? rawAmount : Number(String(rawAmount || "").replace(/[^0-9.-]/g, "") || 0);
     const finalSO = isOra ? "-" : (soVal || "-");
+    const txVal = colMap["txDate"] !== undefined ? row[colMap["txDate"]] : undefined;
 
     records.push({
       orderDate: normalizeDateStr(row[colMap["date"] ?? 0]),
+      transactionDate: txVal ? normalizeDateStr(txVal) : undefined,
       orderNumber: finalSO,
       invoiceNumber: invVal,
       invoiceKey,

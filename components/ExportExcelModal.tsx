@@ -65,11 +65,19 @@ export default function ExportExcelModal({
   groups,
   isDarkMode,
 }: ExportExcelModalProps) {
-  // Find date range from groups to provide smart defaults
+  const [dateBasis, setDateBasis] = useState<"transaction" | "order">("transaction");
+  const [startDate, setStartDate] = useState<string>("");
+  const [endDate, setEndDate] = useState<string>("");
+  const [statusFilter, setStatusFilter] = useState<"all" | "printed" | "unprinted">("all");
+  const [jenisFilter, setJenisFilter] = useState<"all" | "ORA" | "DOO">("all");
+  const [katFilter, setKatFilter] = useState<"all" | "1P" | "2P" | "3P">("all");
+
+  // Find date range from groups to provide smart defaults based on selected dateBasis
   const availableDates = useMemo(() => {
     const isoDates: string[] = [];
     groups.forEach((g) => {
-      const iso = orderDateToIso(g.orderDate);
+      const dStr = dateBasis === "transaction" ? (g.transactionDate || g.orderDate) : g.orderDate;
+      const iso = orderDateToIso(dStr);
       if (iso) isoDates.push(iso);
     });
     isoDates.sort();
@@ -77,20 +85,15 @@ export default function ExportExcelModal({
       min: isoDates.length > 0 ? isoDates[0] : "",
       max: isoDates.length > 0 ? isoDates[isoDates.length - 1] : "",
     };
-  }, [groups]);
-
-  const [startDate, setStartDate] = useState<string>("");
-  const [endDate, setEndDate] = useState<string>("");
-  const [statusFilter, setStatusFilter] = useState<"all" | "printed" | "unprinted">("all");
-  const [jenisFilter, setJenisFilter] = useState<"all" | "ORA" | "DOO">("all");
-  const [katFilter, setKatFilter] = useState<"all" | "1P" | "2P" | "3P">("all");
+  }, [groups, dateBasis]);
 
   // Filter matching data in real-time
   const matchingData = useMemo(() => {
     return groups.filter((g) => {
-      // Date Range Filter
+      // Date Range Filter based on selected dateBasis
       if (startDate || endDate) {
-        const itemIso = orderDateToIso(g.orderDate);
+        const dStr = dateBasis === "transaction" ? (g.transactionDate || g.orderDate) : g.orderDate;
+        const itemIso = orderDateToIso(dStr);
         if (!itemIso) return false;
         if (startDate && itemIso < startDate) return false;
         if (endDate && itemIso > endDate) return false;
@@ -105,7 +108,7 @@ export default function ExportExcelModal({
 
       return true;
     });
-  }, [groups, startDate, endDate, statusFilter, jenisFilter, katFilter]);
+  }, [groups, dateBasis, startDate, endDate, statusFilter, jenisFilter, katFilter]);
 
   const totalNilai = useMemo(() => {
     return matchingData.reduce((acc, curr) => acc + ((curr.totalHarga || 0) * 1.11), 0);
@@ -162,7 +165,8 @@ export default function ExportExcelModal({
         "Kat Produk": g.kategoriProduk,
         "Jenis Transaksi": g.jenisTransaksi,
         Pelanggan: g.customerName,
-        "Tanggal Order": g.orderDate,
+        "Tanggal Faktur": g.transactionDate && g.transactionDate !== "-" ? g.transactionDate : g.orderDate || "-",
+        "Tanggal Order": g.orderDate || "-",
         Kategori: g.kategori,
         "Status Cetak": g.allPrinted ? "Sudah Terprint" : "Belum Terprint",
         "Waktu Cetak": g.allPrinted && g.printedAt ? formatPrintTime(g.printedAt) : "-",
@@ -177,7 +181,7 @@ export default function ExportExcelModal({
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Faktur Tracker");
 
-    let filename = "Faktur_Tracker";
+    let filename = dateBasis === "transaction" ? "Faktur_Tracker_TglFaktur" : "Faktur_Tracker_TglOrder";
     if (startDate && endDate) {
       filename += `_${startDate}_sd_${endDate}`;
     } else if (startDate) {
@@ -251,13 +255,50 @@ export default function ExportExcelModal({
           >
             <div className="flex items-center justify-between">
               <span className={`font-bold text-xs uppercase tracking-wider ${isDarkMode ? "text-slate-300" : "text-slate-700"}`}>
-                🗓️ Rentang Tanggal Order
+                🗓️ Rentang Tanggal ({dateBasis === "transaction" ? "Tanggal Faktur" : "Tanggal Order"})
               </span>
               {availableDates.min && availableDates.max && (
                 <span className={`text-[10px] ${isDarkMode ? "text-slate-500" : "text-slate-400"}`}>
                   Tersedia: {availableDates.min} s/d {availableDates.max}
                 </span>
               )}
+            </div>
+
+            {/* Acuan Tanggal Filter Toggle */}
+            <div className={`p-2 rounded-lg border flex flex-wrap items-center gap-2 ${
+              isDarkMode ? "bg-[#0c1426] border-slate-700/80" : "bg-white border-slate-200"
+            }`}>
+              <span className={`text-[11px] font-semibold ${isDarkMode ? "text-slate-400" : "text-slate-600"}`}>
+                Filter Berdasarkan:
+              </span>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setDateBasis("transaction")}
+                  className={`px-2.5 py-1 rounded text-xs font-bold border transition-all ${
+                    dateBasis === "transaction"
+                      ? "bg-blue-600 text-white border-blue-600 shadow-xs"
+                      : isDarkMode
+                      ? "bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700"
+                      : "bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200"
+                  }`}
+                >
+                  📄 Tanggal Faktur (Tx Date)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDateBasis("order")}
+                  className={`px-2.5 py-1 rounded text-xs font-bold border transition-all ${
+                    dateBasis === "order"
+                      ? "bg-blue-600 text-white border-blue-600 shadow-xs"
+                      : isDarkMode
+                      ? "bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700"
+                      : "bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200"
+                  }`}
+                >
+                  📦 Tanggal Order (SO)
+                </button>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

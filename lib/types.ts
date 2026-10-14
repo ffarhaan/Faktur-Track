@@ -1,5 +1,6 @@
 export interface FakturRecord {
   orderDate: string;
+  transactionDate?: string;
   orderNumber: string;
   invoiceNumber: string;
   invoiceKey: string;
@@ -29,6 +30,7 @@ export interface FirestoreFakturDoc {
   no_sales_order: string;
   customer_name: string;
   order_date: string;
+  transaction_date?: string;
   jenis_transaksi: string;
   kategori: string;
   status_cetak?: boolean;
@@ -37,6 +39,7 @@ export interface FirestoreFakturDoc {
   extra: {
     nama_pelanggan?: string;
     order_date?: string;
+    transaction_date?: string;
     accounting_date?: string;
     jenis_transaksi?: string;
     kategori?: string;
@@ -96,6 +99,7 @@ export interface FakturGroup {
   so: string;
   items: FakturRecord[];
   orderDate: string;
+  transactionDate?: string;
   jenisTransaksi: "ORA" | "DOO";
   customerName: string;
   kategori: "1P" | "2P" | "3P";

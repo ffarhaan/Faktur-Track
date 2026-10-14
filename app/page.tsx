@@ -103,7 +103,8 @@ function dbRowsToFakturRecords(
     const extra = (r.extra as Record<string, unknown>) || {};
     const items = (extra.items as Array<Record<string, unknown>>) || [];
     const cust = String(extra.nama_pelanggan || r.customer_name || "");
-    const date = String(extra.accounting_date || extra.order_date || r.order_date || "");
+    const date = String(extra.order_date || r.order_date || extra.accounting_date || "");
+    const txDate = String(r.transaction_date || extra.transaction_date || date);
     const isOra = r.jenis_transaksi === "ORA" || isOraCustomer(cust);
     const invKey = isOra ? `${cleanInv}-1P` : cleanInv;
     const cleanJenis: "DOO" | "ORA" = isOra ? "ORA" : "DOO";
@@ -140,6 +141,7 @@ function dbRowsToFakturRecords(
 
         records.push({
           orderDate: date,
+          transactionDate: txDate,
           orderNumber: validSO || "-",
           invoiceNumber: cleanInv,
           invoiceKey: invKey,
@@ -168,6 +170,7 @@ function dbRowsToFakturRecords(
 
       records.push({
         orderDate: date,
+        transactionDate: txDate,
         orderNumber: docSO || "-",
         invoiceNumber: cleanInv,
         invoiceKey: invKey,
@@ -774,6 +777,7 @@ export default function Home() {
           so: r.orderNumber,
           items: [],
           orderDate: r.orderDate,
+          transactionDate: r.transactionDate || r.orderDate,
           jenisTransaksi: r.jenisTransaksi,
           customerName: r.customerName,
           kategori: r.kategori,
@@ -838,7 +842,7 @@ export default function Home() {
 
       // Precompute lowercase search string for blazing fast instant search
       const itemText = g.items.map((i) => `${i.itemCode} ${i.itemDescription}`).join(" ");
-      g.searchStr = `${g.so} ${g.invoiceNumber} ${g.customerName} ${g.kategoriProduk} ${g.isRetur ? "retur" : ""} ${itemText}`.toLowerCase();
+      g.searchStr = `${g.so} ${g.invoiceNumber} ${g.customerName} ${g.transactionDate || ""} ${g.orderDate} ${g.kategoriProduk} ${g.isRetur ? "retur" : ""} ${itemText}`.toLowerCase();
     }
 
     return Array.from(map.values()).sort((a, b) => {
@@ -1225,6 +1229,9 @@ export default function Home() {
           } else if (colIdx === 6) {
             textToCopy = currentRow.customerName;
             label = "Pelanggan";
+          } else if (colIdx === 7) {
+            textToCopy = currentRow.transactionDate && currentRow.transactionDate !== "-" ? currentRow.transactionDate : currentRow.orderDate;
+            label = "Tanggal Faktur";
           } else if (colIdx === 10) {
             const grandTotal = Math.round(currentRow.totalHarga * 1.11 * 100) / 100;
             textToCopy = String(grandTotal);
@@ -1530,6 +1537,7 @@ export default function Home() {
               no_sales_order: r.orderNumber || "-",
               customer_name: r.customerName || "-",
               order_date: r.orderDate || "-",
+              transaction_date: r.transactionDate || r.orderDate || "-",
               jenis_transaksi: isOra ? "ORA" : "DOO",
               kategori,
               status_cetak: isPrinted,
@@ -1539,6 +1547,7 @@ export default function Home() {
               extra: {
                 nama_pelanggan: r.customerName,
                 order_date: r.orderDate,
+                transaction_date: r.transactionDate || r.orderDate,
                 accounting_date: r.orderDate,
                 jenis_transaksi: isOra ? "ORA" : "DOO",
                 kategori,
@@ -1551,6 +1560,11 @@ export default function Home() {
           const entry = invMap.get(targetKey)!;
           entry.status_cetak = entry.status_cetak || isPrinted;
           entry.printed_at = entry.printed_at || printedAt;
+
+          if (r.transactionDate && (!entry.transaction_date || entry.transaction_date === "-")) {
+            entry.transaction_date = r.transactionDate;
+            if (entry.extra) entry.extra.transaction_date = r.transactionDate;
+          }
 
           if (overriddenKat && !isOra) {
             entry.kategori = overriddenKat;
@@ -2652,7 +2666,7 @@ export default function Home() {
                   <th className="px-2.5 py-1.5">Kat Produk</th>
                   <th className="px-2.5 py-1.5">Jenis</th>
                   <th className="px-2.5 py-1.5">Pelanggan</th>
-                  <th className="px-2.5 py-1.5">Order Date</th>
+                  <th className="px-2.5 py-1.5" title="Tanggal Faktur (Transaction Date) & Tanggal Order (SO)">Tanggal</th>
                   <th className="px-2.5 py-1.5">Kat</th>
                   <th className="px-2.5 py-1.5">Done Print (Waktu)</th>
                   <th className="px-2.5 py-1.5 text-right" title="Grand Total sudah termasuk PPN 11% (sesuai faktur fisik)">Total (+PPN)</th>
@@ -2872,17 +2886,22 @@ export default function Home() {
                             {g.customerName}
                           </td>
 
-                          {/* Col 7: Order Date */}
+                          {/* Col 7: Tanggal (Transaction Date & Order Date) */}
                           <td
-                            className={`px-2.5 py-1.5 whitespace-nowrap ${
-                              isDarkMode ? "text-slate-400" : "text-slate-500"
-                            } ${getCellCls(7)}`}
+                            className={`px-2.5 py-1.5 whitespace-nowrap ${getCellCls(7)}`}
                             onClick={(e) => {
                               e.stopPropagation();
                               onSelectCell(7);
                             }}
                           >
-                            {g.orderDate}
+                            <div className={`font-mono text-xs font-semibold ${isDarkMode ? "text-slate-200" : "text-slate-800"}`}>
+                              {g.transactionDate && g.transactionDate !== "-" ? g.transactionDate : g.orderDate}
+                            </div>
+                            {g.orderDate && g.orderDate !== "-" && (
+                              <div className={`text-[10px] font-mono ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>
+                                SO: {g.orderDate}
+                              </div>
+                            )}
                           </td>
 
                           {/* Col 8: Kat (Editable Dropdown) */}
