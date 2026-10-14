@@ -1873,8 +1873,8 @@ export default function Home() {
             {/* Left: Brand & Live Online Users Widget */}
             <div className="flex items-center gap-2.5 sm:gap-3">
               <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-lg bg-gradient-to-tr from-blue-600 to-indigo-500 text-white flex items-center justify-center font-bold shadow-sm shadow-blue-500/30 text-sm">
-                  🖨️
+                <div className="w-7 h-7 rounded-lg bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center font-black shadow-sm shadow-blue-500/30 text-xs tracking-tighter select-none">
+                  FT
                 </div>
                 <div>
                   <div className="flex items-center gap-1.5 leading-tight">
