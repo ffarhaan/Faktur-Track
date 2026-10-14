@@ -229,6 +229,7 @@ export default function Home() {
   const [showApotekModal, setShowApotekModal] = useState(false);
   const [showProductModal, setShowProductModal] = useState(false);
   const [showChangelogModal, setShowChangelogModal] = useState(false);
+  const [showSettingsPanel, setShowSettingsPanel] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const deviceIdRef = useRef<string>(Math.random().toString(36).substring(2, 9));
   const [uploadNotification, setUploadNotification] = useState<UploadNotification | null>(null);
@@ -2016,8 +2017,9 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Right: Actions Toolbar & User Switch */}
-            <div className="flex flex-wrap items-center gap-1.5 ml-auto">
+            {/* Right: Compact Actions Toolbar */}
+            <div className="flex items-center gap-1.5 ml-auto">
+
               {/* Upload Button */}
               <label
                 onDragOver={(e) => {
@@ -2068,53 +2070,11 @@ export default function Home() {
                 />
               </label>
 
-              {/* Master Apotek */}
-              <button
-                onClick={() => setShowApotekModal(true)}
-                className={`px-2 py-1 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1 border ${
-                  isDarkMode
-                    ? "bg-[#182542] hover:bg-[#223359] border-slate-700/70 text-slate-200"
-                    : "bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-700"
-                }`}
-                title="Lihat Database Master Apotek (1P / 2P / 3P)"
-              >
-                <span>🏢</span>
-                <span className="hidden sm:inline">Apotek</span>
-              </button>
-
-              {/* Master Produk */}
-              <button
-                onClick={() => setShowProductModal(true)}
-                className={`px-2 py-1 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1 border ${
-                  isDarkMode
-                    ? "bg-[#182542] hover:bg-[#223359] border-slate-700/70 text-slate-200"
-                    : "bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-700"
-                }`}
-                title="Lihat Database Master Produk (Farma / Alkes / Prekursor / OOT / CCP)"
-              >
-                <span>💊</span>
-                <span className="hidden sm:inline">Produk</span>
-              </button>
-
-              {/* Ekspor Excel */}
-              <button
-                onClick={handleExportExcel}
-                className={`px-2 py-1 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1 border ${
-                  isDarkMode
-                    ? "bg-[#182542] hover:bg-[#223359] border-slate-700/70 text-slate-200"
-                    : "bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-700"
-                }`}
-                title="Ekspor Data ke Excel"
-              >
-                <span>📥</span>
-                <span className="hidden sm:inline">Excel</span>
-              </button>
-
               {/* Refresh */}
               <button
                 onClick={handleManualRefresh}
                 disabled={loading}
-                className={`p-1 sm:px-2 sm:py-1 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1 border ${
+                className={`p-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1 border ${
                   isDarkMode
                     ? "bg-[#182542] hover:bg-[#223359] border-slate-700/70 text-slate-200"
                     : "bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-700"
@@ -2124,90 +2084,216 @@ export default function Home() {
                 <span className={loading ? "animate-spin" : ""}>🔄</span>
               </button>
 
-              {/* Info Pembaruan v2.1 */}
+              {/* ⚙ Pengaturan — Sidebar Panel Trigger */}
               <button
                 type="button"
-                onClick={() => setShowChangelogModal(true)}
-                className={`p-1 sm:px-2 sm:py-1 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1 border ${
+                onClick={() => setShowSettingsPanel(true)}
+                className={`px-2 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 border ${
                   isDarkMode
-                    ? "bg-[#182542] hover:bg-[#223359] border-blue-700/60 text-blue-300"
-                    : "bg-blue-50 hover:bg-blue-100 border-blue-200 text-blue-700"
+                    ? "bg-[#182542] hover:bg-[#223359] border-slate-700/70 text-slate-200"
+                    : "bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-700"
                 }`}
-                title="Catatan Pembaruan & Peningkatan v2.1"
+                title="Buka Panel Pengaturan"
               >
-                <span>📢</span>
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
+                  <circle cx="12" cy="12" r="3"/>
+                </svg>
+                <span className="hidden sm:inline">Pengaturan</span>
               </button>
 
-
-              {/* Dark Mode */}
+              {/* User Pill */}
               <button
-                onClick={() => setIsDarkMode((prev) => !prev)}
-                className={`p-1 sm:px-2 sm:py-1 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1 border ${
-                  isDarkMode
-                    ? "bg-[#182542] hover:bg-[#223359] text-amber-300 border-slate-700/80 shadow-xs shadow-amber-500/10"
-                    : "bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200"
+                onClick={() => setShowLoginModal(true)}
+                className={`px-2 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1 border shadow-xs cursor-pointer ${
+                  !currentUser
+                    ? "bg-rose-500 text-white animate-pulse"
+                    : currentUser?.role === "readonly"
+                    ? isDarkMode
+                      ? "bg-amber-950/60 border-amber-800/80 text-amber-300 hover:bg-amber-900/60"
+                      : "bg-amber-50 border-amber-300 text-amber-800 hover:bg-amber-100"
+                    : isDarkMode
+                    ? "bg-blue-950/60 border-blue-700/80 text-blue-300 hover:bg-blue-900/60"
+                    : "bg-blue-50 border-blue-300 text-blue-800 hover:bg-blue-100"
                 }`}
-                title={isDarkMode ? "Mode Terang" : "Mode Gelap"}
+                title="Ganti Pengguna yang Sedang ON"
               >
-                <span>{isDarkMode ? "☀️" : "🌙"}</span>
+                <span>👤</span>
+                <span className="font-bold">{currentUser ? currentUser.name : "Pilih User"}</span>
+                <span className="text-[9px] underline opacity-70">Ganti</span>
               </button>
 
-              {/* Reset Data */}
-              {currentUser?.role !== "readonly" && (
-                <button
-                  onClick={handleClearAll}
-                  className={`px-2 py-1 border rounded-lg text-xs font-semibold transition-colors flex items-center gap-1 ${
-                    isDarkMode
-                      ? "bg-rose-950/40 hover:bg-rose-900/50 text-rose-300 border-rose-800/60"
-                      : "bg-rose-50 hover:bg-rose-100 text-rose-700 border-rose-200"
-                  }`}
-                  title="Hapus Semua Data & Reset Database"
-                >
-                  <span className="text-rose-400">🗑️</span>
-                  <span className="hidden sm:inline">Reset</span>
-                </button>
-              )}
-
-              {/* Current User Pill, Switch & Change Password */}
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={() => setShowLoginModal(true)}
-                  className={`px-2 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1 border shadow-xs cursor-pointer ${
-                    !currentUser
-                      ? "bg-rose-500 text-white animate-pulse"
-                      : currentUser?.role === "readonly"
-                      ? isDarkMode
-                        ? "bg-amber-950/60 border-amber-800/80 text-amber-300 hover:bg-amber-900/60"
-                        : "bg-amber-50 border-amber-300 text-amber-800 hover:bg-amber-100"
-                      : isDarkMode
-                      ? "bg-blue-950/60 border-blue-700/80 text-blue-300 hover:bg-blue-900/60"
-                      : "bg-blue-50 border-blue-300 text-blue-800 hover:bg-blue-100"
-                  }`}
-                  title="Ganti Pengguna yang Sedang ON"
-                >
-                  <span>👤</span>
-                  <span className="font-bold">{currentUser ? currentUser.name : "Pilih User"}</span>
-                  <span className="text-[9px] underline opacity-70">Ganti</span>
-                </button>
-
-                {currentUser && currentUser.role !== "readonly" && (
-                  <button
-                    onClick={() => setShowChangePasswordModal(true)}
-                    className={`px-1.5 py-1 rounded-lg text-xs font-semibold transition-colors border flex items-center gap-1 cursor-pointer ${
-                      isDarkMode
-                        ? "bg-[#182542] hover:bg-[#223359] border-slate-700/80 text-slate-300"
-                        : "bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-700"
-                    }`}
-                    title={`Ganti Password untuk ${currentUser.name}`}
-                  >
-                    <span>🔑</span>
-                    <span className="hidden lg:inline text-[10px]">Password</span>
-                  </button>
-                )}
-              </div>
             </div>
           </div>
         </div>
+
+        {/* ─── Settings Sidebar Panel ─── */}
+        {showSettingsPanel && (
+          <>
+            {/* Backdrop */}
+            <div
+              className="fixed inset-0 z-40 bg-slate-900/30 backdrop-blur-xs"
+              onClick={() => setShowSettingsPanel(false)}
+            />
+            {/* Panel */}
+            <div className={`fixed top-0 right-0 h-full w-72 z-50 shadow-2xl flex flex-col transition-all duration-200 ${
+              isDarkMode
+                ? "bg-[#0d1528] border-l border-slate-700/80 text-slate-100"
+                : "bg-white border-l border-slate-200 text-slate-900"
+            }`}>
+              {/* Panel Header */}
+              <div className={`px-5 py-4 border-b flex items-center justify-between ${
+                isDarkMode ? "border-slate-700/80 bg-[#0b1120]" : "border-slate-100 bg-slate-50"
+              }`}>
+                <div className="flex items-center gap-2.5">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
+                    <circle cx="12" cy="12" r="3"/>
+                  </svg>
+                  <span className="font-bold text-sm">Pengaturan</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowSettingsPanel(false)}
+                  className={`w-7 h-7 rounded-md flex items-center justify-center text-xs font-bold transition-colors ${
+                    isDarkMode ? "text-slate-400 hover:text-slate-200 hover:bg-slate-800" : "text-slate-400 hover:text-slate-700 hover:bg-slate-200"
+                  }`}
+                  title="Tutup Panel"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Panel Body */}
+              <div className="flex-1 overflow-y-auto py-3 px-4 space-y-1">
+
+                {/* Section: Master Data */}
+                <p className={`text-[10px] font-bold uppercase tracking-widest px-1 pb-1 pt-2 ${isDarkMode ? "text-slate-500" : "text-slate-400"}`}>
+                  Master Data
+                </p>
+
+                <button
+                  type="button"
+                  onClick={() => { setShowApotekModal(true); setShowSettingsPanel(false); }}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors text-left ${
+                    isDarkMode ? "hover:bg-slate-800/70 text-slate-200" : "hover:bg-slate-100 text-slate-700"
+                  }`}
+                >
+                  <span className={`w-8 h-8 rounded-lg flex items-center justify-center text-base shrink-0 ${isDarkMode ? "bg-slate-800 text-slate-300" : "bg-slate-100 text-slate-600"}`}>🏢</span>
+                  <div>
+                    <div className="font-semibold text-xs">Master Apotek</div>
+                    <div className={`text-[11px] ${isDarkMode ? "text-slate-500" : "text-slate-400"}`}>Kelola kategori 1P / 2P / 3P</div>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => { setShowProductModal(true); setShowSettingsPanel(false); }}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors text-left ${
+                    isDarkMode ? "hover:bg-slate-800/70 text-slate-200" : "hover:bg-slate-100 text-slate-700"
+                  }`}
+                >
+                  <span className={`w-8 h-8 rounded-lg flex items-center justify-center text-base shrink-0 ${isDarkMode ? "bg-slate-800 text-slate-300" : "bg-slate-100 text-slate-600"}`}>💊</span>
+                  <div>
+                    <div className="font-semibold text-xs">Master Produk</div>
+                    <div className={`text-[11px] ${isDarkMode ? "text-slate-500" : "text-slate-400"}`}>Farma / Alkes / CCP / Prekursor / OOT</div>
+                  </div>
+                </button>
+
+                {/* Divider */}
+                <div className={`my-1 border-t ${isDarkMode ? "border-slate-800" : "border-slate-100"}`} />
+
+                {/* Section: Ekspor */}
+                <p className={`text-[10px] font-bold uppercase tracking-widest px-1 pb-1 pt-2 ${isDarkMode ? "text-slate-500" : "text-slate-400"}`}>
+                  Ekspor
+                </p>
+
+                <button
+                  type="button"
+                  onClick={() => { handleExportExcel(); setShowSettingsPanel(false); }}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors text-left ${
+                    isDarkMode ? "hover:bg-slate-800/70 text-slate-200" : "hover:bg-slate-100 text-slate-700"
+                  }`}
+                >
+                  <span className={`w-8 h-8 rounded-lg flex items-center justify-center text-base shrink-0 ${isDarkMode ? "bg-slate-800 text-slate-300" : "bg-slate-100 text-slate-600"}`}>📥</span>
+                  <div>
+                    <div className="font-semibold text-xs">Ekspor ke Excel</div>
+                    <div className={`text-[11px] ${isDarkMode ? "text-slate-500" : "text-slate-400"}`}>Download data faktur (.xlsx)</div>
+                  </div>
+                </button>
+
+                {/* Divider */}
+                <div className={`my-1 border-t ${isDarkMode ? "border-slate-800" : "border-slate-100"}`} />
+
+                {/* Section: Tampilan & Akun */}
+                <p className={`text-[10px] font-bold uppercase tracking-widest px-1 pb-1 pt-2 ${isDarkMode ? "text-slate-500" : "text-slate-400"}`}>
+                  Tampilan & Akun
+                </p>
+
+                {/* Dark Mode Toggle */}
+                <div className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg ${
+                  isDarkMode ? "hover:bg-slate-800/70" : "hover:bg-slate-100"
+                }`}>
+                  <span className={`w-8 h-8 rounded-lg flex items-center justify-center text-base shrink-0 ${isDarkMode ? "bg-slate-800 text-amber-400" : "bg-slate-100 text-slate-600"}`}>
+                    {isDarkMode ? "☀️" : "🌙"}
+                  </span>
+                  <div className="flex-1">
+                    <div className={`font-semibold text-xs ${isDarkMode ? "text-slate-200" : "text-slate-700"}`}>Mode Gelap</div>
+                    <div className={`text-[11px] ${isDarkMode ? "text-slate-500" : "text-slate-400"}`}>{isDarkMode ? "Aktif" : "Nonaktif"}</div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsDarkMode(prev => !prev)}
+                    className={`relative w-10 h-5 rounded-full transition-colors shrink-0 ${isDarkMode ? "bg-blue-600" : "bg-slate-300"}`}
+                    title={isDarkMode ? "Nonaktifkan Mode Gelap" : "Aktifkan Mode Gelap"}
+                  >
+                    <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all ${isDarkMode ? "left-5" : "left-0.5"}`} />
+                  </button>
+                </div>
+
+                {/* Info Pembaruan */}
+                <button
+                  type="button"
+                  onClick={() => { setShowChangelogModal(true); setShowSettingsPanel(false); }}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors text-left ${
+                    isDarkMode ? "hover:bg-slate-800/70 text-slate-200" : "hover:bg-slate-100 text-slate-700"
+                  }`}
+                >
+                  <span className={`w-8 h-8 rounded-lg flex items-center justify-center text-base shrink-0 ${isDarkMode ? "bg-blue-950/70 text-blue-400" : "bg-blue-50 text-blue-600"}`}>📢</span>
+                  <div>
+                    <div className="font-semibold text-xs">Info Pembaruan</div>
+                    <div className={`text-[11px] ${isDarkMode ? "text-slate-500" : "text-slate-400"}`}>Catatan perubahan sistem v2.1</div>
+                  </div>
+                </button>
+
+                {/* Change Password */}
+                {currentUser && currentUser.role !== "readonly" && (
+                  <button
+                    type="button"
+                    onClick={() => { setShowChangePasswordModal(true); setShowSettingsPanel(false); }}
+                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors text-left ${
+                      isDarkMode ? "hover:bg-slate-800/70 text-slate-200" : "hover:bg-slate-100 text-slate-700"
+                    }`}
+                  >
+                    <span className={`w-8 h-8 rounded-lg flex items-center justify-center text-base shrink-0 ${isDarkMode ? "bg-slate-800 text-slate-300" : "bg-slate-100 text-slate-600"}`}>🔑</span>
+                    <div>
+                      <div className="font-semibold text-xs">Ganti Password</div>
+                      <div className={`text-[11px] ${isDarkMode ? "text-slate-500" : "text-slate-400"}`}>Ubah password akun {currentUser.name}</div>
+                    </div>
+                  </button>
+                )}
+
+              </div>
+
+              {/* Panel Footer */}
+              <div className={`px-5 py-3 border-t text-[11px] ${
+                isDarkMode ? "border-slate-800 text-slate-600" : "border-slate-100 text-slate-400"
+              }`}>
+                Faktur Tracker v2.1 • Oracle ERP Live Tracker
+              </div>
+            </div>
+          </>
+        )}
 
         {/* Upload Notification Banner */}
         {uploadNotification && (
