@@ -31,6 +31,7 @@ import MasterApotekModal from "@/components/MasterApotekModal";
 import MasterProductModal from "@/components/MasterProductModal";
 import LoginModal, { AppUser } from "@/components/LoginModal";
 import ChangePasswordModal from "@/components/ChangePasswordModal";
+import ExportExcelModal from "@/components/ExportExcelModal";
 
 type Filter = "belum" | "sudah" | "all" | "double" | "retur";
 type KatFilter = "all" | "1P" | "2P" | "3P";
@@ -230,6 +231,7 @@ export default function Home() {
   const [showProductModal, setShowProductModal] = useState(false);
   const [showChangelogModal, setShowChangelogModal] = useState(false);
   const [showSettingsPanel, setShowSettingsPanel] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const deviceIdRef = useRef<string>(Math.random().toString(36).substring(2, 9));
   const [uploadNotification, setUploadNotification] = useState<UploadNotification | null>(null);
@@ -361,6 +363,7 @@ export default function Home() {
   const showApotekModalRef = useRef(false);
   const showProductModalRef = useRef(false);
   const showChangelogModalRef = useRef(false);
+  const showExportModalRef = useRef(false);
   const togglePrintRef = useRef<(group: FakturGroup) => void>(() => {});
   const toggleExpandRef = useRef<(key: string) => void>(() => {});
   const lastSpaceTimeRef = useRef(0);
@@ -384,6 +387,10 @@ export default function Home() {
   useEffect(() => {
     showChangelogModalRef.current = showChangelogModal;
   }, [showChangelogModal]);
+
+  useEffect(() => {
+    showExportModalRef.current = showExportModal;
+  }, [showExportModal]);
 
   useEffect(() => {
     categoryOverridesRef.current = categoryOverrides;
@@ -1096,11 +1103,12 @@ export default function Home() {
         if (showApotekModalRef.current) setShowApotekModal(false);
         if (showProductModalRef.current) setShowProductModal(false);
         if (showChangelogModalRef.current) setShowChangelogModal(false);
+        if (showExportModalRef.current) setShowExportModal(false);
         return;
       }
 
       if (isInput) return;
-      if (showApotekModalRef.current || showProductModalRef.current || showChangelogModalRef.current) return;
+      if (showApotekModalRef.current || showProductModalRef.current || showChangelogModalRef.current || showExportModalRef.current) return;
 
       const currentPages = pageDataRef.current;
       const maxRow = Math.max(0, currentPages.length - 1);
@@ -1815,38 +1823,13 @@ export default function Home() {
   );
 
 
-  // Export to Excel (Ascending order)
+  // Export to Excel Dialog (Date range & filters)
   const handleExportExcel = () => {
-    if (filtered.length === 0) {
-      alert("Tidak ada data faktur untuk diekspor.");
+    if (grouped.length === 0) {
+      showToast("⚠️ Tidak ada data faktur untuk diekspor.");
       return;
     }
-
-    const sortedForExport = [...filtered].sort((a, b) => {
-      const na = parseInvNum(a.invoiceNumber);
-      const nb = parseInvNum(b.invoiceNumber);
-      return na - nb; // Ascending
-    });
-
-    const rows = sortedForExport.map((g, idx) => ({
-      No: idx + 1,
-      "No SO": g.so,
-      "No Invoice": g.invoiceNumber,
-      "Kat Produk": g.kategoriProduk,
-      "Jenis Transaksi": g.jenisTransaksi,
-      Pelanggan: g.customerName,
-      "Tanggal Order": g.orderDate,
-      Kategori: g.kategori,
-      "Status Cetak": g.allPrinted ? "Sudah Terprint" : "Belum Terprint",
-      "Waktu Cetak": g.allPrinted && g.printedAt ? formatPrintTime(g.printedAt) : "-",
-      "Dicetak Oleh": g.allPrinted && g.printedBy ? g.printedBy : "-",
-      "Total Harga": g.totalHarga,
-    }));
-
-    const ws = XLSX.utils.json_to_sheet(rows);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Faktur Tracker");
-    XLSX.writeFile(wb, `Faktur_Tracker_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    setShowExportModal(true);
   };
 
   return (
@@ -2218,7 +2201,7 @@ export default function Home() {
                   <span className={`w-8 h-8 rounded-lg flex items-center justify-center text-base shrink-0 ${isDarkMode ? "bg-slate-800 text-slate-300" : "bg-slate-100 text-slate-600"}`}>📥</span>
                   <div>
                     <div className="font-semibold text-xs">Ekspor ke Excel</div>
-                    <div className={`text-[11px] ${isDarkMode ? "text-slate-500" : "text-slate-400"}`}>Download data faktur (.xlsx)</div>
+                    <div className={`text-[11px] ${isDarkMode ? "text-slate-500" : "text-slate-400"}`}>Filter rentang tanggal & unduh data (.xlsx)</div>
                   </div>
                 </button>
 
@@ -3183,6 +3166,14 @@ export default function Home() {
           onSuccess={(msg) => showToast(`✓ ${msg}`)}
         />
       )}
+
+      {/* Export to Excel Date-Range Modal */}
+      <ExportExcelModal
+        isOpen={showExportModal}
+        onClose={() => setShowExportModal(false)}
+        groups={grouped}
+        isDarkMode={isDarkMode}
+      />
 
       {/* Changelog & System Update Notes Modal (v2.1) - High Contrast & Polished Design */}
       {showChangelogModal && (
