@@ -2654,7 +2654,7 @@ export default function Home() {
                   <th className="px-2.5 py-1.5">Order Date</th>
                   <th className="px-2.5 py-1.5">Kat</th>
                   <th className="px-2.5 py-1.5">Done Print (Waktu)</th>
-                  <th className="px-2.5 py-1.5 text-right">Total Harga</th>
+                  <th className="px-2.5 py-1.5 text-right" title="Grand Total sudah termasuk PPN 11% (sesuai faktur fisik)">Total (+PPN)</th>
                 </tr>
               </thead>
               <tbody className={`divide-y ${isDarkMode ? "divide-slate-800/80" : "divide-slate-100"}`}>
@@ -2955,7 +2955,7 @@ export default function Home() {
                             )}
                           </td>
 
-                          {/* Col 10: Total Harga */}
+                          {/* Col 10: Total Harga (Grand Total include PPN 11%) */}
                           <td
                             className={`px-2.5 py-1.5 text-right font-medium whitespace-nowrap ${
                               g.isRetur || g.totalHarga < 0
@@ -2969,7 +2969,12 @@ export default function Home() {
                               onSelectCell(10);
                             }}
                           >
-                            {formatRupiah(g.totalHarga)}
+                            <div className="font-mono font-semibold">
+                              {formatRupiah(g.totalHarga * 1.11)}
+                            </div>
+                            <div className={`text-[10px] font-mono ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>
+                              DPP: {formatRupiah(g.totalHarga)}
+                            </div>
                           </td>
                         </tr>
 
@@ -3084,6 +3089,31 @@ export default function Home() {
                                     ))}
                                   </tbody>
                                 </table>
+
+                                {/* Summary Box (DPP, PPN 11%, Grand Total) */}
+                                <div className={`p-2.5 rounded-lg border flex flex-wrap items-center justify-between gap-3 text-xs ${
+                                  isDarkMode ? "bg-[#0b1222] border-slate-700/80" : "bg-slate-50 border-slate-200"
+                                }`}>
+                                  <div className={`flex items-center gap-2 ${isDarkMode ? "text-slate-400" : "text-slate-600"}`}>
+                                    <span>📦 Total Item: <strong className={isDarkMode ? "text-white" : "text-slate-900"}>{g.items.length}</strong></span>
+                                  </div>
+                                  <div className="flex flex-wrap items-center gap-3 sm:gap-4 font-mono">
+                                    <div>
+                                      <span className={`text-[11px] mr-1 ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>Subtotal (DPP):</span>
+                                      <span className="font-semibold">Rp {formatRupiah(g.totalHarga)}</span>
+                                    </div>
+                                    <div>
+                                      <span className={`text-[11px] mr-1 ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>PPN (11%):</span>
+                                      <span className="font-semibold text-amber-500">Rp {formatRupiah(g.totalHarga * 0.11)}</span>
+                                    </div>
+                                    <div className={`px-2.5 py-1 rounded-md border font-bold ${
+                                      isDarkMode ? "bg-blue-950/60 border-blue-800 text-blue-300" : "bg-blue-50 border-blue-200 text-blue-800"
+                                    }`}>
+                                      <span className="text-[11px] mr-1">Grand Total:</span>
+                                      <span>Rp {formatRupiah(g.totalHarga * 1.11)}</span>
+                                    </div>
+                                  </div>
+                                </div>
                               </div>
                             </td>
                           </tr>

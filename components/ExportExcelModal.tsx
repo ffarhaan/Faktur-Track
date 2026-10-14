@@ -108,7 +108,7 @@ export default function ExportExcelModal({
   }, [groups, startDate, endDate, statusFilter, jenisFilter, katFilter]);
 
   const totalNilai = useMemo(() => {
-    return matchingData.reduce((acc, curr) => acc + (curr.totalHarga || 0), 0);
+    return matchingData.reduce((acc, curr) => acc + ((curr.totalHarga || 0) * 1.11), 0);
   }, [matchingData]);
 
   // Quick Preset Handlers
@@ -150,20 +150,28 @@ export default function ExportExcelModal({
       return na - nb; // Ascending order
     });
 
-    const rows = sortedForExport.map((g, idx) => ({
-      No: idx + 1,
-      "No SO": g.so,
-      "No Invoice": g.invoiceNumber,
-      "Kat Produk": g.kategoriProduk,
-      "Jenis Transaksi": g.jenisTransaksi,
-      Pelanggan: g.customerName,
-      "Tanggal Order": g.orderDate,
-      Kategori: g.kategori,
-      "Status Cetak": g.allPrinted ? "Sudah Terprint" : "Belum Terprint",
-      "Waktu Cetak": g.allPrinted && g.printedAt ? formatPrintTime(g.printedAt) : "-",
-      "Dicetak Oleh": g.allPrinted && g.printedBy ? g.printedBy : "-",
-      "Total Harga": g.totalHarga,
-    }));
+    const rows = sortedForExport.map((g, idx) => {
+      const dpp = g.totalHarga;
+      const ppn = Math.round(dpp * 0.11 * 100) / 100;
+      const grandTotal = Math.round(dpp * 1.11 * 100) / 100;
+
+      return {
+        No: idx + 1,
+        "No SO": g.so,
+        "No Invoice": g.invoiceNumber,
+        "Kat Produk": g.kategoriProduk,
+        "Jenis Transaksi": g.jenisTransaksi,
+        Pelanggan: g.customerName,
+        "Tanggal Order": g.orderDate,
+        Kategori: g.kategori,
+        "Status Cetak": g.allPrinted ? "Sudah Terprint" : "Belum Terprint",
+        "Waktu Cetak": g.allPrinted && g.printedAt ? formatPrintTime(g.printedAt) : "-",
+        "Dicetak Oleh": g.allPrinted && g.printedBy ? g.printedBy : "-",
+        "Subtotal (DPP)": dpp,
+        "PPN (11%)": ppn,
+        "Total Harga (Grand Total)": grandTotal,
+      };
+    });
 
     const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new();
