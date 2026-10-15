@@ -1857,16 +1857,19 @@ export default function Home() {
   return (
     <div className={`min-h-screen flex flex-col font-sans transition-colors duration-200 relative overflow-hidden ${
       isDarkMode
-        ? "bg-[#070A12] text-slate-100 selection:bg-blue-500/30"
-        : "bg-[#F4F6FB] text-slate-800 selection:bg-blue-500/20"
+        ? "dark mesh-bg-dark text-slate-100 selection:bg-blue-500/30"
+        : "mesh-bg-light text-slate-800 selection:bg-blue-500/20"
     }`}>
       {/* Ambient Luxury Caustic Glows */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
-        <div className={`absolute -top-40 -left-40 w-96 h-96 rounded-full blur-3xl opacity-20 ${
-          isDarkMode ? "bg-indigo-600" : "bg-blue-400"
+        <div className={`absolute -top-32 -left-32 w-[500px] h-[500px] rounded-full blur-3xl opacity-40 transition-all ${
+          isDarkMode ? "bg-indigo-600/30" : "bg-blue-400/35"
         }`} />
-        <div className={`absolute top-1/2 -right-40 w-96 h-96 rounded-full blur-3xl opacity-15 ${
-          isDarkMode ? "bg-emerald-600" : "bg-teal-300"
+        <div className={`absolute top-1/3 -right-32 w-[450px] h-[450px] rounded-full blur-3xl opacity-35 transition-all ${
+          isDarkMode ? "bg-emerald-600/20" : "bg-teal-300/40"
+        }`} />
+        <div className={`absolute -bottom-32 left-1/3 w-[500px] h-[500px] rounded-full blur-3xl opacity-30 transition-all ${
+          isDarkMode ? "bg-purple-900/30" : "bg-indigo-200/50"
         }`} />
       </div>
 
@@ -1883,23 +1886,23 @@ export default function Home() {
       {/* Main Container */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-2.5 sm:p-4 space-y-2.5 relative z-10">
         {/* Top Header Card - Floating Frosted Glass Bar */}
-        <div className={`border rounded-2xl px-3.5 py-2.5 shadow-xl transition-all backdrop-blur-xl ${
-          isDarkMode
-            ? "bg-[#0D1424]/80 border-white/[0.08] text-slate-100 shadow-black/40"
-            : "bg-white/80 border-slate-200/80 text-slate-900 shadow-slate-200/50"
-        }`}>
+        <div className="glass-panel rounded-2xl px-3.5 py-2.5 transition-all">
           <div className="flex flex-wrap items-center justify-between gap-2">
             {/* Left: Brand & Live Online Users Widget */}
             <div className="flex items-center gap-2.5 sm:gap-3">
               <div className="flex items-center gap-2.5">
-                <img
-                  src="/logo-3d.png"
-                  alt="FT 3D Glass Logo"
-                  className="w-8 h-8 object-contain rounded-lg drop-shadow-md select-none"
-                />
+                <div className="w-9 h-9 rounded-xl bg-slate-950 p-1 flex items-center justify-center shadow-md border border-slate-800/80 shrink-0">
+                  <img
+                    src="/logo-3d.png"
+                    alt="FT 3D Glass Logo"
+                    className="w-full h-full object-contain drop-shadow-md select-none"
+                  />
+                </div>
                 <div>
                   <div className="flex items-center gap-1.5 leading-tight">
-                    <span className="font-extrabold text-sm sm:text-base tracking-wider text-slate-900 dark:text-white">
+                    <span className={`font-black text-sm sm:text-base tracking-wider ${
+                      isDarkMode ? "text-white" : "text-slate-900"
+                    }`}>
                       FAKTUR TRACKER
                     </span>
                     <button
@@ -2382,119 +2385,119 @@ export default function Home() {
         )}
 
         {/* 8 Metric KPI - SINGLE UNIFIED FROSTED GLASS CAPSULE (Sesuai Mockup) */}
-        <div className={`border rounded-2xl shadow-xl backdrop-blur-xl transition-all overflow-hidden grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 divide-y sm:divide-y-0 sm:divide-x ${
+        <div className={`glass-panel rounded-2xl transition-all overflow-hidden grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 divide-y sm:divide-y-0 sm:divide-x ${
           isDarkMode
-            ? "bg-[#0D1424]/85 border-white/[0.08] shadow-black/40 divide-white/[0.06]"
-            : "bg-white/85 border-slate-200/80 shadow-slate-200/50 divide-slate-100"
+            ? "divide-white/[0.08]"
+            : "divide-slate-200/60"
         }`}>
           {/* Cell 1: Belum Terprint */}
           <div className="p-3 flex flex-col justify-between items-center text-center">
-            <span className={`text-[11px] font-semibold ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>
+            <span className={`text-[11px] font-semibold ${isDarkMode ? "text-slate-400" : "text-slate-600"}`}>
               Belum Terprint
             </span>
-            <div className={`my-1.5 px-4 py-0.5 rounded-full font-black text-lg font-mono tracking-tight shadow-md border ${
+            <div className={`my-1.5 px-4 py-0.5 rounded-full font-black text-lg font-mono tracking-tight shadow-sm border ${
               isDarkMode
                 ? "bg-gradient-to-r from-amber-500/25 to-amber-600/35 border-amber-500/40 text-amber-300 shadow-amber-950/40"
-                : "bg-gradient-to-r from-amber-100 to-amber-200 border-amber-300 text-amber-800 shadow-amber-100"
+                : "bg-gradient-to-r from-amber-200/70 to-amber-300/80 border-amber-400/80 text-amber-950 shadow-amber-200/50"
             }`}>
               {stats.belumCount}
             </div>
-            <span className={`text-[10px] font-medium ${isDarkMode ? "text-amber-400/90" : "text-amber-600"}`}>
+            <span className={`text-[10px] font-bold ${isDarkMode ? "text-amber-400/90" : "text-amber-700"}`}>
               Sisa Tugas
             </span>
           </div>
 
           {/* Cell 2: Total SO */}
           <div className="p-3 flex flex-col justify-between items-center text-center">
-            <span className={`text-[11px] font-semibold ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>
+            <span className={`text-[11px] font-semibold ${isDarkMode ? "text-slate-400" : "text-slate-600"}`}>
               Total SO
             </span>
             <div className={`my-1.5 font-black text-xl font-mono tracking-tight ${isDarkMode ? "text-white" : "text-slate-900"}`}>
               {stats.totalSO}
             </div>
-            <span className="text-[10px] text-slate-400 font-medium">
+            <span className={`text-[10px] font-medium ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>
               SO Terdata
             </span>
           </div>
 
           {/* Cell 3: Total Faktur */}
           <div className="p-3 flex flex-col justify-between items-center text-center">
-            <span className={`text-[11px] font-semibold ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>
+            <span className={`text-[11px] font-semibold ${isDarkMode ? "text-slate-400" : "text-slate-600"}`}>
               Total Faktur
             </span>
             <div className={`my-1.5 font-black text-xl font-mono tracking-tight ${isDarkMode ? "text-white" : "text-slate-900"}`}>
               {stats.totalCount}
             </div>
-            <span className="text-[10px] text-slate-400 font-medium">
+            <span className={`text-[10px] font-medium ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>
               Semua Faktur
             </span>
           </div>
 
           {/* Cell 4: 1P ORA */}
           <div className="p-3 flex flex-col justify-between items-center text-center">
-            <span className={`text-[11px] font-semibold ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>
+            <span className={`text-[11px] font-semibold ${isDarkMode ? "text-slate-400" : "text-slate-600"}`}>
               1P (ORA)
             </span>
             <div className={`my-1.5 font-bold text-base font-mono ${isDarkMode ? "text-sky-200" : "text-slate-900"}`}>
               {highestInvoices.maxOraStr}
             </div>
-            <span className="text-[10px] text-slate-400 font-medium truncate max-w-full px-1" title={invoiceProgression?.rangeOra || ""}>
+            <span className={`text-[10px] font-medium truncate max-w-full px-1 ${isDarkMode ? "text-slate-400" : "text-slate-500"}`} title={invoiceProgression?.rangeOra || ""}>
               {invoiceProgression?.rangeOra ? `R: ${invoiceProgression.rangeOra}` : "Belum ada"}
             </span>
           </div>
 
           {/* Cell 5: 1P DOO */}
           <div className="p-3 flex flex-col justify-between items-center text-center">
-            <span className={`text-[11px] font-semibold ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>
+            <span className={`text-[11px] font-semibold ${isDarkMode ? "text-slate-400" : "text-slate-600"}`}>
               1P (DOO)
             </span>
             <div className={`my-1.5 font-bold text-base font-mono ${isDarkMode ? "text-teal-200" : "text-slate-900"}`}>
               {highestInvoices.max1PDooStr}
             </div>
-            <span className="text-[10px] text-slate-400 font-medium truncate max-w-full px-1" title={invoiceProgression?.range1PDoo || ""}>
+            <span className={`text-[10px] font-medium truncate max-w-full px-1 ${isDarkMode ? "text-slate-400" : "text-slate-500"}`} title={invoiceProgression?.range1PDoo || ""}>
               {invoiceProgression?.range1PDoo ? `R: ${invoiceProgression.range1PDoo}` : "Belum ada"}
             </span>
           </div>
 
           {/* Cell 6: 2P */}
           <div className="p-3 flex flex-col justify-between items-center text-center">
-            <span className={`text-[11px] font-semibold ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>
+            <span className={`text-[11px] font-semibold ${isDarkMode ? "text-slate-400" : "text-slate-600"}`}>
               2P
             </span>
             <div className={`my-1.5 font-bold text-base font-mono ${isDarkMode ? "text-emerald-200" : "text-slate-900"}`}>
               {highestInvoices.max2PStr}
             </div>
-            <span className="text-[10px] text-slate-400 font-medium truncate max-w-full px-1" title={invoiceProgression?.range2P || ""}>
+            <span className={`text-[10px] font-medium truncate max-w-full px-1 ${isDarkMode ? "text-slate-400" : "text-slate-500"}`} title={invoiceProgression?.range2P || ""}>
               {invoiceProgression?.range2P ? `R: ${invoiceProgression.range2P}` : "Belum ada"}
             </span>
           </div>
 
           {/* Cell 7: 3P */}
           <div className="p-3 flex flex-col justify-between items-center text-center">
-            <span className={`text-[11px] font-semibold ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>
+            <span className={`text-[11px] font-semibold ${isDarkMode ? "text-slate-400" : "text-slate-600"}`}>
               3P
             </span>
             <div className={`my-1.5 font-bold text-base font-mono ${isDarkMode ? "text-purple-200" : "text-slate-900"}`}>
               {highestInvoices.max3PStr}
             </div>
-            <span className="text-[10px] text-slate-400 font-medium truncate max-w-full px-1" title={invoiceProgression?.range3P || ""}>
+            <span className={`text-[10px] font-medium truncate max-w-full px-1 ${isDarkMode ? "text-slate-400" : "text-slate-500"}`} title={invoiceProgression?.range3P || ""}>
               {invoiceProgression?.range3P ? `R: ${invoiceProgression.range3P}` : "Belum ada"}
             </span>
           </div>
 
           {/* Cell 8: Double INV */}
           <div className="p-3 flex flex-col justify-between items-center text-center">
-            <span className={`text-[11px] font-semibold ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>
+            <span className={`text-[11px] font-semibold ${isDarkMode ? "text-slate-400" : "text-slate-600"}`}>
               Double INV
             </span>
-            <div className={`my-1.5 px-3 py-0.5 rounded-full font-black text-lg font-mono tracking-tight shadow-md border ${
+            <div className={`my-1.5 px-3 py-0.5 rounded-full font-black text-lg font-mono tracking-tight shadow-sm border ${
               isDarkMode
                 ? "bg-gradient-to-r from-rose-500/25 to-rose-600/35 border-rose-500/40 text-rose-300 shadow-rose-950/40"
-                : "bg-gradient-to-r from-rose-100 to-rose-200 border-rose-300 text-rose-800 shadow-rose-100"
+                : "bg-gradient-to-r from-rose-200/70 to-rose-300/80 border-rose-400/80 text-rose-950 shadow-rose-200/50"
             }`}>
               {stats.doubleCount}
             </div>
-            <span className={`text-[10px] font-medium ${isDarkMode ? "text-rose-400/90" : "text-rose-600"}`}>
+            <span className={`text-[10px] font-bold ${isDarkMode ? "text-rose-400/90" : "text-rose-700"}`}>
               Perlu Cek
             </span>
           </div>
@@ -2503,18 +2506,16 @@ export default function Home() {
         {/* Filter and Search Bar Section - Seamless Raycast Floating Capsule (Sesuai Mockup) */}
         <div className="flex flex-wrap items-center justify-between gap-2.5">
           {/* Left: Floating Status Tabs Pills */}
-          <div className={`flex flex-wrap items-center p-1 rounded-2xl border backdrop-blur-xl shadow-lg transition-all ${
-            isDarkMode ? "bg-[#0D1424]/85 border-white/[0.08]" : "bg-white/85 border-slate-200/80 shadow-slate-200/40"
-          }`}>
+          <div className="glass-capsule p-1 rounded-2xl flex flex-wrap items-center transition-all">
             <button
               onClick={() => { setFilter("belum"); setPage(0); }}
               className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
                 filter === "belum"
                   ? (isDarkMode ? "bg-white text-slate-950 shadow-md" : "bg-slate-900 text-white shadow-md")
-                  : (isDarkMode ? "text-slate-400 hover:text-white" : "text-slate-600 hover:text-slate-900")
+                  : (isDarkMode ? "text-slate-400 hover:text-white" : "text-slate-700 hover:text-slate-950")
               }`}
             >
-              <span className={`w-2 h-2 rounded-full ${filter === "belum" ? "bg-amber-500" : "bg-amber-400/60"}`}></span>
+              <span className={`w-2 h-2 rounded-full ${filter === "belum" ? "bg-amber-500" : "bg-amber-500/80"}`}></span>
               <span>Belum Dicetak ({stats.belumCount})</span>
             </button>
             <button
@@ -2522,7 +2523,7 @@ export default function Home() {
               className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
                 filter === "all"
                   ? (isDarkMode ? "bg-white text-slate-950 shadow-md" : "bg-slate-900 text-white shadow-md")
-                  : (isDarkMode ? "text-slate-400 hover:text-white" : "text-slate-600 hover:text-slate-900")
+                  : (isDarkMode ? "text-slate-400 hover:text-white" : "text-slate-700 hover:text-slate-950")
               }`}
             >
               <span>Semua ({stats.totalCount})</span>
@@ -2532,7 +2533,7 @@ export default function Home() {
               className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
                 filter === "double"
                   ? "bg-rose-600 text-white shadow-md shadow-rose-600/30"
-                  : (isDarkMode ? "text-rose-400 hover:text-rose-300" : "text-rose-600 hover:text-rose-800")
+                  : (isDarkMode ? "text-rose-400 hover:text-rose-300" : "text-rose-700 hover:text-rose-900")
               }`}
             >
               <span>Double INV ({stats.doubleCount})</span>
@@ -2542,7 +2543,7 @@ export default function Home() {
               className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
                 filter === "retur"
                   ? "bg-amber-600 text-white shadow-md shadow-amber-600/30"
-                  : (isDarkMode ? "text-amber-400 hover:text-amber-300" : "text-amber-600 hover:text-amber-800")
+                  : (isDarkMode ? "text-amber-400 hover:text-amber-300" : "text-amber-700 hover:text-amber-900")
               }`}
             >
               <span>Retur ({stats.returCount})</span>
@@ -2552,9 +2553,7 @@ export default function Home() {
           {/* Right: Floating Search Input Capsule (⌘K / [/]) & Quick Actions */}
           <div className="flex flex-wrap items-center gap-2 flex-1 sm:flex-initial justify-end">
             {/* Search Input Capsule */}
-            <div className={`relative flex items-center rounded-2xl border backdrop-blur-xl shadow-lg transition-all min-w-[240px] sm:min-w-[280px] ${
-              isDarkMode ? "bg-[#0D1424]/85 border-white/[0.08]" : "bg-white/85 border-slate-200/80 shadow-slate-200/40"
-            }`}>
+            <div className="glass-capsule relative flex items-center rounded-2xl transition-all min-w-[240px] sm:min-w-[280px]">
               <span className="pl-3 text-xs text-slate-400">🔍</span>
               <input
                 ref={searchInputRef}
@@ -2562,12 +2561,12 @@ export default function Home() {
                 placeholder="Cari no faktur, SO, pelanggan..."
                 value={search}
                 onChange={(e) => { setSearch(e.target.value); setPage(0); }}
-                className={`w-full pl-2 pr-9 py-1.5 rounded-2xl text-xs focus:outline-none transition-colors ${
-                  isDarkMode ? "text-slate-100 placeholder:text-slate-500" : "text-slate-900 placeholder:text-slate-400"
+                className={`w-full pl-2 pr-9 py-1.5 rounded-2xl text-xs focus:outline-none transition-colors bg-transparent ${
+                  isDarkMode ? "text-slate-100 placeholder:text-slate-500" : "text-slate-900 placeholder:text-slate-500"
                 }`}
               />
               <span className={`absolute right-2 text-[10px] font-mono px-1.5 py-0.5 rounded-md border ${
-                isDarkMode ? "bg-slate-800/80 text-slate-400 border-slate-700/80" : "bg-slate-100 text-slate-500 border-slate-200"
+                isDarkMode ? "bg-slate-800/80 text-slate-400 border-slate-700/80" : "bg-white/80 text-slate-600 border-slate-200/80 shadow-xs"
               }`}>
                 ⌘K
               </span>
@@ -2587,17 +2586,15 @@ export default function Home() {
         </div>
 
         {/* Filter Dropdowns - Compact Frosted Glass Row */}
-        <div className={`p-2 rounded-2xl border backdrop-blur-xl transition-all grid grid-cols-2 sm:grid-cols-4 gap-2 ${
-          isDarkMode ? "bg-[#0D1424]/60 border-white/[0.06]" : "bg-white/60 border-slate-200/60"
-        }`}>
+        <div className="glass-capsule p-2 rounded-2xl transition-all grid grid-cols-2 sm:grid-cols-4 gap-2">
           {/* Kategori Filter */}
           <select
             value={katFilter}
             onChange={(e) => { setKatFilter(e.target.value as KatFilter); setPage(0); }}
             className={`w-full px-2.5 py-1 rounded-xl text-xs font-medium focus:outline-none transition-colors border ${
               isDarkMode
-                ? "bg-[#0B101D] border-white/[0.08] text-slate-200"
-                : "bg-white border-slate-200 text-slate-700"
+                ? "bg-[#0B101D]/80 border-white/[0.08] text-slate-200"
+                : "bg-white/80 border-white/90 text-slate-800 shadow-xs"
             }`}
           >
             <option value="all">Semua Kategori (1P/2P/3P)</option>
@@ -2612,8 +2609,8 @@ export default function Home() {
             onChange={(e) => { setJenisFilter(e.target.value as JenisFilter); setPage(0); }}
             className={`w-full px-2.5 py-1 rounded-xl text-xs font-medium focus:outline-none transition-colors border ${
               isDarkMode
-                ? "bg-[#0B101D] border-white/[0.08] text-slate-200"
-                : "bg-white border-slate-200 text-slate-700"
+                ? "bg-[#0B101D]/80 border-white/[0.08] text-slate-200"
+                : "bg-white/80 border-white/90 text-slate-800 shadow-xs"
             }`}
           >
             <option value="all">Semua Jenis (ORA/DOO)</option>
@@ -2627,8 +2624,8 @@ export default function Home() {
             onChange={(e) => { setKlasFilter(e.target.value as KlasFilter); setPage(0); }}
             className={`w-full px-2.5 py-1 rounded-xl text-xs font-medium focus:outline-none transition-colors border ${
               isDarkMode
-                ? "bg-[#0B101D] border-white/[0.08] text-slate-200"
-                : "bg-white border-slate-200 text-slate-700"
+                ? "bg-[#0B101D]/80 border-white/[0.08] text-slate-200"
+                : "bg-white/80 border-white/90 text-slate-800 shadow-xs"
             }`}
           >
             <option value="all">Semua Produk</option>
@@ -2645,8 +2642,8 @@ export default function Home() {
             onChange={(e) => { setDateFilter(e.target.value); setPage(0); }}
             className={`w-full px-2.5 py-1 rounded-xl text-xs font-medium focus:outline-none transition-colors border ${
               isDarkMode
-                ? "bg-[#0B101D] border-white/[0.08] text-slate-200"
-                : "bg-white border-slate-200 text-slate-700"
+                ? "bg-[#0B101D]/80 border-white/[0.08] text-slate-200"
+                : "bg-white/80 border-white/90 text-slate-800 shadow-xs"
             }`}
           >
             <option value="all">Semua Tanggal</option>
@@ -2657,16 +2654,14 @@ export default function Home() {
         </div>
 
         {/* Faktur Table Card - Frosted Crystal Glass Canvas */}
-        <div className={`border rounded-2xl shadow-2xl overflow-hidden transition-all backdrop-blur-xl ${
-          isDarkMode ? "bg-[#0D1424]/80 border-white/[0.08] shadow-black/40" : "bg-white/80 border-slate-200/80 shadow-slate-200/50"
-        }`}>
+        <div className="glass-panel rounded-2xl overflow-hidden transition-all">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
                 <tr className={`border-b font-semibold transition-colors ${
                   isDarkMode
-                    ? "bg-[#101A2E]/90 border-white/[0.06] text-slate-300"
-                    : "bg-slate-100/90 border-slate-200 text-slate-600"
+                    ? "bg-[#101A2E]/80 border-white/[0.08] text-slate-300"
+                    : "bg-white/60 border-slate-200/60 text-slate-700 backdrop-blur-md"
                 }`}>
                   <th className="px-3 py-2 w-7 text-center">#</th>
                   <th className="px-3 py-2 w-10 text-center">Print</th>
