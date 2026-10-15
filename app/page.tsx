@@ -2401,20 +2401,7 @@ export default function Home() {
             </span>
           </button>
 
-          {/* Cell 2: Total SO */}
-          <div className="py-1.5 px-2 flex flex-col justify-between items-center text-center">
-            <span className={`text-[10px] font-semibold tracking-tight ${isDarkMode ? "text-slate-400" : "text-slate-600"}`}>
-              Total SO
-            </span>
-            <div className={`my-0.5 font-black text-sm sm:text-base font-mono tracking-tight ${isDarkMode ? "text-white" : "text-slate-900"}`}>
-              {stats.totalSO}
-            </div>
-            <span className={`text-[9px] font-medium leading-none ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>
-              SO Terdata
-            </span>
-          </div>
-
-          {/* Cell 3: Total Faktur (Semua - Clickable Filter) */}
+          {/* Cell 2: Total Faktur (Semua - Clickable Filter) */}
           <button
             type="button"
             onClick={() => { setFilter("all"); setPage(0); }}
@@ -2439,6 +2426,19 @@ export default function Home() {
               {filter === "all" ? "● Semua Aktif" : "Semua Faktur"}
             </span>
           </button>
+
+          {/* Cell 3: Total SO */}
+          <div className="py-1.5 px-2 flex flex-col justify-between items-center text-center">
+            <span className={`text-[10px] font-semibold tracking-tight ${isDarkMode ? "text-slate-400" : "text-slate-600"}`}>
+              Total SO
+            </span>
+            <div className={`my-0.5 font-black text-sm sm:text-base font-mono tracking-tight ${isDarkMode ? "text-white" : "text-slate-900"}`}>
+              {stats.totalSO}
+            </div>
+            <span className={`text-[9px] font-medium leading-none ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>
+              SO Terdata
+            </span>
+          </div>
 
           {/* Cell 4: 1P ORA */}
           <div className="py-1.5 px-2 flex flex-col justify-between items-center text-center">
