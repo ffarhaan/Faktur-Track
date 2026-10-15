@@ -1855,24 +1855,11 @@ export default function Home() {
   };
 
   return (
-    <div className={`min-h-screen flex flex-col font-sans transition-colors duration-200 relative overflow-hidden ${
+    <div className={`min-h-screen flex flex-col font-sans transition-colors duration-150 relative overflow-hidden ${
       isDarkMode
         ? "dark mesh-bg-dark text-slate-100 selection:bg-blue-500/30"
         : "mesh-bg-light text-slate-800 selection:bg-blue-500/20"
     }`}>
-      {/* Ambient Luxury Caustic Glows */}
-      <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
-        <div className={`absolute -top-32 -left-32 w-[500px] h-[500px] rounded-full blur-3xl opacity-40 transition-all ${
-          isDarkMode ? "bg-indigo-600/30" : "bg-blue-400/35"
-        }`} />
-        <div className={`absolute top-1/3 -right-32 w-[450px] h-[450px] rounded-full blur-3xl opacity-35 transition-all ${
-          isDarkMode ? "bg-emerald-600/20" : "bg-teal-300/40"
-        }`} />
-        <div className={`absolute -bottom-32 left-1/3 w-[500px] h-[500px] rounded-full blur-3xl opacity-30 transition-all ${
-          isDarkMode ? "bg-purple-900/30" : "bg-indigo-200/50"
-        }`} />
-      </div>
-
       {/* Toast Notification */}
       {toastMsg && (
         <div className={`fixed top-5 right-5 z-50 px-4 py-3 rounded-xl shadow-2xl flex items-center gap-3 border animate-in fade-in slide-in-from-top-2 duration-200 ${
@@ -1886,7 +1873,7 @@ export default function Home() {
       {/* Main Container */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-2 sm:p-3 space-y-2 relative z-10">
         {/* Top Header Card - Floating Frosted Glass Bar */}
-        <div className="glass-panel rounded-xl px-3 py-1.5 sm:py-2 transition-all">
+        <div className="glass-panel rounded-xl px-3 py-1.5 sm:py-2">
           <div className="flex flex-wrap items-center justify-between gap-2">
             {/* Left: Brand & Live Online Users Widget */}
             <div className="flex items-center gap-2 sm:gap-2.5">
@@ -2381,7 +2368,7 @@ export default function Home() {
         )}
 
         {/* 8 Metric KPI - SINGLE COMPACT FROSTED GLASS CAPSULE */}
-        <div className={`glass-panel rounded-xl transition-all overflow-hidden grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 divide-y sm:divide-y-0 sm:divide-x ${
+        <div className={`glass-panel rounded-xl overflow-hidden grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 divide-y sm:divide-y-0 sm:divide-x ${
           isDarkMode
             ? "divide-white/[0.08]"
             : "divide-slate-200/60"
@@ -2502,10 +2489,10 @@ export default function Home() {
         {/* Filter and Search Bar Section - Sleek Compact Floating Capsule */}
         <div className="flex flex-wrap items-center justify-between gap-1.5 sm:gap-2">
           {/* Left: Floating Status Tabs Pills */}
-          <div className="glass-capsule p-0.5 rounded-xl flex flex-wrap items-center transition-all">
+          <div className="glass-capsule p-0.5 rounded-xl flex flex-wrap items-center">
             <button
               onClick={() => { setFilter("belum"); setPage(0); }}
-              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5 ${
                 filter === "belum"
                   ? (isDarkMode ? "bg-white text-slate-950 shadow-md" : "bg-slate-900 text-white shadow-md")
                   : (isDarkMode ? "text-slate-400 hover:text-white" : "text-slate-700 hover:text-slate-950")
@@ -2516,7 +2503,7 @@ export default function Home() {
             </button>
             <button
               onClick={() => { setFilter("all"); setPage(0); }}
-              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5 ${
                 filter === "all"
                   ? (isDarkMode ? "bg-white text-slate-950 shadow-md" : "bg-slate-900 text-white shadow-md")
                   : (isDarkMode ? "text-slate-400 hover:text-white" : "text-slate-700 hover:text-slate-950")
@@ -2526,7 +2513,7 @@ export default function Home() {
             </button>
             <button
               onClick={() => { setFilter("double"); setPage(0); }}
-              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5 ${
                 filter === "double"
                   ? "bg-rose-600 text-white shadow-md shadow-rose-600/30"
                   : (isDarkMode ? "text-rose-400 hover:text-rose-300" : "text-rose-700 hover:text-rose-900")
@@ -2536,7 +2523,7 @@ export default function Home() {
             </button>
             <button
               onClick={() => { setFilter("retur"); setPage(0); }}
-              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5 ${
                 filter === "retur"
                   ? "bg-amber-600 text-white shadow-md shadow-amber-600/30"
                   : (isDarkMode ? "text-amber-400 hover:text-amber-300" : "text-amber-700 hover:text-amber-900")
@@ -2549,7 +2536,7 @@ export default function Home() {
           {/* Right: Floating Search Input Capsule (⌘K / [/]) & Quick Actions */}
           <div className="flex flex-wrap items-center gap-1.5 flex-1 sm:flex-initial justify-end">
             {/* Search Input Capsule */}
-            <div className="glass-capsule relative flex items-center rounded-xl transition-all min-w-[200px] sm:min-w-[260px]">
+            <div className="glass-capsule relative flex items-center rounded-xl min-w-[200px] sm:min-w-[260px]">
               <span className="pl-2.5 text-xs text-slate-400">🔍</span>
               <input
                 ref={searchInputRef}
@@ -2572,7 +2559,7 @@ export default function Home() {
             {unprintedCountInFiltered > 0 && currentUser?.role !== "readonly" && (
               <button
                 onClick={handleMarkAllPrinted}
-                className="px-2.5 py-1 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1 shadow-md shadow-emerald-900/20 cursor-pointer"
+                className="px-2.5 py-1 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl text-xs font-bold transition-colors flex items-center gap-1 shadow-md shadow-emerald-900/20 cursor-pointer"
               >
                 <span>✓</span>
                 <span>Tandai Semua Selesai ({unprintedCountInFiltered})</span>
@@ -2582,7 +2569,7 @@ export default function Home() {
         </div>
 
         {/* Filter Dropdowns - Compact Frosted Glass Row */}
-        <div className="glass-capsule p-1 sm:p-1.5 rounded-xl transition-all grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+        <div className="glass-capsule p-1 sm:p-1.5 rounded-xl grid grid-cols-2 sm:grid-cols-4 gap-1.5">
           {/* Kategori Filter */}
           <select
             value={katFilter}
@@ -2650,7 +2637,7 @@ export default function Home() {
         </div>
 
         {/* Faktur Table Card - Frosted Crystal Glass Canvas */}
-        <div className="glass-panel rounded-xl overflow-hidden transition-all">
+        <div className="glass-panel rounded-xl overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
