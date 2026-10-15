@@ -1855,9 +1855,21 @@ export default function Home() {
   };
 
   return (
-    <div className={`min-h-screen flex flex-col font-sans transition-colors duration-200 ${
-      isDarkMode ? "bg-[#0b1120] text-slate-100" : "bg-slate-50 text-slate-800"
+    <div className={`min-h-screen flex flex-col font-sans transition-colors duration-200 relative overflow-hidden ${
+      isDarkMode
+        ? "bg-[#070A12] text-slate-100 selection:bg-blue-500/30"
+        : "bg-[#F4F6FB] text-slate-800 selection:bg-blue-500/20"
     }`}>
+      {/* Ambient Luxury Caustic Glows */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
+        <div className={`absolute -top-40 -left-40 w-96 h-96 rounded-full blur-3xl opacity-20 ${
+          isDarkMode ? "bg-indigo-600" : "bg-blue-400"
+        }`} />
+        <div className={`absolute top-1/2 -right-40 w-96 h-96 rounded-full blur-3xl opacity-15 ${
+          isDarkMode ? "bg-emerald-600" : "bg-teal-300"
+        }`} />
+      </div>
+
       {/* Toast Notification */}
       {toastMsg && (
         <div className={`fixed top-5 right-5 z-50 px-4 py-3 rounded-xl shadow-2xl flex items-center gap-3 border animate-in fade-in slide-in-from-top-2 duration-200 ${
@@ -1869,28 +1881,34 @@ export default function Home() {
       )}
 
       {/* Main Container */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-2.5 sm:p-4 space-y-2.5">
-        {/* Top Header Card - Compact, Space-saving & Live Active Users */}
-        <div className={`border rounded-xl px-3 py-2 shadow-xs transition-colors ${
-          isDarkMode ? "bg-[#111c33]/90 border-slate-700/60 text-slate-100 shadow-black/20" : "bg-white border-slate-200 text-slate-900"
+      <main className="flex-1 max-w-7xl w-full mx-auto p-2.5 sm:p-4 space-y-2.5 relative z-10">
+        {/* Top Header Card - Floating Frosted Glass Bar */}
+        <div className={`border rounded-2xl px-3.5 py-2.5 shadow-xl transition-all backdrop-blur-xl ${
+          isDarkMode
+            ? "bg-[#0D1424]/80 border-white/[0.08] text-slate-100 shadow-black/40"
+            : "bg-white/80 border-slate-200/80 text-slate-900 shadow-slate-200/50"
         }`}>
           <div className="flex flex-wrap items-center justify-between gap-2">
             {/* Left: Brand & Live Online Users Widget */}
             <div className="flex items-center gap-2.5 sm:gap-3">
-              <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-lg bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center font-black shadow-sm shadow-blue-500/30 text-xs tracking-tighter select-none">
-                  FT
-                </div>
+              <div className="flex items-center gap-2.5">
+                <img
+                  src="/logo-3d.png"
+                  alt="FT 3D Glass Logo"
+                  className="w-8 h-8 object-contain rounded-lg drop-shadow-md select-none"
+                />
                 <div>
                   <div className="flex items-center gap-1.5 leading-tight">
-                    <span className="font-bold text-sm tracking-tight">Faktur Tracker</span>
+                    <span className="font-extrabold text-sm tracking-wide bg-gradient-to-r from-white via-slate-100 to-slate-300 dark:from-white dark:to-slate-300 bg-clip-text text-transparent">
+                      FAKTUR TRACKER
+                    </span>
                     <button
                       type="button"
                       onClick={() => setShowChangelogModal(true)}
                       className={`text-[9px] px-1.5 py-0.5 rounded-full font-semibold border transition-all cursor-pointer inline-flex items-center gap-1 ${
                         isDarkMode
-                          ? "bg-blue-950/80 hover:bg-blue-900 text-blue-300 border-blue-700/60 shadow-xs"
-                          : "bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-300 shadow-xs"
+                          ? "bg-blue-950/60 hover:bg-blue-900/80 text-blue-300 border-blue-500/30 shadow-xs"
+                          : "bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-200 shadow-xs"
                       }`}
                       title="Klik untuk melihat catatan pembaruan & perbaikan v2.1"
                     >
@@ -1898,7 +1916,7 @@ export default function Home() {
                       v2.1
                     </button>
                   </div>
-                  <span className={`text-[10px] hidden md:inline leading-none ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>
+                  <span className={`text-[10px] hidden md:inline leading-none font-medium ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>
                     Oracle ERP Live Tracker
                   </span>
                 </div>
@@ -2349,174 +2367,174 @@ export default function Home() {
           </div>
         )}
 
-        {/* 8 Metric KPI Cards Grid - Refined Modern Gradients */}
+        {/* 8 Metric KPI Cards Grid - Frosted Crystal Glass Capsule */}
         <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2">
           {/* Card 1: Belum Terprint */}
-          <div className={`border rounded-xl p-2 sm:p-2.5 shadow-xs transition-colors flex flex-col justify-between ${
+          <div className={`border rounded-2xl p-2.5 shadow-lg transition-all backdrop-blur-xl flex flex-col justify-between ${
             isDarkMode
-              ? "bg-gradient-to-br from-amber-950/50 via-[#111c33] to-[#111c33] border-amber-500/40 text-amber-200 shadow-amber-950/20"
-              : "bg-white border-amber-200 text-amber-800 bg-gradient-to-br from-amber-50/50 to-white"
+              ? "bg-gradient-to-br from-amber-500/15 via-[#0D1424]/80 to-[#0D1424]/80 border-amber-500/35 text-amber-200 shadow-amber-950/20"
+              : "bg-white/80 border-amber-200/80 text-amber-900 bg-gradient-to-br from-amber-50/70 to-white/80 shadow-slate-200/50"
           }`}>
             <div className={`flex items-center justify-between text-[11px] ${isDarkMode ? "text-amber-300 font-semibold" : "text-amber-700 font-bold"}`}>
               <span>Belum Terprint</span>
-              <span>⏱️</span>
+              <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
             </div>
-            <div className={`text-base font-extrabold font-mono my-0.5 ${isDarkMode ? "text-amber-300" : "text-amber-800"}`}>
+            <div className={`text-lg font-black font-mono my-0.5 tracking-tight ${isDarkMode ? "text-amber-300 drop-shadow-[0_0_8px_rgba(251,191,36,0.3)]" : "text-amber-700"}`}>
               {stats.belumCount}
             </div>
-            <div className={`text-[10px] truncate font-medium ${isDarkMode ? "text-amber-400" : "text-amber-600"}`}>
+            <div className={`text-[10px] truncate font-medium ${isDarkMode ? "text-amber-400/90" : "text-amber-600"}`}>
               Perlu dicetak
             </div>
           </div>
 
           {/* Card 2: Total SO */}
-          <div className={`border rounded-xl p-2 sm:p-2.5 shadow-xs transition-colors flex flex-col justify-between ${
+          <div className={`border rounded-2xl p-2.5 shadow-lg transition-all backdrop-blur-xl flex flex-col justify-between ${
             isDarkMode
-              ? "bg-gradient-to-br from-blue-950/40 via-[#111c33] to-[#111c33] border-blue-500/25 text-blue-100"
-              : "bg-white border-slate-200 text-slate-900"
+              ? "bg-[#0D1424]/80 border-white/[0.08] hover:border-white/[0.15] text-slate-100 shadow-black/30"
+              : "bg-white/80 border-slate-200/80 text-slate-900 shadow-slate-200/50"
           }`}>
             <div className={`flex items-center justify-between text-[11px] ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>
               <span className="font-semibold">Total SO</span>
-              <span>📄</span>
+              <span className="text-xs">📄</span>
             </div>
-            <div className={`text-base font-extrabold font-mono my-0.5 ${isDarkMode ? "text-white" : "text-slate-900"}`}>
+            <div className={`text-lg font-black font-mono my-0.5 tracking-tight ${isDarkMode ? "text-white" : "text-slate-900"}`}>
               {stats.totalSO}
             </div>
-            <div className={`text-[10px] truncate ${isDarkMode ? "text-slate-400" : "text-slate-400"}`}>
+            <div className="text-[10px] truncate text-slate-400">
               SO Terdata
             </div>
           </div>
 
           {/* Card 3: Total Faktur */}
-          <div className={`border rounded-xl p-2 sm:p-2.5 shadow-xs transition-colors flex flex-col justify-between ${
+          <div className={`border rounded-2xl p-2.5 shadow-lg transition-all backdrop-blur-xl flex flex-col justify-between ${
             isDarkMode
-              ? "bg-gradient-to-br from-indigo-950/40 via-[#111c33] to-[#111c33] border-indigo-500/25 text-indigo-100"
-              : "bg-white border-slate-200 text-slate-900"
+              ? "bg-[#0D1424]/80 border-white/[0.08] hover:border-white/[0.15] text-slate-100 shadow-black/30"
+              : "bg-white/80 border-slate-200/80 text-slate-900 shadow-slate-200/50"
           }`}>
             <div className={`flex items-center justify-between text-[11px] ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>
               <span className="font-semibold">Total Faktur</span>
-              <span>📑</span>
+              <span className="text-xs">📑</span>
             </div>
-            <div className={`text-base font-extrabold font-mono my-0.5 ${isDarkMode ? "text-white" : "text-slate-900"}`}>
+            <div className={`text-lg font-black font-mono my-0.5 tracking-tight ${isDarkMode ? "text-white" : "text-slate-900"}`}>
               {stats.totalCount}
             </div>
-            <div className={`text-[10px] truncate ${isDarkMode ? "text-slate-400" : "text-slate-400"}`}>
+            <div className="text-[10px] truncate text-slate-400">
               Semua Faktur
             </div>
           </div>
 
           {/* Card 4: 1P ORA */}
-          <div className={`border rounded-xl p-2 sm:p-2.5 shadow-xs transition-colors flex flex-col justify-between ${
+          <div className={`border rounded-2xl p-2.5 shadow-lg transition-all backdrop-blur-xl flex flex-col justify-between ${
             isDarkMode
-              ? "bg-gradient-to-br from-sky-950/40 via-[#111c33] to-[#111c33] border-sky-500/25 text-sky-100"
-              : "bg-white border-slate-200 text-slate-900"
+              ? "bg-[#0D1424]/80 border-sky-500/25 text-sky-100 shadow-black/30"
+              : "bg-white/80 border-slate-200/80 text-slate-900 shadow-slate-200/50"
           }`}>
             <div className={`flex items-center justify-between text-[11px] ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>
-              <span className="font-semibold truncate">1P ORA (Max)</span>
-              <span className={`text-[9px] px-1 py-0.2 rounded font-bold ${
-                isDarkMode ? "bg-sky-950 text-sky-300 border border-sky-700/50" : "bg-blue-100 text-blue-800"
+              <span className="font-semibold truncate">1P ORA</span>
+              <span className={`text-[9px] px-1.5 py-0.2 rounded font-bold ${
+                isDarkMode ? "bg-sky-950/80 text-sky-300 border border-sky-700/50" : "bg-blue-100 text-blue-800"
               }`}>ORA</span>
             </div>
             <div className={`text-base font-bold font-mono my-0.5 ${isDarkMode ? "text-sky-200" : "text-slate-900"}`}>
               {highestInvoices.maxOraStr}
             </div>
-            <div className={`text-[10px] truncate ${isDarkMode ? "text-slate-400" : "text-slate-400"}`} title={invoiceProgression?.rangeOra || ""}>
+            <div className="text-[10px] truncate text-slate-400" title={invoiceProgression?.rangeOra || ""}>
               {invoiceProgression?.rangeOra ? `R: ${invoiceProgression.rangeOra}` : "Belum ada"}
             </div>
           </div>
 
           {/* Card 5: 1P DOO */}
-          <div className={`border rounded-xl p-2 sm:p-2.5 shadow-xs transition-colors flex flex-col justify-between ${
+          <div className={`border rounded-2xl p-2.5 shadow-lg transition-all backdrop-blur-xl flex flex-col justify-between ${
             isDarkMode
-              ? "bg-gradient-to-br from-teal-950/40 via-[#111c33] to-[#111c33] border-teal-500/25 text-teal-100"
-              : "bg-white border-slate-200 text-slate-900"
+              ? "bg-[#0D1424]/80 border-teal-500/25 text-teal-100 shadow-black/30"
+              : "bg-white/80 border-slate-200/80 text-slate-900 shadow-slate-200/50"
           }`}>
             <div className={`flex items-center justify-between text-[11px] ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>
-              <span className="font-semibold truncate">1P DOO (Max)</span>
-              <span className={`text-[9px] px-1 py-0.2 rounded font-bold ${
-                isDarkMode ? "bg-teal-950 text-teal-300 border border-teal-700/50" : "bg-blue-100 text-blue-800"
-              }`}>1P DOO</span>
+              <span className="font-semibold truncate">1P DOO</span>
+              <span className={`text-[9px] px-1.5 py-0.2 rounded font-bold ${
+                isDarkMode ? "bg-teal-950/80 text-teal-300 border border-teal-700/50" : "bg-blue-100 text-blue-800"
+              }`}>DOO</span>
             </div>
             <div className={`text-base font-bold font-mono my-0.5 ${isDarkMode ? "text-teal-200" : "text-slate-900"}`}>
               {highestInvoices.max1PDooStr}
             </div>
-            <div className={`text-[10px] truncate ${isDarkMode ? "text-slate-400" : "text-slate-400"}`} title={invoiceProgression?.range1PDoo || ""}>
+            <div className="text-[10px] truncate text-slate-400" title={invoiceProgression?.range1PDoo || ""}>
               {invoiceProgression?.range1PDoo ? `R: ${invoiceProgression.range1PDoo}` : "Belum ada"}
             </div>
           </div>
 
           {/* Card 6: 2P */}
-          <div className={`border rounded-xl p-2 sm:p-2.5 shadow-xs transition-colors flex flex-col justify-between ${
+          <div className={`border rounded-2xl p-2.5 shadow-lg transition-all backdrop-blur-xl flex flex-col justify-between ${
             isDarkMode
-              ? "bg-gradient-to-br from-emerald-950/40 via-[#111c33] to-[#111c33] border-emerald-500/25 text-emerald-100"
-              : "bg-white border-slate-200 text-slate-900"
+              ? "bg-[#0D1424]/80 border-emerald-500/25 text-emerald-100 shadow-black/30"
+              : "bg-white/80 border-slate-200/80 text-slate-900 shadow-slate-200/50"
           }`}>
             <div className={`flex items-center justify-between text-[11px] ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>
               <span className="font-semibold">2P (Max)</span>
-              <span className={`text-[9px] px-1 py-0.2 rounded font-bold ${
-                isDarkMode ? "bg-emerald-950 text-emerald-300 border border-emerald-700/50" : "bg-emerald-100 text-emerald-800"
+              <span className={`text-[9px] px-1.5 py-0.2 rounded font-bold ${
+                isDarkMode ? "bg-emerald-950/80 text-emerald-300 border border-emerald-700/50" : "bg-emerald-100 text-emerald-800"
               }`}>2P</span>
             </div>
             <div className={`text-base font-bold font-mono my-0.5 ${isDarkMode ? "text-emerald-200" : "text-slate-900"}`}>
               {highestInvoices.max2PStr}
             </div>
-            <div className={`text-[10px] truncate ${isDarkMode ? "text-slate-400" : "text-slate-400"}`} title={invoiceProgression?.range2P || ""}>
+            <div className="text-[10px] truncate text-slate-400" title={invoiceProgression?.range2P || ""}>
               {invoiceProgression?.range2P ? `R: ${invoiceProgression.range2P}` : "Belum ada"}
             </div>
           </div>
 
           {/* Card 7: 3P */}
-          <div className={`border rounded-xl p-2 sm:p-2.5 shadow-xs transition-colors flex flex-col justify-between ${
+          <div className={`border rounded-2xl p-2.5 shadow-lg transition-all backdrop-blur-xl flex flex-col justify-between ${
             isDarkMode
-              ? "bg-gradient-to-br from-purple-950/40 via-[#111c33] to-[#111c33] border-purple-500/25 text-purple-100"
-              : "bg-white border-slate-200 text-slate-900"
+              ? "bg-[#0D1424]/80 border-purple-500/25 text-purple-100 shadow-black/30"
+              : "bg-white/80 border-slate-200/80 text-slate-900 shadow-slate-200/50"
           }`}>
             <div className={`flex items-center justify-between text-[11px] ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>
               <span className="font-semibold">3P (Max)</span>
-              <span className={`text-[9px] px-1 py-0.2 rounded font-bold ${
-                isDarkMode ? "bg-purple-950 text-purple-300 border border-purple-700/50" : "bg-purple-100 text-purple-800"
+              <span className={`text-[9px] px-1.5 py-0.2 rounded font-bold ${
+                isDarkMode ? "bg-purple-950/80 text-purple-300 border border-purple-700/50" : "bg-purple-100 text-purple-800"
               }`}>3P</span>
             </div>
             <div className={`text-base font-bold font-mono my-0.5 ${isDarkMode ? "text-purple-200" : "text-slate-900"}`}>
               {highestInvoices.max3PStr}
             </div>
-            <div className={`text-[10px] truncate ${isDarkMode ? "text-slate-400" : "text-slate-400"}`} title={invoiceProgression?.range3P || ""}>
+            <div className="text-[10px] truncate text-slate-400" title={invoiceProgression?.range3P || ""}>
               {invoiceProgression?.range3P ? `R: ${invoiceProgression.range3P}` : "Belum ada"}
             </div>
           </div>
 
           {/* Card 8: Double Invoice */}
-          <div className={`border rounded-xl p-2 sm:p-2.5 shadow-xs transition-colors flex flex-col justify-between ${
+          <div className={`border rounded-2xl p-2.5 shadow-lg transition-all backdrop-blur-xl flex flex-col justify-between ${
             isDarkMode
-              ? "bg-gradient-to-br from-rose-950/50 via-[#111c33] to-[#111c33] border-rose-500/40 text-rose-200 shadow-rose-950/20"
-              : "bg-white border-slate-200 text-slate-900"
+              ? "bg-gradient-to-br from-rose-500/15 via-[#0D1424]/80 to-[#0D1424]/80 border-rose-500/35 text-rose-200 shadow-rose-950/20"
+              : "bg-white/80 border-slate-200/80 text-slate-900 shadow-slate-200/50"
           }`}>
             <div className={`flex items-center justify-between text-[11px] ${isDarkMode ? "text-rose-300 font-semibold" : "text-slate-500"}`}>
               <span>Double INV</span>
               <span className="text-[10px] text-rose-400 font-bold">⚠️</span>
             </div>
-            <div className="text-base font-extrabold text-rose-400 font-mono my-0.5">
+            <div className="text-lg font-black text-rose-400 font-mono my-0.5 tracking-tight">
               {stats.doubleCount}
             </div>
-            <div className="text-[10px] truncate text-rose-400/90">
+            <div className="text-[10px] truncate text-rose-400/90 font-medium">
               Perlu dicek
             </div>
           </div>
         </div>
 
-        {/* Filter and Search Bar Section - Ultra Compact */}
-        <div className={`border rounded-xl px-2.5 py-1.5 shadow-xs space-y-1.5 transition-colors ${
-          isDarkMode ? "bg-[#111c33]/90 border-slate-700/60 shadow-black/20" : "bg-white border-slate-200"
+        {/* Filter and Search Bar Section - Frosted Glass Capsule */}
+        <div className={`border rounded-2xl px-3 py-2 shadow-xl space-y-2 transition-all backdrop-blur-xl ${
+          isDarkMode ? "bg-[#0D1424]/80 border-white/[0.08] shadow-black/30" : "bg-white/80 border-slate-200/80 shadow-slate-200/50"
         }`}>
           {/* Top Row Filters */}
-          <div className="flex flex-wrap items-center justify-between gap-1.5">
-            {/* Status Filter Tabs */}
-            <div className={`flex flex-wrap items-center p-0.5 rounded-lg ${isDarkMode ? "bg-[#0b1220] border border-slate-800" : "bg-slate-100"}`}>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            {/* Status Filter Tabs - Floating Pill Style */}
+            <div className={`flex flex-wrap items-center p-1 rounded-xl ${isDarkMode ? "bg-[#070A12]/80 border border-white/[0.06]" : "bg-slate-100"}`}>
               <button
                 onClick={() => { setFilter("belum"); setPage(0); }}
-                className={`px-2 py-0.5 rounded-md text-xs font-bold transition-all ${
+                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                   filter === "belum"
-                    ? (isDarkMode ? "bg-[#1e2c4a] text-blue-300 shadow-xs border border-blue-500/30" : "bg-white text-slate-900 shadow-xs")
+                    ? (isDarkMode ? "bg-blue-600 text-white shadow-md shadow-blue-600/30" : "bg-white text-slate-900 shadow-xs")
                     : (isDarkMode ? "text-slate-400 hover:text-white" : "text-slate-600 hover:text-slate-900")
                 }`}
               >
@@ -2524,9 +2542,9 @@ export default function Home() {
               </button>
               <button
                 onClick={() => { setFilter("all"); setPage(0); }}
-                className={`px-2 py-0.5 rounded-md text-xs font-bold transition-all ${
+                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                   filter === "all"
-                    ? (isDarkMode ? "bg-[#1e2c4a] text-blue-300 shadow-xs border border-blue-500/30" : "bg-white text-slate-900 shadow-xs")
+                    ? (isDarkMode ? "bg-blue-600 text-white shadow-md shadow-blue-600/30" : "bg-white text-slate-900 shadow-xs")
                     : (isDarkMode ? "text-slate-400 hover:text-white" : "text-slate-600 hover:text-slate-900")
                 }`}
               >
@@ -2534,9 +2552,9 @@ export default function Home() {
               </button>
               <button
                 onClick={() => { setFilter("double"); setPage(0); }}
-                className={`px-2 py-0.5 rounded-md text-xs font-bold transition-all ${
+                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                   filter === "double"
-                    ? (isDarkMode ? "bg-rose-950 text-rose-300 shadow-xs border border-rose-800" : "bg-white text-rose-700 shadow-xs")
+                    ? (isDarkMode ? "bg-rose-600 text-white shadow-md shadow-rose-600/30" : "bg-white text-rose-700 shadow-xs")
                     : (isDarkMode ? "text-rose-400 hover:text-rose-300" : "text-rose-600 hover:text-rose-800")
                 }`}
               >
@@ -2544,9 +2562,9 @@ export default function Home() {
               </button>
               <button
                 onClick={() => { setFilter("retur"); setPage(0); }}
-                className={`px-2 py-0.5 rounded-md text-xs font-bold transition-all ${
+                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                   filter === "retur"
-                    ? (isDarkMode ? "bg-amber-950 text-amber-300 shadow-xs border border-amber-800" : "bg-white text-amber-700 shadow-xs")
+                    ? (isDarkMode ? "bg-amber-600 text-white shadow-md shadow-amber-600/30" : "bg-white text-amber-700 shadow-xs")
                     : (isDarkMode ? "text-amber-400 hover:text-amber-300" : "text-amber-600 hover:text-amber-800")
                 }`}
               >
@@ -2654,33 +2672,33 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Faktur Table Card */}
-        <div className={`border rounded-xl shadow-xs overflow-hidden transition-colors ${
-          isDarkMode ? "bg-[#111c33]/90 border-slate-700/60 shadow-black/20" : "bg-white border-slate-200"
+        {/* Faktur Table Card - Frosted Crystal Glass Canvas */}
+        <div className={`border rounded-2xl shadow-2xl overflow-hidden transition-all backdrop-blur-xl ${
+          isDarkMode ? "bg-[#0D1424]/80 border-white/[0.08] shadow-black/40" : "bg-white/80 border-slate-200/80 shadow-slate-200/50"
         }`}>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
                 <tr className={`border-b font-semibold transition-colors ${
                   isDarkMode
-                    ? "bg-[#16223d] border-slate-700/80 text-slate-300"
-                    : "bg-slate-100/80 border-slate-200 text-slate-600"
+                    ? "bg-[#101A2E]/90 border-white/[0.06] text-slate-300"
+                    : "bg-slate-100/90 border-slate-200 text-slate-600"
                 }`}>
-                  <th className="px-2.5 py-1.5 w-7 text-center">#</th>
-                  <th className="px-2.5 py-1.5 w-10 text-center">Print</th>
-                  <th className="px-2.5 py-1.5">No SO</th>
-                  <th className="px-2.5 py-1.5">No Invoice</th>
-                  <th className="px-2.5 py-1.5">Kat Produk</th>
-                  <th className="px-2.5 py-1.5">Jenis</th>
-                  <th className="px-2.5 py-1.5">Pelanggan</th>
-                  <th className="px-2.5 py-1.5" title="Tanggal Faktur / Invoice Date (Transaction Date)">Tgl Faktur</th>
-                  <th className="px-2.5 py-1.5" title="Tanggal Sales Order Masuk (Order Date)">Tgl Order</th>
-                  <th className="px-2.5 py-1.5">Kat</th>
-                  <th className="px-2.5 py-1.5">Done Print (Waktu)</th>
-                  <th className="px-2.5 py-1.5 text-right" title="Grand Total sudah termasuk PPN 11% (sesuai faktur fisik)">Total (+PPN)</th>
+                  <th className="px-3 py-2 w-7 text-center">#</th>
+                  <th className="px-3 py-2 w-10 text-center">Print</th>
+                  <th className="px-3 py-2">No SO</th>
+                  <th className="px-3 py-2">No Invoice</th>
+                  <th className="px-3 py-2">Kat Produk</th>
+                  <th className="px-3 py-2">Jenis</th>
+                  <th className="px-3 py-2">Pelanggan</th>
+                  <th className="px-3 py-2" title="Tanggal Faktur / Invoice Date (Transaction Date)">Tgl Faktur</th>
+                  <th className="px-3 py-2" title="Tanggal Sales Order Masuk (Order Date)">Tgl Order</th>
+                  <th className="px-3 py-2">Kat</th>
+                  <th className="px-3 py-2">Done Print (Waktu)</th>
+                  <th className="px-3 py-2 text-right" title="Grand Total sudah termasuk PPN 11% (sesuai faktur fisik)">Total (+PPN)</th>
                 </tr>
               </thead>
-              <tbody className={`divide-y ${isDarkMode ? "divide-slate-800/80" : "divide-slate-100"}`}>
+              <tbody className={`divide-y ${isDarkMode ? "divide-white/[0.04]" : "divide-slate-100"}`}>
                 {loading && records.length === 0 ? (
                   <tr>
                     <td colSpan={12} className={`text-center py-8 ${isDarkMode ? "text-slate-400" : "text-slate-400"}`}>
