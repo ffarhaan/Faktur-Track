@@ -1884,14 +1884,14 @@ export default function Home() {
       )}
 
       {/* Main Container */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-2.5 sm:p-4 space-y-2.5 relative z-10">
+      <main className="flex-1 max-w-7xl w-full mx-auto p-2 sm:p-3 space-y-2 relative z-10">
         {/* Top Header Card - Floating Frosted Glass Bar */}
-        <div className="glass-panel rounded-2xl px-3.5 py-2.5 transition-all">
+        <div className="glass-panel rounded-xl px-3 py-1.5 sm:py-2 transition-all">
           <div className="flex flex-wrap items-center justify-between gap-2">
             {/* Left: Brand & Live Online Users Widget */}
-            <div className="flex items-center gap-2.5 sm:gap-3">
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-slate-950 p-1 flex items-center justify-center shadow-md border border-slate-800/80 shrink-0">
+            <div className="flex items-center gap-2 sm:gap-2.5">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-slate-950 p-0.5 flex items-center justify-center shadow-md border border-slate-800/80 shrink-0">
                   <img
                     src="/logo-3d.png"
                     alt="FT 3D Glass Logo"
@@ -1900,7 +1900,7 @@ export default function Home() {
                 </div>
                 <div>
                   <div className="flex items-center gap-1.5 leading-tight">
-                    <span className={`font-black text-sm sm:text-base tracking-wider ${
+                    <span className={`font-black text-xs sm:text-sm tracking-wider ${
                       isDarkMode ? "text-white" : "text-slate-900"
                     }`}>
                       FAKTUR TRACKER
@@ -1908,7 +1908,7 @@ export default function Home() {
                     <button
                       type="button"
                       onClick={() => setShowChangelogModal(true)}
-                      className={`text-[9px] px-1.5 py-0.5 rounded-full font-semibold border transition-all cursor-pointer inline-flex items-center gap-1 ${
+                      className={`text-[9px] px-1.5 py-0.2 rounded-full font-semibold border transition-all cursor-pointer inline-flex items-center gap-1 ${
                         isDarkMode
                           ? "bg-blue-950/60 hover:bg-blue-900/80 text-blue-300 border-blue-500/30 shadow-xs"
                           : "bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-200 shadow-xs"
@@ -1919,7 +1919,7 @@ export default function Home() {
                       v2.1
                     </button>
                   </div>
-                  <span className={`text-[10px] hidden md:inline leading-none font-medium ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>
+                  <span className={`text-[9px] hidden md:inline leading-none font-medium ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>
                     Oracle ERP Live Tracker
                   </span>
                 </div>
@@ -1930,19 +1930,19 @@ export default function Home() {
                 <button
                   type="button"
                   onClick={() => setShowOnlinePopover((prev) => !prev)}
-                  className={`px-2.5 py-1 rounded-full text-xs font-semibold flex items-center gap-1.5 border transition-all shadow-xs ${
+                  className={`px-2 py-0.5 rounded-full text-[11px] font-semibold flex items-center gap-1.5 border transition-all shadow-xs ${
                     isDarkMode
                       ? "bg-emerald-950/40 hover:bg-emerald-900/60 border-emerald-700/60 text-emerald-300"
                       : "bg-emerald-50 hover:bg-emerald-100 border-emerald-300 text-emerald-800"
                   }`}
                   title="Klik untuk melihat siapa saja yang sedang ON & melihat sistem ini"
                 >
-                  <span className="relative flex h-2 w-2">
+                  <span className="relative flex h-1.5 w-1.5">
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                    <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
                   </span>
                   <span>Online ({onlineUsers.filter(u => u && u.name).length}):</span>
-                  <span className="font-bold max-w-[120px] sm:max-w-[200px] truncate text-left">
+                  <span className="font-bold max-w-[100px] sm:max-w-[160px] truncate text-left">
                     {onlineUsers.filter(u => u && u.name).length > 0
                       ? onlineUsers
                           .filter(u => u && u.name)
@@ -1950,7 +1950,7 @@ export default function Home() {
                           .join(", ")
                       : currentUser?.name || "Menghubungkan..."}
                   </span>
-                  <span className="text-[9px] opacity-70">▼</span>
+                  <span className="text-[8px] opacity-70">▼</span>
                 </button>
 
                 {/* Popover Card */}
@@ -2044,7 +2044,7 @@ export default function Home() {
             </div>
 
             {/* Right: Compact Actions Toolbar */}
-            <div className="flex items-center gap-1.5 sm:gap-2 ml-auto">
+            <div className="flex items-center gap-1.5 ml-auto">
 
               {/* Upload Button */}
               <label
@@ -2070,7 +2070,7 @@ export default function Home() {
                     showToast("⚠️ Akses Stranger: Anda hanya dapat melihat data (Read Only).");
                   }
                 }}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-md ${
+                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm ${
                   currentUser?.role === "readonly"
                     ? "opacity-50 cursor-not-allowed bg-slate-300 text-slate-500"
                     : dragOver
@@ -2100,10 +2100,10 @@ export default function Home() {
               <button
                 type="button"
                 onClick={handleExportExcel}
-                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 border shadow-xs cursor-pointer ${
+                className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all flex items-center gap-1 border shadow-2xs cursor-pointer ${
                   isDarkMode
-                    ? "bg-[#141E34] hover:bg-[#1C2A48] border-white/[0.08] text-slate-200"
-                    : "bg-white hover:bg-slate-50 border-slate-200 text-slate-700 shadow-slate-100"
+                    ? "bg-[#141E34]/80 hover:bg-[#1C2A48] border-white/[0.08] text-slate-200"
+                    : "bg-white/80 hover:bg-white border-white/90 text-slate-700 shadow-slate-100"
                 }`}
                 title="Ekspor Data ke Excel (.xlsx)"
               >
@@ -2115,10 +2115,10 @@ export default function Home() {
               <button
                 onClick={handleManualRefresh}
                 disabled={loading}
-                className={`p-1.5 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1 border ${
+                className={`p-1 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1 border ${
                   isDarkMode
-                    ? "bg-[#141E34] hover:bg-[#1C2A48] border-white/[0.08] text-slate-200"
-                    : "bg-white hover:bg-slate-100 border-slate-200 text-slate-700"
+                    ? "bg-[#141E34]/80 hover:bg-[#1C2A48] border-white/[0.08] text-slate-200"
+                    : "bg-white/80 hover:bg-white border-white/90 text-slate-700"
                 }`}
                 title="Refresh Data dari Server"
               >
@@ -2129,10 +2129,10 @@ export default function Home() {
               <button
                 type="button"
                 onClick={() => setShowSettingsPanel(true)}
-                className={`p-1.5 sm:px-2.5 sm:py-1.5 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5 border ${
+                className={`p-1 sm:px-2 sm:py-1 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1 border ${
                   isDarkMode
-                    ? "bg-[#141E34] hover:bg-[#1C2A48] border-white/[0.08] text-slate-200"
-                    : "bg-white hover:bg-slate-100 border-slate-200 text-slate-700"
+                    ? "bg-[#141E34]/80 hover:bg-[#1C2A48] border-white/[0.08] text-slate-200"
+                    : "bg-white/80 hover:bg-white border-white/90 text-slate-700"
                 }`}
                 title="Buka Panel Pengaturan"
               >
@@ -2146,7 +2146,7 @@ export default function Home() {
               {/* User Pill */}
               <button
                 onClick={() => setShowLoginModal(true)}
-                className={`px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 border shadow-xs cursor-pointer ${
+                className={`px-2 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1 border shadow-2xs cursor-pointer ${
                   !currentUser
                     ? "bg-rose-500 text-white animate-pulse"
                     : currentUser?.role === "readonly"
@@ -2337,32 +2337,28 @@ export default function Home() {
 
         {/* Upload Notification Banner */}
         {uploadNotification && (
-          <div className={`border rounded-xl p-3 text-xs flex items-start justify-between gap-2 shadow-xs ${
-            isDarkMode ? "bg-gradient-to-r from-blue-950/70 to-indigo-950/70 border-blue-700/60 text-blue-200 shadow-blue-950/20" : "bg-blue-50 border-blue-200 text-blue-900"
+          <div className={`border rounded-xl px-3 py-1.5 text-xs flex items-center justify-between gap-2 shadow-xs ${
+            isDarkMode ? "bg-gradient-to-r from-blue-950/70 to-indigo-950/70 border-blue-700/60 text-blue-200 shadow-blue-950/20" : "bg-blue-50/90 border-blue-200 text-blue-900"
           }`}>
-            <div className="flex items-start gap-2.5">
-              <span className="text-base">📋</span>
-              <div className="space-y-0.5">
-                <div className="font-bold flex items-center gap-2">
-                  <span>File Berhasil Diunggah: <span className="underline">{uploadNotification.fileName}</span></span>
-                  <span className={`text-[10px] px-1.5 py-0.2 rounded font-semibold ${
-                    isDarkMode ? "bg-blue-900/80 text-blue-200 border border-blue-700/50" : "bg-blue-200/80 text-blue-800"
-                  }`}>{uploadNotification.time}</span>
-                </div>
-                <div className={`flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] ${isDarkMode ? "text-blue-300" : "text-blue-800/90"}`}>
-                  {uploadNotification.rangeOra && (
-                    <span>• <strong>ORA</strong>: {uploadNotification.rangeOra}</span>
-                  )}
-                  {uploadNotification.rangeDoo && (
-                    <span>• <strong>DOO</strong>: {uploadNotification.rangeDoo}</span>
-                  )}
-                  <span>• Faktur Baru Masuk: <strong>{uploadNotification.newUnprinted} faktur</strong></span>
-                </div>
+            <div className="flex items-center gap-2">
+              <span className="text-sm">📋</span>
+              <div className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-[11px]">
+                <span className="font-bold">{uploadNotification.fileName}</span>
+                <span className={`text-[9px] px-1 py-0.2 rounded font-semibold ${
+                  isDarkMode ? "bg-blue-900/80 text-blue-200" : "bg-blue-200/80 text-blue-800"
+                }`}>{uploadNotification.time}</span>
+                {uploadNotification.rangeOra && (
+                  <span>• <strong>ORA</strong>: {uploadNotification.rangeOra}</span>
+                )}
+                {uploadNotification.rangeDoo && (
+                  <span>• <strong>DOO</strong>: {uploadNotification.rangeDoo}</span>
+                )}
+                <span>• Baru Masuk: <strong>{uploadNotification.newUnprinted} faktur</strong></span>
               </div>
             </div>
             <button
               onClick={() => setUploadNotification(null)}
-              className={`p-0.5 rounded ${isDarkMode ? "text-blue-400 hover:text-white" : "text-blue-400 hover:text-blue-700"}`}
+              className={`p-0.5 rounded text-xs ${isDarkMode ? "text-blue-400 hover:text-white" : "text-blue-400 hover:text-blue-700"}`}
             >
               ✕
             </button>
@@ -2371,7 +2367,7 @@ export default function Home() {
 
         {/* Error Banner */}
         {error && (
-          <div className={`border rounded-xl p-2.5 text-xs flex items-center justify-between gap-2 ${
+          <div className={`border rounded-xl px-3 py-1.5 text-xs flex items-center justify-between gap-2 ${
             isDarkMode ? "bg-rose-950/60 border-rose-800 text-rose-300" : "bg-rose-50 border-rose-200 text-rose-800"
           }`}>
             <div className="flex items-center gap-1.5 font-medium">
@@ -2384,143 +2380,143 @@ export default function Home() {
           </div>
         )}
 
-        {/* 8 Metric KPI - SINGLE UNIFIED FROSTED GLASS CAPSULE (Sesuai Mockup) */}
-        <div className={`glass-panel rounded-2xl transition-all overflow-hidden grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 divide-y sm:divide-y-0 sm:divide-x ${
+        {/* 8 Metric KPI - SINGLE COMPACT FROSTED GLASS CAPSULE */}
+        <div className={`glass-panel rounded-xl transition-all overflow-hidden grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 divide-y sm:divide-y-0 sm:divide-x ${
           isDarkMode
             ? "divide-white/[0.08]"
             : "divide-slate-200/60"
         }`}>
           {/* Cell 1: Belum Terprint */}
-          <div className="p-3 flex flex-col justify-between items-center text-center">
-            <span className={`text-[11px] font-semibold ${isDarkMode ? "text-slate-400" : "text-slate-600"}`}>
+          <div className="py-1.5 px-2 flex flex-col justify-between items-center text-center">
+            <span className={`text-[10px] font-semibold tracking-tight ${isDarkMode ? "text-slate-400" : "text-slate-600"}`}>
               Belum Terprint
             </span>
-            <div className={`my-1.5 px-4 py-0.5 rounded-full font-black text-lg font-mono tracking-tight shadow-sm border ${
+            <div className={`my-0.5 px-2.5 py-0.2 rounded-full font-black text-xs sm:text-sm font-mono tracking-tight shadow-xs border ${
               isDarkMode
                 ? "bg-gradient-to-r from-amber-500/25 to-amber-600/35 border-amber-500/40 text-amber-300 shadow-amber-950/40"
                 : "bg-gradient-to-r from-amber-200/70 to-amber-300/80 border-amber-400/80 text-amber-950 shadow-amber-200/50"
             }`}>
               {stats.belumCount}
             </div>
-            <span className={`text-[10px] font-bold ${isDarkMode ? "text-amber-400/90" : "text-amber-700"}`}>
+            <span className={`text-[9px] font-bold leading-none ${isDarkMode ? "text-amber-400/90" : "text-amber-700"}`}>
               Sisa Tugas
             </span>
           </div>
 
           {/* Cell 2: Total SO */}
-          <div className="p-3 flex flex-col justify-between items-center text-center">
-            <span className={`text-[11px] font-semibold ${isDarkMode ? "text-slate-400" : "text-slate-600"}`}>
+          <div className="py-1.5 px-2 flex flex-col justify-between items-center text-center">
+            <span className={`text-[10px] font-semibold tracking-tight ${isDarkMode ? "text-slate-400" : "text-slate-600"}`}>
               Total SO
             </span>
-            <div className={`my-1.5 font-black text-xl font-mono tracking-tight ${isDarkMode ? "text-white" : "text-slate-900"}`}>
+            <div className={`my-0.5 font-black text-sm sm:text-base font-mono tracking-tight ${isDarkMode ? "text-white" : "text-slate-900"}`}>
               {stats.totalSO}
             </div>
-            <span className={`text-[10px] font-medium ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>
+            <span className={`text-[9px] font-medium leading-none ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>
               SO Terdata
             </span>
           </div>
 
           {/* Cell 3: Total Faktur */}
-          <div className="p-3 flex flex-col justify-between items-center text-center">
-            <span className={`text-[11px] font-semibold ${isDarkMode ? "text-slate-400" : "text-slate-600"}`}>
+          <div className="py-1.5 px-2 flex flex-col justify-between items-center text-center">
+            <span className={`text-[10px] font-semibold tracking-tight ${isDarkMode ? "text-slate-400" : "text-slate-600"}`}>
               Total Faktur
             </span>
-            <div className={`my-1.5 font-black text-xl font-mono tracking-tight ${isDarkMode ? "text-white" : "text-slate-900"}`}>
+            <div className={`my-0.5 font-black text-sm sm:text-base font-mono tracking-tight ${isDarkMode ? "text-white" : "text-slate-900"}`}>
               {stats.totalCount}
             </div>
-            <span className={`text-[10px] font-medium ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>
+            <span className={`text-[9px] font-medium leading-none ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>
               Semua Faktur
             </span>
           </div>
 
           {/* Cell 4: 1P ORA */}
-          <div className="p-3 flex flex-col justify-between items-center text-center">
-            <span className={`text-[11px] font-semibold ${isDarkMode ? "text-slate-400" : "text-slate-600"}`}>
+          <div className="py-1.5 px-2 flex flex-col justify-between items-center text-center">
+            <span className={`text-[10px] font-semibold tracking-tight ${isDarkMode ? "text-slate-400" : "text-slate-600"}`}>
               1P (ORA)
             </span>
-            <div className={`my-1.5 font-bold text-base font-mono ${isDarkMode ? "text-sky-200" : "text-slate-900"}`}>
+            <div className={`my-0.5 font-bold text-xs sm:text-sm font-mono ${isDarkMode ? "text-sky-200" : "text-slate-900"}`}>
               {highestInvoices.maxOraStr}
             </div>
-            <span className={`text-[10px] font-medium truncate max-w-full px-1 ${isDarkMode ? "text-slate-400" : "text-slate-500"}`} title={invoiceProgression?.rangeOra || ""}>
+            <span className={`text-[9px] font-medium leading-none truncate max-w-full px-0.5 ${isDarkMode ? "text-slate-400" : "text-slate-500"}`} title={invoiceProgression?.rangeOra || ""}>
               {invoiceProgression?.rangeOra ? `R: ${invoiceProgression.rangeOra}` : "Belum ada"}
             </span>
           </div>
 
           {/* Cell 5: 1P DOO */}
-          <div className="p-3 flex flex-col justify-between items-center text-center">
-            <span className={`text-[11px] font-semibold ${isDarkMode ? "text-slate-400" : "text-slate-600"}`}>
+          <div className="py-1.5 px-2 flex flex-col justify-between items-center text-center">
+            <span className={`text-[10px] font-semibold tracking-tight ${isDarkMode ? "text-slate-400" : "text-slate-600"}`}>
               1P (DOO)
             </span>
-            <div className={`my-1.5 font-bold text-base font-mono ${isDarkMode ? "text-teal-200" : "text-slate-900"}`}>
+            <div className={`my-0.5 font-bold text-xs sm:text-sm font-mono ${isDarkMode ? "text-teal-200" : "text-slate-900"}`}>
               {highestInvoices.max1PDooStr}
             </div>
-            <span className={`text-[10px] font-medium truncate max-w-full px-1 ${isDarkMode ? "text-slate-400" : "text-slate-500"}`} title={invoiceProgression?.range1PDoo || ""}>
+            <span className={`text-[9px] font-medium leading-none truncate max-w-full px-0.5 ${isDarkMode ? "text-slate-400" : "text-slate-500"}`} title={invoiceProgression?.range1PDoo || ""}>
               {invoiceProgression?.range1PDoo ? `R: ${invoiceProgression.range1PDoo}` : "Belum ada"}
             </span>
           </div>
 
           {/* Cell 6: 2P */}
-          <div className="p-3 flex flex-col justify-between items-center text-center">
-            <span className={`text-[11px] font-semibold ${isDarkMode ? "text-slate-400" : "text-slate-600"}`}>
+          <div className="py-1.5 px-2 flex flex-col justify-between items-center text-center">
+            <span className={`text-[10px] font-semibold tracking-tight ${isDarkMode ? "text-slate-400" : "text-slate-600"}`}>
               2P
             </span>
-            <div className={`my-1.5 font-bold text-base font-mono ${isDarkMode ? "text-emerald-200" : "text-slate-900"}`}>
+            <div className={`my-0.5 font-bold text-xs sm:text-sm font-mono ${isDarkMode ? "text-emerald-200" : "text-slate-900"}`}>
               {highestInvoices.max2PStr}
             </div>
-            <span className={`text-[10px] font-medium truncate max-w-full px-1 ${isDarkMode ? "text-slate-400" : "text-slate-500"}`} title={invoiceProgression?.range2P || ""}>
+            <span className={`text-[9px] font-medium leading-none truncate max-w-full px-0.5 ${isDarkMode ? "text-slate-400" : "text-slate-500"}`} title={invoiceProgression?.range2P || ""}>
               {invoiceProgression?.range2P ? `R: ${invoiceProgression.range2P}` : "Belum ada"}
             </span>
           </div>
 
           {/* Cell 7: 3P */}
-          <div className="p-3 flex flex-col justify-between items-center text-center">
-            <span className={`text-[11px] font-semibold ${isDarkMode ? "text-slate-400" : "text-slate-600"}`}>
+          <div className="py-1.5 px-2 flex flex-col justify-between items-center text-center">
+            <span className={`text-[10px] font-semibold tracking-tight ${isDarkMode ? "text-slate-400" : "text-slate-600"}`}>
               3P
             </span>
-            <div className={`my-1.5 font-bold text-base font-mono ${isDarkMode ? "text-purple-200" : "text-slate-900"}`}>
+            <div className={`my-0.5 font-bold text-xs sm:text-sm font-mono ${isDarkMode ? "text-purple-200" : "text-slate-900"}`}>
               {highestInvoices.max3PStr}
             </div>
-            <span className={`text-[10px] font-medium truncate max-w-full px-1 ${isDarkMode ? "text-slate-400" : "text-slate-500"}`} title={invoiceProgression?.range3P || ""}>
+            <span className={`text-[9px] font-medium leading-none truncate max-w-full px-0.5 ${isDarkMode ? "text-slate-400" : "text-slate-500"}`} title={invoiceProgression?.range3P || ""}>
               {invoiceProgression?.range3P ? `R: ${invoiceProgression.range3P}` : "Belum ada"}
             </span>
           </div>
 
           {/* Cell 8: Double INV */}
-          <div className="p-3 flex flex-col justify-between items-center text-center">
-            <span className={`text-[11px] font-semibold ${isDarkMode ? "text-slate-400" : "text-slate-600"}`}>
+          <div className="py-1.5 px-2 flex flex-col justify-between items-center text-center">
+            <span className={`text-[10px] font-semibold tracking-tight ${isDarkMode ? "text-slate-400" : "text-slate-600"}`}>
               Double INV
             </span>
-            <div className={`my-1.5 px-3 py-0.5 rounded-full font-black text-lg font-mono tracking-tight shadow-sm border ${
+            <div className={`my-0.5 px-2 py-0.2 rounded-full font-black text-xs sm:text-sm font-mono tracking-tight shadow-xs border ${
               isDarkMode
                 ? "bg-gradient-to-r from-rose-500/25 to-rose-600/35 border-rose-500/40 text-rose-300 shadow-rose-950/40"
                 : "bg-gradient-to-r from-rose-200/70 to-rose-300/80 border-rose-400/80 text-rose-950 shadow-rose-200/50"
             }`}>
               {stats.doubleCount}
             </div>
-            <span className={`text-[10px] font-bold ${isDarkMode ? "text-rose-400/90" : "text-rose-700"}`}>
+            <span className={`text-[9px] font-bold leading-none ${isDarkMode ? "text-rose-400/90" : "text-rose-700"}`}>
               Perlu Cek
             </span>
           </div>
         </div>
 
-        {/* Filter and Search Bar Section - Seamless Raycast Floating Capsule (Sesuai Mockup) */}
-        <div className="flex flex-wrap items-center justify-between gap-2.5">
+        {/* Filter and Search Bar Section - Sleek Compact Floating Capsule */}
+        <div className="flex flex-wrap items-center justify-between gap-1.5 sm:gap-2">
           {/* Left: Floating Status Tabs Pills */}
-          <div className="glass-capsule p-1 rounded-2xl flex flex-wrap items-center transition-all">
+          <div className="glass-capsule p-0.5 rounded-xl flex flex-wrap items-center transition-all">
             <button
               onClick={() => { setFilter("belum"); setPage(0); }}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
                 filter === "belum"
                   ? (isDarkMode ? "bg-white text-slate-950 shadow-md" : "bg-slate-900 text-white shadow-md")
                   : (isDarkMode ? "text-slate-400 hover:text-white" : "text-slate-700 hover:text-slate-950")
               }`}
             >
-              <span className={`w-2 h-2 rounded-full ${filter === "belum" ? "bg-amber-500" : "bg-amber-500/80"}`}></span>
+              <span className={`w-1.5 h-1.5 rounded-full ${filter === "belum" ? "bg-amber-500" : "bg-amber-500/80"}`}></span>
               <span>Belum Dicetak ({stats.belumCount})</span>
             </button>
             <button
               onClick={() => { setFilter("all"); setPage(0); }}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
                 filter === "all"
                   ? (isDarkMode ? "bg-white text-slate-950 shadow-md" : "bg-slate-900 text-white shadow-md")
                   : (isDarkMode ? "text-slate-400 hover:text-white" : "text-slate-700 hover:text-slate-950")
@@ -2530,7 +2526,7 @@ export default function Home() {
             </button>
             <button
               onClick={() => { setFilter("double"); setPage(0); }}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
                 filter === "double"
                   ? "bg-rose-600 text-white shadow-md shadow-rose-600/30"
                   : (isDarkMode ? "text-rose-400 hover:text-rose-300" : "text-rose-700 hover:text-rose-900")
@@ -2540,7 +2536,7 @@ export default function Home() {
             </button>
             <button
               onClick={() => { setFilter("retur"); setPage(0); }}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
                 filter === "retur"
                   ? "bg-amber-600 text-white shadow-md shadow-amber-600/30"
                   : (isDarkMode ? "text-amber-400 hover:text-amber-300" : "text-amber-700 hover:text-amber-900")
@@ -2551,22 +2547,22 @@ export default function Home() {
           </div>
 
           {/* Right: Floating Search Input Capsule (⌘K / [/]) & Quick Actions */}
-          <div className="flex flex-wrap items-center gap-2 flex-1 sm:flex-initial justify-end">
+          <div className="flex flex-wrap items-center gap-1.5 flex-1 sm:flex-initial justify-end">
             {/* Search Input Capsule */}
-            <div className="glass-capsule relative flex items-center rounded-2xl transition-all min-w-[240px] sm:min-w-[280px]">
-              <span className="pl-3 text-xs text-slate-400">🔍</span>
+            <div className="glass-capsule relative flex items-center rounded-xl transition-all min-w-[200px] sm:min-w-[260px]">
+              <span className="pl-2.5 text-xs text-slate-400">🔍</span>
               <input
                 ref={searchInputRef}
                 type="text"
                 placeholder="Cari no faktur, SO, pelanggan..."
                 value={search}
                 onChange={(e) => { setSearch(e.target.value); setPage(0); }}
-                className={`w-full pl-2 pr-9 py-1.5 rounded-2xl text-xs focus:outline-none transition-colors bg-transparent ${
+                className={`w-full pl-2 pr-8 py-1 rounded-xl text-xs focus:outline-none transition-colors bg-transparent ${
                   isDarkMode ? "text-slate-100 placeholder:text-slate-500" : "text-slate-900 placeholder:text-slate-500"
                 }`}
               />
-              <span className={`absolute right-2 text-[10px] font-mono px-1.5 py-0.5 rounded-md border ${
-                isDarkMode ? "bg-slate-800/80 text-slate-400 border-slate-700/80" : "bg-white/80 text-slate-600 border-slate-200/80 shadow-xs"
+              <span className={`absolute right-1.5 text-[9px] font-mono px-1 py-0.2 rounded border ${
+                isDarkMode ? "bg-slate-800/80 text-slate-400 border-slate-700/80" : "bg-white/80 text-slate-600 border-slate-200/80 shadow-2xs"
               }`}>
                 ⌘K
               </span>
@@ -2576,7 +2572,7 @@ export default function Home() {
             {unprintedCountInFiltered > 0 && currentUser?.role !== "readonly" && (
               <button
                 onClick={handleMarkAllPrinted}
-                className="px-3.5 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-2xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-lg shadow-emerald-900/30 cursor-pointer"
+                className="px-2.5 py-1 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1 shadow-md shadow-emerald-900/20 cursor-pointer"
               >
                 <span>✓</span>
                 <span>Tandai Semua Selesai ({unprintedCountInFiltered})</span>
@@ -2586,15 +2582,15 @@ export default function Home() {
         </div>
 
         {/* Filter Dropdowns - Compact Frosted Glass Row */}
-        <div className="glass-capsule p-2 rounded-2xl transition-all grid grid-cols-2 sm:grid-cols-4 gap-2">
+        <div className="glass-capsule p-1 sm:p-1.5 rounded-xl transition-all grid grid-cols-2 sm:grid-cols-4 gap-1.5">
           {/* Kategori Filter */}
           <select
             value={katFilter}
             onChange={(e) => { setKatFilter(e.target.value as KatFilter); setPage(0); }}
-            className={`w-full px-2.5 py-1 rounded-xl text-xs font-medium focus:outline-none transition-colors border ${
+            className={`w-full px-2 py-0.5 sm:py-1 rounded-lg text-xs font-medium focus:outline-none transition-colors border ${
               isDarkMode
                 ? "bg-[#0B101D]/80 border-white/[0.08] text-slate-200"
-                : "bg-white/80 border-white/90 text-slate-800 shadow-xs"
+                : "bg-white/80 border-white/90 text-slate-800 shadow-2xs"
             }`}
           >
             <option value="all">Semua Kategori (1P/2P/3P)</option>
@@ -2607,10 +2603,10 @@ export default function Home() {
           <select
             value={jenisFilter}
             onChange={(e) => { setJenisFilter(e.target.value as JenisFilter); setPage(0); }}
-            className={`w-full px-2.5 py-1 rounded-xl text-xs font-medium focus:outline-none transition-colors border ${
+            className={`w-full px-2 py-0.5 sm:py-1 rounded-lg text-xs font-medium focus:outline-none transition-colors border ${
               isDarkMode
                 ? "bg-[#0B101D]/80 border-white/[0.08] text-slate-200"
-                : "bg-white/80 border-white/90 text-slate-800 shadow-xs"
+                : "bg-white/80 border-white/90 text-slate-800 shadow-2xs"
             }`}
           >
             <option value="all">Semua Jenis (ORA/DOO)</option>
@@ -2622,10 +2618,10 @@ export default function Home() {
           <select
             value={klasFilter}
             onChange={(e) => { setKlasFilter(e.target.value as KlasFilter); setPage(0); }}
-            className={`w-full px-2.5 py-1 rounded-xl text-xs font-medium focus:outline-none transition-colors border ${
+            className={`w-full px-2 py-0.5 sm:py-1 rounded-lg text-xs font-medium focus:outline-none transition-colors border ${
               isDarkMode
                 ? "bg-[#0B101D]/80 border-white/[0.08] text-slate-200"
-                : "bg-white/80 border-white/90 text-slate-800 shadow-xs"
+                : "bg-white/80 border-white/90 text-slate-800 shadow-2xs"
             }`}
           >
             <option value="all">Semua Produk</option>
@@ -2640,10 +2636,10 @@ export default function Home() {
           <select
             value={dateFilter}
             onChange={(e) => { setDateFilter(e.target.value); setPage(0); }}
-            className={`w-full px-2.5 py-1 rounded-xl text-xs font-medium focus:outline-none transition-colors border ${
+            className={`w-full px-2 py-0.5 sm:py-1 rounded-lg text-xs font-medium focus:outline-none transition-colors border ${
               isDarkMode
                 ? "bg-[#0B101D]/80 border-white/[0.08] text-slate-200"
-                : "bg-white/80 border-white/90 text-slate-800 shadow-xs"
+                : "bg-white/80 border-white/90 text-slate-800 shadow-2xs"
             }`}
           >
             <option value="all">Semua Tanggal</option>
@@ -2654,7 +2650,7 @@ export default function Home() {
         </div>
 
         {/* Faktur Table Card - Frosted Crystal Glass Canvas */}
-        <div className="glass-panel rounded-2xl overflow-hidden transition-all">
+        <div className="glass-panel rounded-xl overflow-hidden transition-all">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
@@ -2663,18 +2659,18 @@ export default function Home() {
                     ? "bg-[#101A2E]/80 border-white/[0.08] text-slate-300"
                     : "bg-white/60 border-slate-200/60 text-slate-700 backdrop-blur-md"
                 }`}>
-                  <th className="px-3 py-2 w-7 text-center">#</th>
-                  <th className="px-3 py-2 w-10 text-center">Print</th>
-                  <th className="px-3 py-2">No SO</th>
-                  <th className="px-3 py-2">No Invoice</th>
-                  <th className="px-3 py-2">Kat Produk</th>
-                  <th className="px-3 py-2">Jenis</th>
-                  <th className="px-3 py-2">Pelanggan</th>
-                  <th className="px-3 py-2" title="Tanggal Faktur / Invoice Date (Transaction Date)">Tgl Faktur</th>
-                  <th className="px-3 py-2" title="Tanggal Sales Order Masuk (Order Date)">Tgl Order</th>
-                  <th className="px-3 py-2">Kat</th>
-                  <th className="px-3 py-2">Done Print (Waktu)</th>
-                  <th className="px-3 py-2 text-right" title="Grand Total sudah termasuk PPN 11% (sesuai faktur fisik)">Total (+PPN)</th>
+                  <th className="px-2.5 py-1.5 w-7 text-center">#</th>
+                  <th className="px-2.5 py-1.5 w-10 text-center">Print</th>
+                  <th className="px-2.5 py-1.5">No SO</th>
+                  <th className="px-2.5 py-1.5">No Invoice</th>
+                  <th className="px-2.5 py-1.5">Kat Produk</th>
+                  <th className="px-2.5 py-1.5">Jenis</th>
+                  <th className="px-2.5 py-1.5">Pelanggan</th>
+                  <th className="px-2.5 py-1.5" title="Tanggal Faktur / Invoice Date (Transaction Date)">Tgl Faktur</th>
+                  <th className="px-2.5 py-1.5" title="Tanggal Sales Order Masuk (Order Date)">Tgl Order</th>
+                  <th className="px-2.5 py-1.5">Kat</th>
+                  <th className="px-2.5 py-1.5">Done Print (Waktu)</th>
+                  <th className="px-2.5 py-1.5 text-right" title="Grand Total sudah termasuk PPN 11% (sesuai faktur fisik)">Total (+PPN)</th>
                 </tr>
               </thead>
               <tbody className={`divide-y ${isDarkMode ? "divide-white/[0.04]" : "divide-slate-100"}`}>
