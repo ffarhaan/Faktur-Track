@@ -2367,18 +2367,29 @@ export default function Home() {
           </div>
         )}
 
-        {/* 8 Metric KPI - SINGLE COMPACT FROSTED GLASS CAPSULE */}
-        <div className={`glass-panel rounded-xl overflow-hidden grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 divide-y sm:divide-y-0 sm:divide-x ${
+        {/* 9 Metric KPI - SINGLE COMPACT FROSTED GLASS CAPSULE (Interactive Filter Ribbon) */}
+        <div className={`glass-panel rounded-xl overflow-hidden grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-9 divide-y sm:divide-y-0 sm:divide-x ${
           isDarkMode
             ? "divide-white/[0.08]"
             : "divide-slate-200/60"
         }`}>
-          {/* Cell 1: Belum Terprint */}
-          <div className="py-1.5 px-2 flex flex-col justify-between items-center text-center">
-            <span className={`text-[10px] font-semibold tracking-tight ${isDarkMode ? "text-slate-400" : "text-slate-600"}`}>
+          {/* Cell 1: Belum Terprint (Clickable Filter) */}
+          <button
+            type="button"
+            onClick={() => { setFilter(filter === "belum" ? "all" : "belum"); setPage(0); }}
+            className={`py-1.5 px-2 flex flex-col justify-between items-center text-center transition-all cursor-pointer group ${
+              filter === "belum"
+                ? (isDarkMode ? "bg-amber-500/15 ring-2 ring-inset ring-amber-500/60 shadow-inner" : "bg-amber-100/70 ring-2 ring-inset ring-amber-500/60")
+                : (isDarkMode ? "hover:bg-white/[0.04]" : "hover:bg-slate-100/60")
+            }`}
+            title="Klik untuk filter Belum Terprint"
+          >
+            <span className={`text-[10px] font-semibold tracking-tight transition-colors ${
+              filter === "belum" ? "text-amber-400 font-bold" : (isDarkMode ? "text-slate-400 group-hover:text-slate-200" : "text-slate-600 group-hover:text-slate-900")
+            }`}>
               Belum Terprint
             </span>
-            <div className={`my-0.5 px-2.5 py-0.2 rounded-full font-black text-xs sm:text-sm font-mono tracking-tight shadow-xs border ${
+            <div className={`my-0.5 px-2.5 py-0.2 rounded-full font-black text-xs sm:text-sm font-mono tracking-tight shadow-xs border transition-transform group-hover:scale-105 ${
               isDarkMode
                 ? "bg-gradient-to-r from-amber-500/25 to-amber-600/35 border-amber-500/40 text-amber-300 shadow-amber-950/40"
                 : "bg-gradient-to-r from-amber-200/70 to-amber-300/80 border-amber-400/80 text-amber-950 shadow-amber-200/50"
@@ -2386,9 +2397,9 @@ export default function Home() {
               {stats.belumCount}
             </div>
             <span className={`text-[9px] font-bold leading-none ${isDarkMode ? "text-amber-400/90" : "text-amber-700"}`}>
-              Sisa Tugas
+              {filter === "belum" ? "● Aktif" : "Sisa Tugas"}
             </span>
-          </div>
+          </button>
 
           {/* Cell 2: Total SO */}
           <div className="py-1.5 px-2 flex flex-col justify-between items-center text-center">
@@ -2403,18 +2414,31 @@ export default function Home() {
             </span>
           </div>
 
-          {/* Cell 3: Total Faktur */}
-          <div className="py-1.5 px-2 flex flex-col justify-between items-center text-center">
-            <span className={`text-[10px] font-semibold tracking-tight ${isDarkMode ? "text-slate-400" : "text-slate-600"}`}>
+          {/* Cell 3: Total Faktur (Semua - Clickable Filter) */}
+          <button
+            type="button"
+            onClick={() => { setFilter("all"); setPage(0); }}
+            className={`py-1.5 px-2 flex flex-col justify-between items-center text-center transition-all cursor-pointer group ${
+              filter === "all"
+                ? (isDarkMode ? "bg-sky-500/15 ring-2 ring-inset ring-sky-500/60 shadow-inner" : "bg-sky-100/70 ring-2 ring-inset ring-sky-500/60")
+                : (isDarkMode ? "hover:bg-white/[0.04]" : "hover:bg-slate-100/60")
+            }`}
+            title="Klik untuk tampilkan Semua Faktur"
+          >
+            <span className={`text-[10px] font-semibold tracking-tight transition-colors ${
+              filter === "all" ? "text-sky-400 font-bold" : (isDarkMode ? "text-slate-400 group-hover:text-slate-200" : "text-slate-600 group-hover:text-slate-900")
+            }`}>
               Total Faktur
             </span>
-            <div className={`my-0.5 font-black text-sm sm:text-base font-mono tracking-tight ${isDarkMode ? "text-white" : "text-slate-900"}`}>
+            <div className={`my-0.5 font-black text-sm sm:text-base font-mono tracking-tight transition-transform group-hover:scale-105 ${isDarkMode ? "text-white" : "text-slate-900"}`}>
               {stats.totalCount}
             </div>
-            <span className={`text-[9px] font-medium leading-none ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>
-              Semua Faktur
+            <span className={`text-[9px] font-medium leading-none ${
+              filter === "all" ? (isDarkMode ? "text-sky-400 font-bold" : "text-sky-700 font-bold") : (isDarkMode ? "text-slate-400" : "text-slate-500")
+            }`}>
+              {filter === "all" ? "● Semua Aktif" : "Semua Faktur"}
             </span>
-          </div>
+          </button>
 
           {/* Cell 4: 1P ORA */}
           <div className="py-1.5 px-2 flex flex-col justify-between items-center text-center">
@@ -2468,12 +2492,23 @@ export default function Home() {
             </span>
           </div>
 
-          {/* Cell 8: Double INV */}
-          <div className="py-1.5 px-2 flex flex-col justify-between items-center text-center">
-            <span className={`text-[10px] font-semibold tracking-tight ${isDarkMode ? "text-slate-400" : "text-slate-600"}`}>
+          {/* Cell 8: Double INV (Clickable Filter) */}
+          <button
+            type="button"
+            onClick={() => { setFilter(filter === "double" ? "all" : "double"); setPage(0); }}
+            className={`py-1.5 px-2 flex flex-col justify-between items-center text-center transition-all cursor-pointer group ${
+              filter === "double"
+                ? (isDarkMode ? "bg-rose-500/15 ring-2 ring-inset ring-rose-500/60 shadow-inner" : "bg-rose-100/70 ring-2 ring-inset ring-rose-500/60")
+                : (isDarkMode ? "hover:bg-white/[0.04]" : "hover:bg-slate-100/60")
+            }`}
+            title="Klik untuk filter Double INV"
+          >
+            <span className={`text-[10px] font-semibold tracking-tight transition-colors ${
+              filter === "double" ? "text-rose-400 font-bold" : (isDarkMode ? "text-slate-400 group-hover:text-slate-200" : "text-slate-600 group-hover:text-slate-900")
+            }`}>
               Double INV
             </span>
-            <div className={`my-0.5 px-2 py-0.2 rounded-full font-black text-xs sm:text-sm font-mono tracking-tight shadow-xs border ${
+            <div className={`my-0.5 px-2 py-0.2 rounded-full font-black text-xs sm:text-sm font-mono tracking-tight shadow-xs border transition-transform group-hover:scale-105 ${
               isDarkMode
                 ? "bg-gradient-to-r from-rose-500/25 to-rose-600/35 border-rose-500/40 text-rose-300 shadow-rose-950/40"
                 : "bg-gradient-to-r from-rose-200/70 to-rose-300/80 border-rose-400/80 text-rose-950 shadow-rose-200/50"
@@ -2481,91 +2516,83 @@ export default function Home() {
               {stats.doubleCount}
             </div>
             <span className={`text-[9px] font-bold leading-none ${isDarkMode ? "text-rose-400/90" : "text-rose-700"}`}>
-              Perlu Cek
+              {filter === "double" ? "● Aktif" : "Perlu Cek"}
             </span>
-          </div>
+          </button>
+
+          {/* Cell 9: Retur (Clickable Filter) */}
+          <button
+            type="button"
+            onClick={() => { setFilter(filter === "retur" ? "all" : "retur"); setPage(0); }}
+            className={`py-1.5 px-2 flex flex-col justify-between items-center text-center transition-all cursor-pointer group ${
+              filter === "retur"
+                ? (isDarkMode ? "bg-amber-500/15 ring-2 ring-inset ring-amber-500/60 shadow-inner" : "bg-amber-100/70 ring-2 ring-inset ring-amber-500/60")
+                : (isDarkMode ? "hover:bg-white/[0.04]" : "hover:bg-slate-100/60")
+            }`}
+            title="Klik untuk filter Retur"
+          >
+            <span className={`text-[10px] font-semibold tracking-tight transition-colors ${
+              filter === "retur" ? "text-amber-400 font-bold" : (isDarkMode ? "text-slate-400 group-hover:text-slate-200" : "text-slate-600 group-hover:text-slate-900")
+            }`}>
+              Retur
+            </span>
+            <div className={`my-0.5 px-2 py-0.2 rounded-full font-black text-xs sm:text-sm font-mono tracking-tight shadow-xs border transition-transform group-hover:scale-105 ${
+              isDarkMode
+                ? "bg-gradient-to-r from-amber-500/25 to-amber-600/35 border-amber-500/40 text-amber-300 shadow-amber-950/40"
+                : "bg-gradient-to-r from-amber-200/70 to-amber-300/80 border-amber-400/80 text-amber-950 shadow-amber-200/50"
+            }`}>
+              {stats.returCount}
+            </div>
+            <span className={`text-[9px] font-bold leading-none ${isDarkMode ? "text-amber-400/90" : "text-amber-700"}`}>
+              {filter === "retur" ? "● Aktif" : "Faktur Retur"}
+            </span>
+          </button>
         </div>
 
-        {/* Filter and Search Bar Section - Sleek Compact Floating Capsule */}
-        <div className="flex flex-wrap items-center justify-between gap-1.5 sm:gap-2">
-          {/* Left: Floating Status Tabs Pills */}
-          <div className="glass-capsule p-0.5 rounded-xl flex flex-wrap items-center">
-            <button
-              onClick={() => { setFilter("belum"); setPage(0); }}
-              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5 ${
-                filter === "belum"
-                  ? (isDarkMode ? "bg-white text-slate-950 shadow-md" : "bg-slate-900 text-white shadow-md")
-                  : (isDarkMode ? "text-slate-400 hover:text-white" : "text-slate-700 hover:text-slate-950")
+        {/* Search Bar & Quick Action Section - Full Width Sleek Floating Capsule */}
+        <div className="flex items-center gap-2 w-full">
+          {/* Expanded Full-Width Search Input Capsule */}
+          <div className="glass-capsule relative flex items-center rounded-xl flex-1 min-w-0">
+            <span className="pl-3 text-sm text-slate-400">🔍</span>
+            <input
+              ref={searchInputRef}
+              type="text"
+              placeholder="Cari no faktur, no SO, nama pelanggan, produk obat..."
+              value={search}
+              onChange={(e) => { setSearch(e.target.value); setPage(0); }}
+              className={`w-full pl-2.5 pr-14 py-1.5 rounded-xl text-xs sm:text-sm focus:outline-none transition-colors bg-transparent ${
+                isDarkMode ? "text-slate-100 placeholder:text-slate-500" : "text-slate-900 placeholder:text-slate-500"
               }`}
-            >
-              <span className={`w-1.5 h-1.5 rounded-full ${filter === "belum" ? "bg-amber-500" : "bg-amber-500/80"}`}></span>
-              <span>Belum Dicetak ({stats.belumCount})</span>
-            </button>
-            <button
-              onClick={() => { setFilter("all"); setPage(0); }}
-              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5 ${
-                filter === "all"
-                  ? (isDarkMode ? "bg-white text-slate-950 shadow-md" : "bg-slate-900 text-white shadow-md")
-                  : (isDarkMode ? "text-slate-400 hover:text-white" : "text-slate-700 hover:text-slate-950")
-              }`}
-            >
-              <span>Semua ({stats.totalCount})</span>
-            </button>
-            <button
-              onClick={() => { setFilter("double"); setPage(0); }}
-              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5 ${
-                filter === "double"
-                  ? "bg-rose-600 text-white shadow-md shadow-rose-600/30"
-                  : (isDarkMode ? "text-rose-400 hover:text-rose-300" : "text-rose-700 hover:text-rose-900")
-              }`}
-            >
-              <span>Double INV ({stats.doubleCount})</span>
-            </button>
-            <button
-              onClick={() => { setFilter("retur"); setPage(0); }}
-              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5 ${
-                filter === "retur"
-                  ? "bg-amber-600 text-white shadow-md shadow-amber-600/30"
-                  : (isDarkMode ? "text-amber-400 hover:text-amber-300" : "text-amber-700 hover:text-amber-900")
-              }`}
-            >
-              <span>Retur ({stats.returCount})</span>
-            </button>
-          </div>
-
-          {/* Right: Floating Search Input Capsule (⌘K / [/]) & Quick Actions */}
-          <div className="flex flex-wrap items-center gap-1.5 flex-1 sm:flex-initial justify-end">
-            {/* Search Input Capsule */}
-            <div className="glass-capsule relative flex items-center rounded-xl min-w-[200px] sm:min-w-[260px]">
-              <span className="pl-2.5 text-xs text-slate-400">🔍</span>
-              <input
-                ref={searchInputRef}
-                type="text"
-                placeholder="Cari no faktur, SO, pelanggan..."
-                value={search}
-                onChange={(e) => { setSearch(e.target.value); setPage(0); }}
-                className={`w-full pl-2 pr-8 py-1 rounded-xl text-xs focus:outline-none transition-colors bg-transparent ${
-                  isDarkMode ? "text-slate-100 placeholder:text-slate-500" : "text-slate-900 placeholder:text-slate-500"
-                }`}
-              />
-              <span className={`absolute right-1.5 text-[9px] font-mono px-1 py-0.2 rounded border ${
-                isDarkMode ? "bg-slate-800/80 text-slate-400 border-slate-700/80" : "bg-white/80 text-slate-600 border-slate-200/80 shadow-2xs"
-              }`}>
-                ⌘K
-              </span>
-            </div>
-
-            {/* Batch Done Print Button */}
-            {unprintedCountInFiltered > 0 && currentUser?.role !== "readonly" && (
+            />
+            {search && (
               <button
-                onClick={handleMarkAllPrinted}
-                className="px-2.5 py-1 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl text-xs font-bold transition-colors flex items-center gap-1 shadow-md shadow-emerald-900/20 cursor-pointer"
+                type="button"
+                onClick={() => { setSearch(""); setPage(0); searchInputRef.current?.focus(); }}
+                className={`mr-8 px-1.5 py-0.5 rounded text-xs transition-colors cursor-pointer ${
+                  isDarkMode ? "text-slate-400 hover:text-white" : "text-slate-500 hover:text-slate-900"
+                }`}
+                title="Hapus pencarian"
               >
-                <span>✓</span>
-                <span>Tandai Semua Selesai ({unprintedCountInFiltered})</span>
+                ✕
               </button>
             )}
+            <span className={`absolute right-2 text-[9px] font-mono px-1.5 py-0.5 rounded border pointer-events-none ${
+              isDarkMode ? "bg-slate-800/80 text-slate-400 border-slate-700/80" : "bg-white/80 text-slate-600 border-slate-200/80 shadow-2xs"
+            }`}>
+              ⌘K
+            </span>
           </div>
+
+          {/* Batch Done Print Button */}
+          {unprintedCountInFiltered > 0 && currentUser?.role !== "readonly" && (
+            <button
+              onClick={handleMarkAllPrinted}
+              className="px-3 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-md shadow-emerald-900/20 cursor-pointer shrink-0 active:scale-95"
+            >
+              <span>✓</span>
+              <span>Tandai Semua Selesai ({unprintedCountInFiltered})</span>
+            </button>
+          )}
         </div>
 
         {/* Filter Dropdowns - Compact Frosted Glass Row */}
