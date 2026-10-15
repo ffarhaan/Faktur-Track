@@ -2351,25 +2351,7 @@ export default function Home() {
 
         {/* 8 Metric KPI Cards Grid - Refined Modern Gradients */}
         <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2">
-          {/* Card 1: Total SO */}
-          <div className={`border rounded-xl p-2 sm:p-2.5 shadow-xs transition-colors flex flex-col justify-between ${
-            isDarkMode
-              ? "bg-gradient-to-br from-blue-950/40 via-[#111c33] to-[#111c33] border-blue-500/25 text-blue-100"
-              : "bg-white border-slate-200 text-slate-900"
-          }`}>
-            <div className={`flex items-center justify-between text-[11px] ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>
-              <span className="font-semibold">Total SO</span>
-              <span>📄</span>
-            </div>
-            <div className={`text-base font-extrabold font-mono my-0.5 ${isDarkMode ? "text-white" : "text-slate-900"}`}>
-              {stats.totalSO}
-            </div>
-            <div className={`text-[10px] truncate ${isDarkMode ? "text-slate-400" : "text-slate-400"}`}>
-              SO Terdata
-            </div>
-          </div>
-
-          {/* Card 2: Belum Terprint */}
+          {/* Card 1: Belum Terprint */}
           <div className={`border rounded-xl p-2 sm:p-2.5 shadow-xs transition-colors flex flex-col justify-between ${
             isDarkMode
               ? "bg-gradient-to-br from-amber-950/50 via-[#111c33] to-[#111c33] border-amber-500/40 text-amber-200 shadow-amber-950/20"
@@ -2387,7 +2369,43 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Card 3: 1P ORA */}
+          {/* Card 2: Total SO */}
+          <div className={`border rounded-xl p-2 sm:p-2.5 shadow-xs transition-colors flex flex-col justify-between ${
+            isDarkMode
+              ? "bg-gradient-to-br from-blue-950/40 via-[#111c33] to-[#111c33] border-blue-500/25 text-blue-100"
+              : "bg-white border-slate-200 text-slate-900"
+          }`}>
+            <div className={`flex items-center justify-between text-[11px] ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>
+              <span className="font-semibold">Total SO</span>
+              <span>📄</span>
+            </div>
+            <div className={`text-base font-extrabold font-mono my-0.5 ${isDarkMode ? "text-white" : "text-slate-900"}`}>
+              {stats.totalSO}
+            </div>
+            <div className={`text-[10px] truncate ${isDarkMode ? "text-slate-400" : "text-slate-400"}`}>
+              SO Terdata
+            </div>
+          </div>
+
+          {/* Card 3: Total Faktur */}
+          <div className={`border rounded-xl p-2 sm:p-2.5 shadow-xs transition-colors flex flex-col justify-between ${
+            isDarkMode
+              ? "bg-gradient-to-br from-indigo-950/40 via-[#111c33] to-[#111c33] border-indigo-500/25 text-indigo-100"
+              : "bg-white border-slate-200 text-slate-900"
+          }`}>
+            <div className={`flex items-center justify-between text-[11px] ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>
+              <span className="font-semibold">Total Faktur</span>
+              <span>📑</span>
+            </div>
+            <div className={`text-base font-extrabold font-mono my-0.5 ${isDarkMode ? "text-white" : "text-slate-900"}`}>
+              {stats.totalCount}
+            </div>
+            <div className={`text-[10px] truncate ${isDarkMode ? "text-slate-400" : "text-slate-400"}`}>
+              Semua Faktur
+            </div>
+          </div>
+
+          {/* Card 4: 1P ORA */}
           <div className={`border rounded-xl p-2 sm:p-2.5 shadow-xs transition-colors flex flex-col justify-between ${
             isDarkMode
               ? "bg-gradient-to-br from-sky-950/40 via-[#111c33] to-[#111c33] border-sky-500/25 text-sky-100"
@@ -2407,63 +2425,7 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Card 4: 2P */}
-          <div className={`border rounded-xl p-2 sm:p-2.5 shadow-xs transition-colors flex flex-col justify-between ${
-            isDarkMode
-              ? "bg-gradient-to-br from-emerald-950/40 via-[#111c33] to-[#111c33] border-emerald-500/25 text-emerald-100"
-              : "bg-white border-slate-200 text-slate-900"
-          }`}>
-            <div className={`flex items-center justify-between text-[11px] ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>
-              <span className="font-semibold">2P (Max)</span>
-              <span className={`text-[9px] px-1 py-0.2 rounded font-bold ${
-                isDarkMode ? "bg-emerald-950 text-emerald-300 border border-emerald-700/50" : "bg-emerald-100 text-emerald-800"
-              }`}>2P</span>
-            </div>
-            <div className={`text-base font-bold font-mono my-0.5 ${isDarkMode ? "text-emerald-200" : "text-slate-900"}`}>
-              {highestInvoices.max2PStr}
-            </div>
-            <div className={`text-[10px] truncate ${isDarkMode ? "text-slate-400" : "text-slate-400"}`} title={invoiceProgression?.range2P || ""}>
-              {invoiceProgression?.range2P ? `R: ${invoiceProgression.range2P}` : "Belum ada"}
-            </div>
-          </div>
-
-          {/* Card 5: Total Invoice */}
-          <div className={`border rounded-xl p-2 sm:p-2.5 shadow-xs transition-colors flex flex-col justify-between ${
-            isDarkMode
-              ? "bg-gradient-to-br from-indigo-950/40 via-[#111c33] to-[#111c33] border-indigo-500/25 text-indigo-100"
-              : "bg-white border-slate-200 text-slate-900"
-          }`}>
-            <div className={`flex items-center justify-between text-[11px] ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>
-              <span className="font-semibold">Total Faktur</span>
-              <span>📑</span>
-            </div>
-            <div className={`text-base font-extrabold font-mono my-0.5 ${isDarkMode ? "text-white" : "text-slate-900"}`}>
-              {stats.totalCount}
-            </div>
-            <div className={`text-[10px] truncate ${isDarkMode ? "text-slate-400" : "text-slate-400"}`}>
-              Semua Faktur
-            </div>
-          </div>
-
-          {/* Card 6: Double Invoice */}
-          <div className={`border rounded-xl p-2 sm:p-2.5 shadow-xs transition-colors flex flex-col justify-between ${
-            isDarkMode
-              ? "bg-gradient-to-br from-rose-950/50 via-[#111c33] to-[#111c33] border-rose-500/40 text-rose-200 shadow-rose-950/20"
-              : "bg-white border-slate-200 text-slate-900"
-          }`}>
-            <div className={`flex items-center justify-between text-[11px] ${isDarkMode ? "text-rose-300 font-semibold" : "text-slate-500"}`}>
-              <span>Double INV</span>
-              <span className="text-[10px] text-rose-400 font-bold">⚠️</span>
-            </div>
-            <div className="text-base font-extrabold text-rose-400 font-mono my-0.5">
-              {stats.doubleCount}
-            </div>
-            <div className="text-[10px] truncate text-rose-400/90">
-              Perlu dicek
-            </div>
-          </div>
-
-          {/* Card 7: 1P DOO */}
+          {/* Card 5: 1P DOO */}
           <div className={`border rounded-xl p-2 sm:p-2.5 shadow-xs transition-colors flex flex-col justify-between ${
             isDarkMode
               ? "bg-gradient-to-br from-teal-950/40 via-[#111c33] to-[#111c33] border-teal-500/25 text-teal-100"
@@ -2483,7 +2445,27 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Card 8: 3P */}
+          {/* Card 6: 2P */}
+          <div className={`border rounded-xl p-2 sm:p-2.5 shadow-xs transition-colors flex flex-col justify-between ${
+            isDarkMode
+              ? "bg-gradient-to-br from-emerald-950/40 via-[#111c33] to-[#111c33] border-emerald-500/25 text-emerald-100"
+              : "bg-white border-slate-200 text-slate-900"
+          }`}>
+            <div className={`flex items-center justify-between text-[11px] ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>
+              <span className="font-semibold">2P (Max)</span>
+              <span className={`text-[9px] px-1 py-0.2 rounded font-bold ${
+                isDarkMode ? "bg-emerald-950 text-emerald-300 border border-emerald-700/50" : "bg-emerald-100 text-emerald-800"
+              }`}>2P</span>
+            </div>
+            <div className={`text-base font-bold font-mono my-0.5 ${isDarkMode ? "text-emerald-200" : "text-slate-900"}`}>
+              {highestInvoices.max2PStr}
+            </div>
+            <div className={`text-[10px] truncate ${isDarkMode ? "text-slate-400" : "text-slate-400"}`} title={invoiceProgression?.range2P || ""}>
+              {invoiceProgression?.range2P ? `R: ${invoiceProgression.range2P}` : "Belum ada"}
+            </div>
+          </div>
+
+          {/* Card 7: 3P */}
           <div className={`border rounded-xl p-2 sm:p-2.5 shadow-xs transition-colors flex flex-col justify-between ${
             isDarkMode
               ? "bg-gradient-to-br from-purple-950/40 via-[#111c33] to-[#111c33] border-purple-500/25 text-purple-100"
@@ -2500,6 +2482,24 @@ export default function Home() {
             </div>
             <div className={`text-[10px] truncate ${isDarkMode ? "text-slate-400" : "text-slate-400"}`} title={invoiceProgression?.range3P || ""}>
               {invoiceProgression?.range3P ? `R: ${invoiceProgression.range3P}` : "Belum ada"}
+            </div>
+          </div>
+
+          {/* Card 8: Double Invoice */}
+          <div className={`border rounded-xl p-2 sm:p-2.5 shadow-xs transition-colors flex flex-col justify-between ${
+            isDarkMode
+              ? "bg-gradient-to-br from-rose-950/50 via-[#111c33] to-[#111c33] border-rose-500/40 text-rose-200 shadow-rose-950/20"
+              : "bg-white border-slate-200 text-slate-900"
+          }`}>
+            <div className={`flex items-center justify-between text-[11px] ${isDarkMode ? "text-rose-300 font-semibold" : "text-slate-500"}`}>
+              <span>Double INV</span>
+              <span className="text-[10px] text-rose-400 font-bold">⚠️</span>
+            </div>
+            <div className="text-base font-extrabold text-rose-400 font-mono my-0.5">
+              {stats.doubleCount}
+            </div>
+            <div className="text-[10px] truncate text-rose-400/90">
+              Perlu dicek
             </div>
           </div>
         </div>
