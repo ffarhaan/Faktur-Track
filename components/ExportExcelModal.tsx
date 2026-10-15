@@ -20,17 +20,27 @@ function parseInvNum(inv: string): number {
 
 function orderDateToIso(dStr: string): string | null {
   if (!dStr || dStr === "-" || dStr === "0") return null;
-  const mSlash = dStr.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  const s = String(dStr).trim();
+  const mSlash = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
   if (mSlash) {
     const pad = (n: number | string) => String(n).padStart(2, "0");
     return `${mSlash[3]}-${pad(mSlash[2])}-${pad(mSlash[1])}`;
   }
-  const mIso = dStr.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  const mIso = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
   if (mIso) {
     const pad = (n: number | string) => String(n).padStart(2, "0");
     return `${mIso[1]}-${pad(mIso[2])}-${pad(mIso[3])}`;
   }
   return null;
+}
+
+function isoToDisplayDate(iso: string): string {
+  if (!iso) return "-";
+  const parts = iso.split("-");
+  if (parts.length === 3) {
+    return `${parts[2]}/${parts[1]}/${parts[0]}`;
+  }
+  return iso;
 }
 
 function formatPrintTime(dStr?: string | null): string {
@@ -65,7 +75,8 @@ export default function ExportExcelModal({
   groups,
   isDarkMode,
 }: ExportExcelModalProps) {
-  const [dateBasis, setDateBasis] = useState<"transaction" | "order">("transaction");
+  // dateBasis: "order" = Berdasarkan Tanggal Masuk SO; "transaction" = Berdasarkan Tanggal Faktur Terbit (Tx)
+  const [dateBasis, setDateBasis] = useState<"order" | "transaction">("order");
   const [startDate, setStartDate] = useState<string>("");
   const [endDate, setEndDate] = useState<string>("");
   const [statusFilter, setStatusFilter] = useState<"all" | "printed" | "unprinted">("all");
@@ -110,18 +121,30 @@ export default function ExportExcelModal({
     });
   }, [groups, dateBasis, startDate, endDate, statusFilter, jenisFilter, katFilter]);
 
+  // Count unique Sales Orders (SO) in matching data
+  const uniqueSoCount = useMemo(() => {
+    const set = new Set<string>();
+    matchingData.forEach((g) => {
+      const s = String(g.so || "").trim();
+      if (s && s !== "-") set.add(s);
+    });
+    return set.size;
+  }, [matchingData]);
+
   const totalNilai = useMemo(() => {
     return matchingData.reduce((acc, curr) => acc + ((curr.totalHarga || 0) * 1.11), 0);
   }, [matchingData]);
 
-  // Quick Preset Handlers
+  // Quick Preset Handlers (using local time to prevent UTC date shift)
   const handlePresetAll = () => {
     setStartDate("");
     setEndDate("");
   };
 
   const handlePresetToday = () => {
-    const today = new Date().toISOString().slice(0, 10);
+    const now = new Date();
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const today = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
     setStartDate(today);
     setEndDate(today);
   };
@@ -130,15 +153,16 @@ export default function ExportExcelModal({
     const now = new Date();
     const past = new Date();
     past.setDate(now.getDate() - 7);
-    setStartDate(past.toISOString().slice(0, 10));
-    setEndDate(now.toISOString().slice(0, 10));
+    const pad = (n: number) => String(n).padStart(2, "0");
+    setStartDate(`${past.getFullYear()}-${pad(past.getMonth() + 1)}-${pad(past.getDate())}`);
+    setEndDate(`${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`);
   };
 
   const handlePresetThisMonth = () => {
     const now = new Date();
-    const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
-    setStartDate(firstDay.toISOString().slice(0, 10));
-    setEndDate(now.toISOString().slice(0, 10));
+    const pad = (n: number) => String(n).padStart(2, "0");
+    setStartDate(`${now.getFullYear()}-${pad(now.getMonth() + 1)}-01`);
+    setEndDate(`${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`);
   };
 
   const handleDownload = () => {
@@ -162,11 +186,11 @@ export default function ExportExcelModal({
         No: idx + 1,
         "No SO": g.so,
         "No Invoice": g.invoiceNumber,
+        "Tanggal Order (SO)": g.orderDate || "-",
+        "Tanggal Faktur (Tx)": g.transactionDate && g.transactionDate !== "-" ? g.transactionDate : g.orderDate || "-",
         "Kat Produk": g.kategoriProduk,
         "Jenis Transaksi": g.jenisTransaksi,
         Pelanggan: g.customerName,
-        "Tanggal Faktur": g.transactionDate && g.transactionDate !== "-" ? g.transactionDate : g.orderDate || "-",
-        "Tanggal Order": g.orderDate || "-",
         Kategori: g.kategori,
         "Status Cetak": g.allPrinted ? "Sudah Terprint" : "Belum Terprint",
         "Waktu Cetak": g.allPrinted && g.printedAt ? formatPrintTime(g.printedAt) : "-",
@@ -181,7 +205,7 @@ export default function ExportExcelModal({
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Faktur Tracker");
 
-    let filename = dateBasis === "transaction" ? "Faktur_Tracker_TglFaktur" : "Faktur_Tracker_TglOrder";
+    let filename = dateBasis === "order" ? "Faktur_Tracker_TglOrder_SO" : "Faktur_Tracker_TglFaktur_Tx";
     if (startDate && endDate) {
       filename += `_${startDate}_sd_${endDate}`;
     } else if (startDate) {
@@ -189,7 +213,9 @@ export default function ExportExcelModal({
     } else if (endDate) {
       filename += `_sd_${endDate}`;
     } else {
-      filename += `_Semua_${new Date().toISOString().slice(0, 10)}`;
+      const pad = (n: number) => String(n).padStart(2, "0");
+      const d = new Date();
+      filename += `_Semua_${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
     }
     filename += ".xlsx";
 
@@ -229,7 +255,7 @@ export default function ExportExcelModal({
                 Ekspor Data ke Excel
               </h2>
               <p className="text-[11px] text-blue-100 font-medium">
-                Pilih rentang tanggal dan kriteria data yang ingin ditarik
+                Tarik data berdasarkan Tanggal Masuk SO atau Tanggal Terfaktur
               </p>
             </div>
           </div>
@@ -255,56 +281,75 @@ export default function ExportExcelModal({
           >
             <div className="flex items-center justify-between">
               <span className={`font-bold text-xs uppercase tracking-wider ${isDarkMode ? "text-slate-300" : "text-slate-700"}`}>
-                🗓️ Rentang Tanggal ({dateBasis === "transaction" ? "Tanggal Faktur" : "Tanggal Order"})
+                🗓️ Acuan & Rentang Tanggal
               </span>
               {availableDates.min && availableDates.max && (
                 <span className={`text-[10px] ${isDarkMode ? "text-slate-500" : "text-slate-400"}`}>
-                  Tersedia: {availableDates.min} s/d {availableDates.max}
+                  Data: {isoToDisplayDate(availableDates.min)} s/d {isoToDisplayDate(availableDates.max)}
                 </span>
               )}
             </div>
 
             {/* Acuan Tanggal Filter Toggle */}
-            <div className={`p-2 rounded-lg border flex flex-wrap items-center gap-2 ${
-              isDarkMode ? "bg-[#0c1426] border-slate-700/80" : "bg-white border-slate-200"
+            <div className={`p-2.5 rounded-xl border space-y-2 ${
+              isDarkMode ? "bg-[#0c1426] border-slate-700/80" : "bg-white border-slate-200 shadow-xs"
             }`}>
-              <span className={`text-[11px] font-semibold ${isDarkMode ? "text-slate-400" : "text-slate-600"}`}>
-                Filter Berdasarkan:
-              </span>
-              <div className="flex items-center gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => setDateBasis("transaction")}
-                  className={`px-2.5 py-1 rounded text-xs font-bold border transition-all ${
-                    dateBasis === "transaction"
-                      ? "bg-blue-600 text-white border-blue-600 shadow-xs"
-                      : isDarkMode
-                      ? "bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700"
-                      : "bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200"
-                  }`}
-                >
-                  📄 Tanggal Faktur (Tx Date)
-                </button>
+              <div className="flex items-center justify-between">
+                <span className={`text-[11px] font-bold uppercase tracking-wider ${isDarkMode ? "text-slate-400" : "text-slate-600"}`}>
+                  Pilih Mode Tarik Data:
+                </span>
+                <span className="text-[10px] text-blue-600 dark:text-blue-400 font-bold">
+                  {dateBasis === "order" ? "✓ Mode Tanggal Masuk SO" : "✓ Mode Tanggal Terfaktur"}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <button
                   type="button"
                   onClick={() => setDateBasis("order")}
-                  className={`px-2.5 py-1 rounded text-xs font-bold border transition-all ${
+                  className={`p-2.5 rounded-lg text-left border transition-all cursor-pointer ${
                     dateBasis === "order"
-                      ? "bg-blue-600 text-white border-blue-600 shadow-xs"
+                      ? "bg-blue-600 text-white border-blue-600 shadow-md ring-2 ring-blue-500/30"
                       : isDarkMode
-                      ? "bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700"
-                      : "bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200"
+                      ? "bg-slate-800/80 border-slate-700 text-slate-300 hover:bg-slate-700"
+                      : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100"
                   }`}
                 >
-                  📦 Tanggal Order (SO)
+                  <div className="flex items-center gap-1.5 font-bold text-xs">
+                    <span>📦</span>
+                    <span>Tanggal Masuk SO (Order)</span>
+                  </div>
+                  <div className={`text-[10px] mt-1 leading-tight ${dateBasis === "order" ? "text-blue-100" : "opacity-75"}`}>
+                    Cari ada berapa SO di tanggal sekian yang sudah terfaktur
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setDateBasis("transaction")}
+                  className={`p-2.5 rounded-lg text-left border transition-all cursor-pointer ${
+                    dateBasis === "transaction"
+                      ? "bg-blue-600 text-white border-blue-600 shadow-md ring-2 ring-blue-500/30"
+                      : isDarkMode
+                      ? "bg-slate-800/80 border-slate-700 text-slate-300 hover:bg-slate-700"
+                      : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100"
+                  }`}
+                >
+                  <div className="flex items-center gap-1.5 font-bold text-xs">
+                    <span>📄</span>
+                    <span>Tanggal Terfaktur (Tx Date)</span>
+                  </div>
+                  <div className={`text-[10px] mt-1 leading-tight ${dateBasis === "transaction" ? "text-blue-100" : "opacity-75"}`}>
+                    Cari ada berapa faktur yang terbit di tanggal sekian
+                  </div>
                 </button>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
               <div>
                 <label className={`block text-[11px] font-semibold mb-1 ${isDarkMode ? "text-slate-400" : "text-slate-600"}`}>
-                  Dari Tanggal:
+                  Dari Tanggal ({dateBasis === "order" ? "Tgl Order SO" : "Tgl Terfaktur"}):
                 </label>
                 <input
                   type="date"
@@ -320,7 +365,7 @@ export default function ExportExcelModal({
 
               <div>
                 <label className={`block text-[11px] font-semibold mb-1 ${isDarkMode ? "text-slate-400" : "text-slate-600"}`}>
-                  Hingga Tanggal:
+                  Hingga Tanggal ({dateBasis === "order" ? "Tgl Order SO" : "Tgl Terfaktur"}):
                 </label>
                 <input
                   type="date"
@@ -343,7 +388,7 @@ export default function ExportExcelModal({
               <button
                 type="button"
                 onClick={handlePresetAll}
-                className={`px-2 py-0.5 rounded text-[11px] font-semibold border transition-all ${
+                className={`px-2 py-0.5 rounded text-[11px] font-semibold border transition-all cursor-pointer ${
                   !startDate && !endDate
                     ? "bg-blue-600 text-white border-blue-600"
                     : isDarkMode
@@ -356,7 +401,7 @@ export default function ExportExcelModal({
               <button
                 type="button"
                 onClick={handlePresetToday}
-                className={`px-2 py-0.5 rounded text-[11px] font-semibold border transition-all ${
+                className={`px-2 py-0.5 rounded text-[11px] font-semibold border transition-all cursor-pointer ${
                   isDarkMode
                     ? "bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700"
                     : "bg-white border-slate-200 text-slate-700 hover:bg-slate-100"
@@ -367,7 +412,7 @@ export default function ExportExcelModal({
               <button
                 type="button"
                 onClick={handlePreset7Days}
-                className={`px-2 py-0.5 rounded text-[11px] font-semibold border transition-all ${
+                className={`px-2 py-0.5 rounded text-[11px] font-semibold border transition-all cursor-pointer ${
                   isDarkMode
                     ? "bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700"
                     : "bg-white border-slate-200 text-slate-700 hover:bg-slate-100"
@@ -378,7 +423,7 @@ export default function ExportExcelModal({
               <button
                 type="button"
                 onClick={handlePresetThisMonth}
-                className={`px-2 py-0.5 rounded text-[11px] font-semibold border transition-all ${
+                className={`px-2 py-0.5 rounded text-[11px] font-semibold border transition-all cursor-pointer ${
                   isDarkMode
                     ? "bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700"
                     : "bg-white border-slate-200 text-slate-700 hover:bg-slate-100"
@@ -453,32 +498,67 @@ export default function ExportExcelModal({
             </div>
           </div>
 
-          {/* Pratinjau Hasil Data */}
+          {/* Pratinjau Hasil Data (Preview KPI Cards) */}
           <div
-            className={`p-3 rounded-xl border flex items-center justify-between gap-3 ${
+            className={`p-3.5 rounded-xl border space-y-2.5 ${
               isDarkMode
                 ? "bg-[#0b1222] border-slate-700/80"
                 : "bg-blue-50/70 border-blue-200 text-blue-950"
             }`}
           >
-            <div className="space-y-0.5">
-              <div className="text-[11px] font-semibold opacity-75">
-                Data Siap Diekspor:
+            <div className="flex items-center justify-between text-[11px] font-bold uppercase tracking-wider opacity-80">
+              <span>📊 Pratinjau Data Terpilih:</span>
+              <span className="font-mono text-emerald-600 dark:text-emerald-400 font-extrabold text-xs">
+                Rp {formatRupiah(totalNilai)}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              <div className={`p-2 rounded-lg border text-center ${
+                isDarkMode ? "bg-[#111c33] border-slate-700/60" : "bg-white border-blue-100"
+              }`}>
+                <div className="text-[10px] text-slate-500 font-medium">Total SO Terfaktur</div>
+                <div className="text-base font-extrabold font-mono text-blue-600 dark:text-blue-400">
+                  {uniqueSoCount}
+                </div>
               </div>
-              <div className="text-base font-extrabold flex items-center gap-2">
-                <span className="text-blue-600 dark:text-blue-400 font-mono">
+
+              <div className={`p-2 rounded-lg border text-center ${
+                isDarkMode ? "bg-[#111c33] border-slate-700/60" : "bg-white border-blue-100"
+              }`}>
+                <div className="text-[10px] text-slate-500 font-medium">Total Lembar Faktur</div>
+                <div className="text-base font-extrabold font-mono text-indigo-600 dark:text-indigo-400">
                   {matchingData.length}
-                </span>
-                <span className="text-xs font-medium opacity-80">Faktur Terpilih</span>
+                </div>
+              </div>
+
+              <div className={`col-span-2 sm:col-span-1 p-2 rounded-lg border text-center ${
+                isDarkMode ? "bg-[#111c33] border-slate-700/60" : "bg-white border-blue-100"
+              }`}>
+                <div className="text-[10px] text-slate-500 font-medium">Basis Penarikan</div>
+                <div className="text-xs font-bold text-slate-700 dark:text-slate-300 mt-0.5">
+                  {dateBasis === "order" ? "Tanggal Order SO" : "Tanggal Faktur (Tx)"}
+                </div>
               </div>
             </div>
 
-            <div className="text-right space-y-0.5">
-              <div className="text-[11px] font-semibold opacity-75">
-                Total Nilai:
-              </div>
-              <div className="text-xs font-bold font-mono text-emerald-600 dark:text-emerald-400">
-                Rp {formatRupiah(totalNilai)}
+            {/* Informative Explanation Helper */}
+            <div className={`text-[11px] leading-relaxed p-2 rounded-lg border flex items-start gap-1.5 ${
+              isDarkMode
+                ? "bg-slate-900/60 border-slate-800 text-slate-300"
+                : "bg-blue-100/60 border-blue-200 text-blue-900"
+            }`}>
+              <span className="text-xs mt-0.5">💡</span>
+              <div>
+                {dateBasis === "order" ? (
+                  <span>
+                    Menarik <strong>{uniqueSoCount} SO</strong> yang masuk pada rentang tanggal terpilih dan sudah memiliki faktur terbit (total <strong>{matchingData.length} faktur</strong>).
+                  </span>
+                ) : (
+                  <span>
+                    Menarik <strong>{matchingData.length} faktur</strong> yang diterbitkan pada rentang tanggal terpilih (mencakup <strong>{uniqueSoCount} SO</strong>).
+                  </span>
+                )}
               </div>
             </div>
           </div>
@@ -493,7 +573,7 @@ export default function ExportExcelModal({
           <button
             type="button"
             onClick={onClose}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
               isDarkMode ? "hover:bg-slate-800 text-slate-400" : "hover:bg-slate-200 text-slate-600"
             }`}
           >
@@ -511,7 +591,7 @@ export default function ExportExcelModal({
             }`}
           >
             <span>📥</span>
-            <span>Unduh Excel ({matchingData.length} Data)</span>
+            <span>Unduh Excel ({matchingData.length} Faktur | {uniqueSoCount} SO)</span>
           </button>
         </div>
       </div>
