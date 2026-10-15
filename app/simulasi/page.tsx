@@ -191,6 +191,33 @@ function formatRupiah(n: number): string {
   }).format(n);
 }
 
+// ─── Customizer Configuration Interface ──────────────────────────────────────
+interface UIConfig {
+  layout: "sidebar" | "topbar" | "hybrid";
+  theme: "obsidian" | "navy" | "zinc" | "light";
+  accent: "blue" | "emerald" | "cyan" | "indigo" | "amber" | "rose";
+  density: "compact" | "normal" | "spacious";
+  kpiStyle: "sidebar-docked" | "ribbon-top" | "cards-grid" | "hidden";
+  showTxDate: boolean;
+  showOrderDate: boolean;
+  showProductBadge: boolean;
+  showCustomerName: boolean;
+  showTotal: boolean;
+}
+
+const DEFAULT_CONFIG: UIConfig = {
+  layout: "sidebar",
+  theme: "obsidian",
+  accent: "blue",
+  density: "compact",
+  kpiStyle: "sidebar-docked",
+  showTxDate: true,
+  showOrderDate: true,
+  showProductBadge: true,
+  showCustomerName: true,
+  showTotal: true,
+};
+
 export default function SimulasiPage() {
   const [data, setData] = useState<MockFaktur[]>(INITIAL_MOCK_DATA);
   const [activeNav, setActiveNav] = useState<"belum" | "sudah" | "semua" | "double" | "retur">("belum");
@@ -201,8 +228,12 @@ export default function SimulasiPage() {
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>("1");
 
+  // ─── Studio Customizer State ───────────────────────────────────────────────
+  const [cfg, setCfg] = useState<UIConfig>(DEFAULT_CONFIG);
+  const [showStudioDrawer, setShowStudioDrawer] = useState<boolean>(false);
+  const [copiedConfig, setCopiedConfig] = useState<boolean>(false);
+
   // Settings & Modals State
-  const [isDarkMode, setIsDarkMode] = useState<boolean>(true);
   const [showSettingsPanel, setShowSettingsPanel] = useState<boolean>(false);
   const [showApotekModal, setShowApotekModal] = useState<boolean>(false);
   const [showProductModal, setShowProductModal] = useState<boolean>(false);
@@ -276,7 +307,7 @@ export default function SimulasiPage() {
     };
   }, [data]);
 
-  // Convert mock data to FakturGroup format for ExportExcelModal
+  // Convert mock data for ExportExcelModal
   const exportGroups = useMemo<FakturGroup[]>(() => {
     return data.map((d) => ({
       key: d.id,
@@ -350,395 +381,450 @@ export default function SimulasiPage() {
     retur: { title: "Faktur Retur", subtitle: `${stats.retur} Faktur retur/pengembalian barang`, color: "text-amber-400" },
   }[activeNav];
 
-  return (
-    <div className={`flex h-screen w-screen overflow-hidden font-sans transition-colors duration-150 ${
-      isDarkMode ? "bg-[#080C15] text-slate-100" : "bg-[#F8FAFC] text-slate-800"
-    }`}>
-      {/* ═════════════════════════════════════════════════════════════════════ */}
-      {/* ─── LEFT SIDEBAR WORKSPACE (Width: 260px) ───────────────────────── */}
-      {/* ═════════════════════════════════════════════════════════════════════ */}
-      <aside className={`w-64 shrink-0 h-full border-r flex flex-col justify-between select-none ${
-        isDarkMode ? "bg-[#0A0F1D] border-slate-800/80" : "bg-white border-slate-200"
-      }`}>
-        {/* Top: Branding, Online Popover, Upload */}
-        <div className="p-3.5 space-y-3">
-          {/* Logo & Online Presence Button */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="w-6 h-6 rounded-md bg-blue-600 flex items-center justify-center font-mono font-black text-white text-xs shadow-xs">
-                FT
-              </div>
-              <div>
-                <div className="font-extrabold text-xs font-mono tracking-tight leading-tight">
-                  FAKTUR TRACKER
-                </div>
-                <div className={`text-[10px] font-medium ${isDarkMode ? "text-slate-500" : "text-slate-400"}`}>
-                  Gudang 1 • Cabang Pusat
-                </div>
-              </div>
-            </div>
+  // ─── Dynamic Theme Colors ──────────────────────────────────────────────────
+  const themeClasses = {
+    obsidian: {
+      bg: "bg-[#080C15]",
+      surface: "bg-[#0A0F1D]",
+      surface2: "bg-[#0E1524]",
+      border: "border-slate-800/80",
+      text: "text-slate-100",
+      textMuted: "text-slate-400",
+      tableHeader: "bg-[#0E1524] text-slate-400",
+      isDark: true,
+    },
+    navy: {
+      bg: "bg-[#070D1E]",
+      surface: "bg-[#0B1530]",
+      surface2: "bg-[#0F1E42]",
+      border: "border-blue-900/60",
+      text: "text-blue-50",
+      textMuted: "text-blue-300/70",
+      tableHeader: "bg-[#0E1B3D] text-blue-300",
+      isDark: true,
+    },
+    zinc: {
+      bg: "bg-[#121214]",
+      surface: "bg-[#18181B]",
+      surface2: "bg-[#202024]",
+      border: "border-zinc-800",
+      text: "text-zinc-100",
+      textMuted: "text-zinc-400",
+      tableHeader: "bg-[#1E1E22] text-zinc-400",
+      isDark: true,
+    },
+    light: {
+      bg: "bg-[#F8FAFC]",
+      surface: "bg-white",
+      surface2: "bg-slate-50",
+      border: "border-slate-200",
+      text: "text-slate-900",
+      textMuted: "text-slate-500",
+      tableHeader: "bg-slate-100 text-slate-700",
+      isDark: false,
+    },
+  }[cfg.theme];
 
-            {/* Online Status Pill - Clickable to open online users */}
-            <div className="relative">
+  const accentBtn = {
+    blue: "bg-blue-600 hover:bg-blue-500 text-white shadow-blue-600/20",
+    emerald: "bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/20",
+    cyan: "bg-cyan-600 hover:bg-cyan-500 text-white shadow-cyan-600/20",
+    indigo: "bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-600/20",
+    amber: "bg-amber-600 hover:bg-amber-500 text-white shadow-amber-600/20",
+    rose: "bg-rose-600 hover:bg-rose-500 text-white shadow-rose-600/20",
+  }[cfg.accent];
+
+  const tablePadding = {
+    compact: "py-1.5 px-2.5",
+    normal: "py-2.5 px-3",
+    spacious: "py-3.5 px-4",
+  }[cfg.density];
+
+  // Presets
+  const applyPreset = (name: string) => {
+    if (name === "operator-pro") {
+      setCfg({
+        layout: "sidebar",
+        theme: "obsidian",
+        accent: "blue",
+        density: "compact",
+        kpiStyle: "sidebar-docked",
+        showTxDate: true,
+        showOrderDate: true,
+        showProductBadge: true,
+        showCustomerName: true,
+        showTotal: true,
+      });
+    } else if (name === "stripe-clean") {
+      setCfg({
+        layout: "topbar",
+        theme: "light",
+        accent: "indigo",
+        density: "normal",
+        kpiStyle: "ribbon-top",
+        showTxDate: true,
+        showOrderDate: true,
+        showProductBadge: true,
+        showCustomerName: true,
+        showTotal: true,
+      });
+    } else if (name === "financial-terminal") {
+      setCfg({
+        layout: "topbar",
+        theme: "navy",
+        accent: "cyan",
+        density: "compact",
+        kpiStyle: "ribbon-top",
+        showTxDate: true,
+        showOrderDate: true,
+        showProductBadge: true,
+        showCustomerName: true,
+        showTotal: true,
+      });
+    } else if (name === "zen-minimal") {
+      setCfg({
+        layout: "sidebar",
+        theme: "zinc",
+        accent: "emerald",
+        density: "compact",
+        kpiStyle: "hidden",
+        showTxDate: true,
+        showOrderDate: true,
+        showProductBadge: true,
+        showCustomerName: true,
+        showTotal: true,
+      });
+    }
+  };
+
+  const copyConfigJson = () => {
+    navigator.clipboard.writeText(JSON.stringify(cfg, null, 2));
+    setCopiedConfig(true);
+    setTimeout(() => setCopiedConfig(false), 2000);
+  };
+
+  return (
+    <div className={`flex h-screen w-screen overflow-hidden font-sans ${themeClasses.bg} ${themeClasses.text} transition-colors duration-150`}>
+
+      {/* ─── FLOATING UI STUDIO TRIGGER (Always visible in bottom-right corner) ─── */}
+      <div className="fixed bottom-4 right-4 z-50">
+        <button
+          type="button"
+          onClick={() => setShowStudioDrawer(true)}
+          className="px-3.5 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-xl shadow-blue-600/30 flex items-center gap-2 cursor-pointer transition-all hover:scale-105 active:scale-95 border border-white/20"
+        >
+          <span className="text-sm">🎨</span>
+          <span>Desain Sendiri (Studio UI)</span>
+        </button>
+      </div>
+
+      {/* ═════════════════════════════════════════════════════════════════════ */}
+      {/* ─── LAYOUT MODE 1: SIDEBAR WORKSPACE ─────────────────────────────── */}
+      {/* ═════════════════════════════════════════════════════════════════════ */}
+      {cfg.layout === "sidebar" && (
+        <aside className={`w-64 shrink-0 h-full border-r ${themeClasses.border} ${themeClasses.surface} flex flex-col justify-between select-none`}>
+          {/* Top Brand & Actions */}
+          <div className="p-3.5 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className={`w-6 h-6 rounded-md flex items-center justify-center font-mono font-black text-white text-xs shadow-xs ${accentBtn.split(" ")[0]}`}>
+                  FT
+                </div>
+                <div>
+                  <div className="font-extrabold text-xs font-mono tracking-tight leading-tight">
+                    FAKTUR TRACKER
+                  </div>
+                  <div className={`text-[10px] font-medium ${themeClasses.textMuted}`}>
+                    Gudang 1 • Cabang Pusat
+                  </div>
+                </div>
+              </div>
               <button
                 type="button"
                 onClick={() => setShowOnlinePopover(!showOnlinePopover)}
-                className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[9px] text-emerald-400 font-semibold cursor-pointer hover:bg-emerald-500/20 transition-colors"
-                title="Lihat pengguna online"
+                className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[9px] text-emerald-400 font-semibold cursor-pointer"
               >
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                 <span>4 ON</span>
               </button>
+            </div>
 
-              {/* Online Users Popover */}
-              {showOnlinePopover && (
-                <div className={`absolute left-0 top-full mt-2 w-56 rounded-xl border p-2.5 shadow-2xl z-50 text-xs ${
-                  isDarkMode ? "bg-[#0E1524] border-slate-700 text-slate-100" : "bg-white border-slate-200 text-slate-800"
-                }`}>
-                  <div className="flex items-center justify-between pb-1.5 border-b border-slate-800 text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                    <span>Pengguna Online (4)</span>
-                    <button onClick={() => setShowOnlinePopover(false)} className="text-slate-400 hover:text-white">✕</button>
+            <button
+              type="button"
+              className={`w-full py-1.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-md ${accentBtn}`}
+            >
+              <span>+</span>
+              <span>Upload Data XXCUST</span>
+            </button>
+          </div>
+
+          {/* Navigation Lists */}
+          <div className="flex-1 overflow-y-auto px-2 space-y-4 py-1 custom-scrollbar text-xs">
+            <div>
+              <div className={`px-2 pb-1 text-[9px] font-bold uppercase tracking-wider ${themeClasses.textMuted}`}>
+                Antrean Cetak
+              </div>
+              <div className="space-y-0.5">
+                <button
+                  type="button"
+                  onClick={() => setActiveNav("belum")}
+                  className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg font-semibold transition-all cursor-pointer ${
+                    activeNav === "belum"
+                      ? "bg-blue-600/15 text-blue-400 border border-blue-500/30 font-bold"
+                      : `${themeClasses.textMuted} hover:text-white hover:bg-slate-800/40`
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <span>📥</span>
+                    <span>Belum Dicetak</span>
                   </div>
-                  <div className="space-y-1.5 pt-1.5">
-                    <div className="flex items-center justify-between text-[11px]">
-                      <span className="font-bold flex items-center gap-1.5">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                        Admin Gudang (Anda)
-                      </span>
-                      <span className="text-[9px] text-emerald-400 font-mono">Aktif</span>
+                  <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                    {stats.belum}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setActiveNav("sudah")}
+                  className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg font-semibold transition-all cursor-pointer ${
+                    activeNav === "sudah"
+                      ? "bg-blue-600/15 text-blue-400 border border-blue-500/30 font-bold"
+                      : `${themeClasses.textMuted} hover:text-white hover:bg-slate-800/40`
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <span>✅</span>
+                    <span>Selesai Dicetak</span>
+                  </div>
+                  <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono text-emerald-400 bg-emerald-500/10">
+                    {stats.sudah}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setActiveNav("semua")}
+                  className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg font-semibold transition-all cursor-pointer ${
+                    activeNav === "semua"
+                      ? "bg-blue-600/15 text-blue-400 border border-blue-500/30 font-bold"
+                      : `${themeClasses.textMuted} hover:text-white hover:bg-slate-800/40`
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <span>📑</span>
+                    <span>Semua Faktur</span>
+                  </div>
+                  <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${themeClasses.surface2} ${themeClasses.textMuted}`}>
+                    {stats.total}
+                  </span>
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <div className={`px-2 pb-1 text-[9px] font-bold uppercase tracking-wider ${themeClasses.textMuted}`}>
+                Perlu Perhatian
+              </div>
+              <div className="space-y-0.5">
+                <button
+                  type="button"
+                  onClick={() => setActiveNav("double")}
+                  className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg font-semibold transition-all cursor-pointer ${
+                    activeNav === "double"
+                      ? "bg-rose-950/40 text-rose-300 border border-rose-700/50 font-bold"
+                      : "text-rose-400 hover:bg-rose-950/30"
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <span>⚠️</span>
+                    <span>Double INV</span>
+                  </div>
+                  <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold bg-rose-500/20 text-rose-300 border border-rose-500/40 animate-pulse">
+                    {stats.double}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setActiveNav("retur")}
+                  className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg font-semibold transition-all cursor-pointer ${
+                    activeNav === "retur"
+                      ? "bg-amber-950/40 text-amber-300 border border-amber-700/50 font-bold"
+                      : "text-amber-400 hover:bg-amber-950/30"
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <span>🔄</span>
+                    <span>Faktur Retur</span>
+                  </div>
+                  <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                    {stats.retur}
+                  </span>
+                </button>
+              </div>
+            </div>
+
+            {/* Master Menu */}
+            <div>
+              <div className={`px-2 pb-1 text-[9px] font-bold uppercase tracking-wider ${themeClasses.textMuted}`}>
+                Master & Pengaturan
+              </div>
+              <div className="space-y-0.5">
+                <button
+                  type="button"
+                  onClick={() => setShowApotekModal(true)}
+                  className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg font-semibold transition-colors cursor-pointer text-left ${themeClasses.textMuted} hover:text-white`}
+                >
+                  <span>🏢</span>
+                  <span>Master Apotek (1P/2P/3P)</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setShowProductModal(true)}
+                  className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg font-semibold transition-colors cursor-pointer text-left ${themeClasses.textMuted} hover:text-white`}
+                >
+                  <span>💊</span>
+                  <span>Master Produk</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setShowSettingsPanel(true)}
+                  className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg font-semibold transition-colors cursor-pointer text-left text-blue-400 hover:bg-blue-950/40"
+                >
+                  <span>⚙️</span>
+                  <span>Panel Pengaturan</span>
+                </button>
+              </div>
+            </div>
+
+            {/* KPI Telemetry Widget in Sidebar (if enabled) */}
+            {cfg.kpiStyle === "sidebar-docked" && (
+              <div className="pt-2 border-t border-slate-800/80">
+                <div className={`p-2.5 rounded-xl border ${themeClasses.border} ${themeClasses.surface2} space-y-2 text-[11px]`}>
+                  <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                    <span>Progresi Nomor</span>
+                    <span className="text-blue-400 font-mono">SO: {stats.totalSO}</span>
+                  </div>
+
+                  <div className={`p-1.5 rounded-lg border ${themeClasses.border} ${themeClasses.surface}`}>
+                    <div className="flex items-center justify-between text-[10px]">
+                      <span className="text-slate-400 font-semibold">1P ORA (Max)</span>
+                      <span className="text-[8px] font-mono px-1 rounded bg-sky-500/20 text-sky-400 font-bold">ORA</span>
                     </div>
-                    <div className="flex items-center justify-between text-[11px] opacity-80">
-                      <span className="flex items-center gap-1.5">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                        Ahmad Staff
-                      </span>
-                      <span className="text-[9px] text-slate-400 font-mono">Gudang</span>
+                    <div className="font-mono font-bold text-sky-300 text-xs mt-0.5">
+                      {stats.maxOra}
                     </div>
-                    <div className="flex items-center justify-between text-[11px] opacity-80">
-                      <span className="flex items-center gap-1.5">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                        Rian Ops
-                      </span>
-                      <span className="text-[9px] text-slate-400 font-mono">Checker</span>
+                    <div className="text-[9px] font-mono text-slate-500 truncate">
+                      R: {stats.rangeOra}
+                    </div>
+                  </div>
+
+                  <div className={`p-1.5 rounded-lg border ${themeClasses.border} ${themeClasses.surface} space-y-1`}>
+                    <div className="text-[10px] text-slate-400 font-semibold">DOO Nomor Max:</div>
+                    <div className="grid grid-cols-3 gap-1 text-[10px] font-mono font-bold text-center">
+                      <div className="p-0.5 rounded bg-slate-800/60 text-emerald-400">1P:{stats.max1PDoo}</div>
+                      <div className="p-0.5 rounded bg-slate-800/60 text-sky-300">2P:{stats.max2P}</div>
+                      <div className="p-0.5 rounded bg-slate-800/60 text-purple-300">3P:{stats.max3P}</div>
                     </div>
                   </div>
                 </div>
-              )}
-            </div>
+              </div>
+            )}
           </div>
 
-          {/* Upload Button */}
-          <button
-            type="button"
-            className="w-full py-1.5 px-3 rounded-lg text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white shadow-md shadow-blue-600/20 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
-          >
-            <span>+</span>
-            <span>Upload Data XXCUST</span>
-          </button>
-        </div>
-
-        {/* Middle: Navigation Lists */}
-        <div className="flex-1 overflow-y-auto px-2 space-y-4 py-1 custom-scrollbar text-xs">
-          {/* Section 1: Antrean Kerja */}
-          <div>
-            <div className={`px-2 pb-1 text-[9px] font-bold uppercase tracking-wider ${isDarkMode ? "text-slate-500" : "text-slate-400"}`}>
-              Antrean Cetak
-            </div>
-            <div className="space-y-0.5">
+          {/* Sidebar Footer User */}
+          <div className={`p-3 border-t ${themeClasses.border} ${themeClasses.surface} space-y-2`}>
+            <Link
+              href="/"
+              className={`w-full text-center block py-1 rounded text-[11px] font-semibold transition-colors ${themeClasses.textMuted} hover:text-white`}
+            >
+              ← Kembali ke Sistem Utama
+            </Link>
+            <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-800/60">
               <button
                 type="button"
-                onClick={() => setActiveNav("belum")}
-                className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg font-semibold transition-all cursor-pointer ${
-                  activeNav === "belum"
-                    ? "bg-blue-600/15 text-blue-400 border border-blue-500/30 font-bold"
-                    : isDarkMode ? "text-slate-400 hover:text-white hover:bg-slate-800/50" : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
-                }`}
+                onClick={() => setShowLoginModal(true)}
+                className="flex items-center gap-2 text-left cursor-pointer hover:opacity-80 transition-opacity"
               >
-                <div className="flex items-center gap-2">
-                  <span>📥</span>
-                  <span>Belum Dicetak</span>
+                <div className="w-6 h-6 rounded-md bg-blue-600/30 border border-blue-500/40 flex items-center justify-center text-[10px] font-bold text-blue-300">
+                  👤
                 </div>
-                <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30">
-                  {stats.belum}
-                </span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setActiveNav("sudah")}
-                className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg font-semibold transition-all cursor-pointer ${
-                  activeNav === "sudah"
-                    ? "bg-blue-600/15 text-blue-400 border border-blue-500/30 font-bold"
-                    : isDarkMode ? "text-slate-400 hover:text-white hover:bg-slate-800/50" : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
-                }`}
-              >
-                <div className="flex items-center gap-2">
-                  <span>✅</span>
-                  <span>Selesai Dicetak</span>
+                <div>
+                  <div className="font-bold text-[11px] leading-tight flex items-center gap-1">
+                    <span>{currentUser?.name || "Admin"}</span>
+                    <span className="text-[9px] text-blue-400 underline">Ganti</span>
+                  </div>
+                  <div className={`text-[9px] ${themeClasses.textMuted}`}>
+                    {currentUser?.role === "admin" ? "Pencetak Aktif" : "Hanya Lihat"}
+                  </div>
                 </div>
-                <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono text-emerald-400 bg-emerald-500/10">
-                  {stats.sudah}
-                </span>
               </button>
-
-              <button
-                type="button"
-                onClick={() => setActiveNav("semua")}
-                className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg font-semibold transition-all cursor-pointer ${
-                  activeNav === "semua"
-                    ? "bg-blue-600/15 text-blue-400 border border-blue-500/30 font-bold"
-                    : isDarkMode ? "text-slate-400 hover:text-white hover:bg-slate-800/50" : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
-                }`}
-              >
-                <div className="flex items-center gap-2">
-                  <span>📑</span>
-                  <span>Semua Faktur</span>
-                </div>
-                <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
-                  isDarkMode ? "text-slate-400 bg-slate-800" : "text-slate-600 bg-slate-100"
-                }`}>
-                  {stats.total}
-                </span>
-              </button>
-            </div>
-          </div>
-
-          {/* Section 2: Perhatian Khusus */}
-          <div>
-            <div className={`px-2 pb-1 text-[9px] font-bold uppercase tracking-wider ${isDarkMode ? "text-slate-500" : "text-slate-400"}`}>
-              Perlu Perhatian
-            </div>
-            <div className="space-y-0.5">
-              <button
-                type="button"
-                onClick={() => setActiveNav("double")}
-                className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg font-semibold transition-all cursor-pointer ${
-                  activeNav === "double"
-                    ? "bg-rose-950/40 text-rose-300 border border-rose-700/50 font-bold"
-                    : "text-rose-400 hover:bg-rose-950/30"
-                }`}
-              >
-                <div className="flex items-center gap-2">
-                  <span>⚠️</span>
-                  <span>Double INV</span>
-                </div>
-                <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold bg-rose-500/20 text-rose-300 border border-rose-500/40 animate-pulse">
-                  {stats.double}
-                </span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setActiveNav("retur")}
-                className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg font-semibold transition-all cursor-pointer ${
-                  activeNav === "retur"
-                    ? "bg-amber-950/40 text-amber-300 border border-amber-700/50 font-bold"
-                    : "text-amber-400 hover:bg-amber-950/30"
-                }`}
-              >
-                <div className="flex items-center gap-2">
-                  <span>🔄</span>
-                  <span>Faktur Retur</span>
-                </div>
-                <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                  {stats.retur}
-                </span>
-              </button>
-            </div>
-          </div>
-
-          {/* Section 3: Master Data & Pengaturan Menu Langsung di Sidebar */}
-          <div>
-            <div className={`px-2 pb-1 text-[9px] font-bold uppercase tracking-wider ${isDarkMode ? "text-slate-500" : "text-slate-400"}`}>
-              Master & Pengaturan
-            </div>
-            <div className="space-y-0.5">
-              <button
-                type="button"
-                onClick={() => setShowApotekModal(true)}
-                className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg font-semibold transition-colors cursor-pointer text-left ${
-                  isDarkMode ? "text-slate-300 hover:bg-slate-800/60" : "text-slate-700 hover:bg-slate-100"
-                }`}
-              >
-                <span>🏢</span>
-                <span>Master Apotek (1P/2P/3P)</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setShowProductModal(true)}
-                className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg font-semibold transition-colors cursor-pointer text-left ${
-                  isDarkMode ? "text-slate-300 hover:bg-slate-800/60" : "text-slate-700 hover:bg-slate-100"
-                }`}
-              >
-                <span>💊</span>
-                <span>Master Produk</span>
-              </button>
-
               <button
                 type="button"
                 onClick={() => setShowSettingsPanel(true)}
-                className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg font-semibold transition-colors cursor-pointer text-left ${
-                  isDarkMode ? "text-blue-400 hover:bg-blue-950/40" : "text-blue-600 hover:bg-blue-50"
-                }`}
+                className="p-1.5 rounded-lg border border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700 cursor-pointer"
               >
-                <span>⚙️</span>
-                <span>Buka Panel Pengaturan</span>
+                ⚙️
               </button>
             </div>
           </div>
-
-          {/* Section 4: Progresi Telemetri Nomor Faktur */}
-          <div className="pt-2 border-t border-slate-800/80">
-            <div className={`p-2.5 rounded-xl border space-y-2 text-[11px] ${
-              isDarkMode ? "bg-[#0C1222] border-slate-800" : "bg-slate-50 border-slate-200"
-            }`}>
-              <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                <span>Progresi Nomor</span>
-                <span className="text-blue-400 font-mono">SO: {stats.totalSO}</span>
-              </div>
-
-              {/* ORA Max */}
-              <div className={`p-1.5 rounded-lg border ${
-                isDarkMode ? "bg-[#090D18] border-slate-800" : "bg-white border-slate-200"
-              }`}>
-                <div className="flex items-center justify-between text-[10px]">
-                  <span className="text-slate-400 font-semibold">1P ORA (Max)</span>
-                  <span className="text-[8px] font-mono px-1 rounded bg-sky-500/20 text-sky-400 font-bold">ORA</span>
-                </div>
-                <div className="font-mono font-bold text-sky-300 text-xs mt-0.5">
-                  {stats.maxOra}
-                </div>
-                <div className="text-[9px] font-mono text-slate-500 truncate">
-                  R: {stats.rangeOra}
-                </div>
-              </div>
-
-              {/* DOO Max Progressions */}
-              <div className={`p-1.5 rounded-lg border space-y-1 ${
-                isDarkMode ? "bg-[#090D18] border-slate-800" : "bg-white border-slate-200"
-              }`}>
-                <div className="text-[10px] text-slate-400 font-semibold">DOO Nomor Max:</div>
-                <div className="grid grid-cols-3 gap-1 text-[10px] font-mono font-bold text-center">
-                  <div className={`p-0.5 rounded ${isDarkMode ? "bg-slate-800" : "bg-slate-100"} text-emerald-400`}>
-                    1P:{stats.max1PDoo}
-                  </div>
-                  <div className={`p-0.5 rounded ${isDarkMode ? "bg-slate-800" : "bg-slate-100"} text-sky-300`}>
-                    2P:{stats.max2P}
-                  </div>
-                  <div className={`p-0.5 rounded ${isDarkMode ? "bg-slate-800" : "bg-slate-100"} text-purple-300`}>
-                    3P:{stats.max3P}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Bottom User Profile, Settings Trigger, & Link */}
-        <div className={`p-3 border-t space-y-2 ${
-          isDarkMode ? "bg-[#0B101D] border-slate-800/80" : "bg-slate-50 border-slate-200"
-        }`}>
-          <Link
-            href="/"
-            className={`w-full text-center block py-1 rounded text-[11px] font-semibold transition-colors ${
-              isDarkMode ? "text-slate-400 hover:text-white hover:bg-slate-800/60" : "text-slate-600 hover:text-slate-900 hover:bg-slate-200"
-            }`}
-          >
-            ← Kembali ke Tampilan Lama
-          </Link>
-
-          <div className={`flex items-center justify-between text-xs pt-2 border-t ${
-            isDarkMode ? "border-slate-800/60" : "border-slate-200"
-          }`}>
-            <button
-              type="button"
-              onClick={() => setShowLoginModal(true)}
-              className="flex items-center gap-2 text-left cursor-pointer hover:opacity-80 transition-opacity"
-              title="Ganti Pengguna"
-            >
-              <div className="w-6 h-6 rounded-md bg-blue-600/30 border border-blue-500/40 flex items-center justify-center text-[10px] font-bold text-blue-300">
-                👤
-              </div>
-              <div>
-                <div className="font-bold text-[11px] leading-tight flex items-center gap-1">
-                  <span>{currentUser?.name || "Pilih User"}</span>
-                  <span className="text-[9px] text-blue-400 underline">Ganti</span>
-                </div>
-                <div className={`text-[9px] ${isDarkMode ? "text-slate-500" : "text-slate-400"}`}>
-                  {currentUser?.role === "admin" ? "Pencetak Aktif" : "Hanya Lihat"}
-                </div>
-              </div>
-            </button>
-
-            {/* Quick Gear Icon */}
-            <button
-              type="button"
-              onClick={() => setShowSettingsPanel(true)}
-              className={`p-1.5 rounded-lg border transition-colors cursor-pointer ${
-                isDarkMode ? "bg-slate-800/80 border-slate-700 text-slate-300 hover:bg-slate-700" : "bg-white border-slate-200 text-slate-700 hover:bg-slate-100"
-              }`}
-              title="Buka Pengaturan"
-            >
-              ⚙️
-            </button>
-          </div>
-        </div>
-      </aside>
+        </aside>
+      )}
 
       {/* ═════════════════════════════════════════════════════════════════════ */}
-      {/* ─── RIGHT MAIN CANVAS ────────────────────────────────────────────── */}
+      {/* ─── MAIN RIGHT CANVAS / FULL BODY ─────────────────────────────────── */}
       {/* ═════════════════════════════════════════════════════════════════════ */}
       <main className="flex-1 flex flex-col h-full overflow-hidden">
-        {/* Top Context & Action Bar (Height: 52px) */}
-        <header className={`h-[52px] shrink-0 px-4 border-b flex items-center justify-between gap-3 ${
-          isDarkMode ? "bg-[#0B101D] border-slate-800/80" : "bg-white border-slate-200"
-        }`}>
-          {/* Left Title */}
-          <div>
-            <h1 className="text-sm font-extrabold tracking-tight flex items-center gap-2">
-              <span className={activeNavTitle.color}>{activeNavTitle.title}</span>
-              <span className="text-xs text-slate-500 font-normal">({filtered.length} Faktur)</span>
-            </h1>
-            <p className="text-[10px] text-slate-500">{activeNavTitle.subtitle}</p>
+        {/* Top Header Bar */}
+        <header className={`h-[52px] shrink-0 px-4 border-b ${themeClasses.border} ${themeClasses.surface} flex items-center justify-between gap-3`}>
+          {/* Left: View Title or Brand if Topbar mode */}
+          <div className="flex items-center gap-3">
+            {cfg.layout !== "sidebar" && (
+              <div className="flex items-center gap-2 mr-2">
+                <div className={`w-6 h-6 rounded-md flex items-center justify-center font-mono font-black text-white text-xs ${accentBtn.split(" ")[0]}`}>
+                  FT
+                </div>
+                <span className="font-extrabold text-xs font-mono tracking-tight">FAKTUR TRACKER</span>
+              </div>
+            )}
+            <div>
+              <h1 className="text-sm font-extrabold tracking-tight flex items-center gap-2">
+                <span className={activeNavTitle.color}>{activeNavTitle.title}</span>
+                <span className={`text-xs ${themeClasses.textMuted} font-normal`}>({filtered.length} Faktur)</span>
+              </h1>
+              <p className={`text-[10px] ${themeClasses.textMuted}`}>{activeNavTitle.subtitle}</p>
+            </div>
           </div>
 
-          {/* Right Filters & Tools */}
+          {/* Right Toolbar Controls */}
           <div className="flex items-center gap-2">
-            {/* Quick Search */}
-            <div className="relative w-44 sm:w-52">
+            <div className="relative w-40 sm:w-48">
               <span className="absolute left-2.5 top-1.5 text-xs text-slate-500">🔍</span>
               <input
                 type="text"
-                placeholder="Cari SO, Faktur, Apotek... (/)"
+                placeholder="Cari SO, Faktur... (/)"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className={`w-full pl-7 pr-2.5 py-1 rounded-md text-xs outline-hidden transition-all ${
-                  isDarkMode ? "bg-[#080C15] border border-slate-700/80 text-slate-100 focus:border-blue-500" : "bg-slate-50 border border-slate-300 text-slate-800 focus:bg-white"
-                }`}
+                className={`w-full pl-7 pr-2.5 py-1 rounded-md text-xs outline-hidden ${themeClasses.surface2} border ${themeClasses.border}`}
               />
             </div>
 
-            {/* Filter Jenis */}
             <select
               value={jenisFilter}
               onChange={(e) => setJenisFilter(e.target.value)}
-              className={`px-2 py-1 rounded-md text-xs outline-hidden ${
-                isDarkMode ? "bg-[#080C15] border border-slate-700/80 text-slate-300" : "bg-slate-50 border border-slate-300 text-slate-700"
-              }`}
+              className={`px-2 py-1 rounded-md text-xs outline-hidden ${themeClasses.surface2} border ${themeClasses.border}`}
             >
               <option value="all">Semua Jenis</option>
               <option value="ORA">Khusus ORA</option>
               <option value="DOO">Khusus DOO</option>
             </select>
 
-            {/* Filter Kategori */}
             <select
               value={katFilter}
               onChange={(e) => setKatFilter(e.target.value)}
-              className={`px-2 py-1 rounded-md text-xs outline-hidden ${
-                isDarkMode ? "bg-[#080C15] border border-slate-700/80 text-slate-300" : "bg-slate-50 border border-slate-300 text-slate-700"
-              }`}
+              className={`px-2 py-1 rounded-md text-xs outline-hidden ${themeClasses.surface2} border ${themeClasses.border}`}
             >
               <option value="all">Semua Kat</option>
               <option value="1P">1P</option>
@@ -746,48 +832,15 @@ export default function SimulasiPage() {
               <option value="3P">3P</option>
             </select>
 
-            {/* Filter Produk */}
-            <select
-              value={klasFilter}
-              onChange={(e) => setKlasFilter(e.target.value)}
-              className={`px-2 py-1 rounded-md text-xs outline-hidden ${
-                isDarkMode ? "bg-[#080C15] border border-slate-700/80 text-slate-300" : "bg-slate-50 border border-slate-300 text-slate-700"
-              }`}
-            >
-              <option value="all">Semua Produk</option>
-              <option value="prekursor">Prekursor</option>
-              <option value="oot">OOT</option>
-              <option value="ccp">CCP</option>
-              <option value="alkes">Alkes</option>
-              <option value="farma">Farma</option>
-            </select>
-
-            {/* Ekspor Excel Trigger */}
             <button
               type="button"
               onClick={() => setShowExportModal(true)}
-              className={`px-2.5 py-1 rounded-md text-xs font-semibold border transition-colors flex items-center gap-1 cursor-pointer ${
-                isDarkMode ? "border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700" : "border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
-              }`}
+              className={`px-2.5 py-1 rounded-md text-xs font-semibold border ${themeClasses.border} ${themeClasses.surface2} hover:opacity-80 transition-colors flex items-center gap-1 cursor-pointer`}
             >
               <span>📥</span>
               <span className="hidden sm:inline">Ekspor Excel</span>
             </button>
 
-            {/* Settings Trigger in Header */}
-            <button
-              type="button"
-              onClick={() => setShowSettingsPanel(true)}
-              className={`px-2 py-1 rounded-md text-xs font-semibold border transition-colors flex items-center gap-1 cursor-pointer ${
-                isDarkMode ? "border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700" : "border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
-              }`}
-              title="Buka Pengaturan"
-            >
-              <span>⚙️</span>
-              <span className="hidden md:inline">Pengaturan</span>
-            </button>
-
-            {/* Batch Done Print Button */}
             {activeNav === "belum" && stats.belum > 0 && (
               <button
                 type="button"
@@ -801,32 +854,118 @@ export default function SimulasiPage() {
           </div>
         </header>
 
-        {/* ─── Table Canvas (Full Bleed) ──────────────────────────────────── */}
+        {/* ─── OPTIONAL TOP KPI RIBBON (If configured) ────────────────────── */}
+        {cfg.kpiStyle === "ribbon-top" && (
+          <div className={`px-4 py-2 border-b ${themeClasses.border} ${themeClasses.surface2} flex flex-wrap items-center justify-between gap-3 text-xs`}>
+            <div className="flex items-center gap-4">
+              <span className="flex items-center gap-1.5 font-bold">
+                <span className="text-slate-400">Total SO:</span>
+                <span className="font-mono text-white">{stats.totalSO}</span>
+              </span>
+              <span className="flex items-center gap-1.5 font-bold text-amber-400">
+                <span>Belum Print:</span>
+                <span className="font-mono">{stats.belum}</span>
+              </span>
+              <span className="flex items-center gap-1.5 font-bold text-emerald-400">
+                <span>Selesai:</span>
+                <span className="font-mono">{stats.sudah}</span>
+              </span>
+              {stats.double > 0 && (
+                <span className="flex items-center gap-1.5 font-bold text-rose-400">
+                  <span>Double INV:</span>
+                  <span className="font-mono">{stats.double}</span>
+                </span>
+              )}
+              {stats.retur > 0 && (
+                <span className="flex items-center gap-1.5 font-bold text-amber-400">
+                  <span>Retur:</span>
+                  <span className="font-mono">{stats.retur}</span>
+                </span>
+              )}
+            </div>
+
+            <div className="flex items-center gap-3 text-[11px] font-mono text-slate-400">
+              <span className="text-sky-300">ORA Max: {stats.maxOra}</span>
+              <span>•</span>
+              <span className="text-emerald-300">1P DOO: {stats.max1PDoo}</span>
+              <span className="text-sky-200">2P: {stats.max2P}</span>
+              <span className="text-purple-200">3P: {stats.max3P}</span>
+            </div>
+          </div>
+        )}
+
+        {/* ─── OPTIONAL CLASSIC TOP CARDS GRID (If configured) ────────────── */}
+        {cfg.kpiStyle === "cards-grid" && (
+          <div className={`p-3 border-b ${themeClasses.border} ${themeClasses.surface2} grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-1.5`}>
+            <div className={`p-2 rounded-lg border ${themeClasses.border} ${themeClasses.surface}`}>
+              <div className="text-[10px] uppercase font-bold text-slate-400">Total SO</div>
+              <div className="text-base font-black font-mono mt-0.5">{stats.totalSO}</div>
+            </div>
+            <div className={`p-2 rounded-lg border border-amber-500/40 bg-amber-500/10 text-amber-300`}>
+              <div className="text-[10px] uppercase font-bold text-amber-400">Belum Print</div>
+              <div className="text-base font-black font-mono mt-0.5">{stats.belum}</div>
+            </div>
+            <div className={`p-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 text-emerald-300`}>
+              <div className="text-[10px] uppercase font-bold text-emerald-400">Selesai</div>
+              <div className="text-base font-black font-mono mt-0.5">{stats.sudah}</div>
+            </div>
+            <div className={`p-2 rounded-lg border ${themeClasses.border} ${themeClasses.surface}`}>
+              <div className="text-[10px] uppercase font-bold text-slate-400">Total Faktur</div>
+              <div className="text-base font-black font-mono mt-0.5">{stats.total}</div>
+            </div>
+            <div className={`p-2 rounded-lg border ${stats.double > 0 ? "border-rose-500/40 bg-rose-500/10 text-rose-300" : `${themeClasses.border} ${themeClasses.surface}`}`}>
+              <div className="text-[10px] uppercase font-bold">Double INV</div>
+              <div className="text-base font-black font-mono mt-0.5">{stats.double}</div>
+            </div>
+            <div className={`p-2 rounded-lg border ${stats.retur > 0 ? "border-amber-500/40 bg-amber-500/10 text-amber-300" : `${themeClasses.border} ${themeClasses.surface}`}`}>
+              <div className="text-[10px] uppercase font-bold">Retur</div>
+              <div className="text-base font-black font-mono mt-0.5">{stats.retur}</div>
+            </div>
+            <div className={`p-2 rounded-lg border border-sky-500/30 bg-sky-950/20 text-sky-200`}>
+              <div className="text-[10px] uppercase font-bold text-sky-400">1P ORA Max</div>
+              <div className="text-xs font-bold font-mono mt-0.5">{stats.maxOra}</div>
+            </div>
+            <div className={`p-2 rounded-lg border border-indigo-500/30 bg-indigo-950/20 text-indigo-200`}>
+              <div className="text-[10px] uppercase font-bold text-indigo-400">DOO Max</div>
+              <div className="text-[10px] font-mono font-bold mt-0.5">1P:{stats.max1PDoo}</div>
+            </div>
+          </div>
+        )}
+
+        {/* ─── DATA TABLE CANVAS (100% Full Height) ───────────────────────── */}
         <div className="flex-1 overflow-auto custom-scrollbar">
           <table className="w-full text-left text-xs border-collapse">
-            <thead className={`sticky top-0 z-20 border-b text-[11px] font-bold uppercase tracking-wider select-none shadow-xs ${
-              isDarkMode ? "bg-[#0E1524] border-slate-800 text-slate-400" : "bg-slate-100 border-slate-300 text-slate-600"
-            }`}>
+            <thead className={`sticky top-0 z-20 border-b ${themeClasses.border} ${themeClasses.tableHeader} text-[11px] font-bold uppercase tracking-wider select-none shadow-xs`}>
               <tr>
-                <th className="py-2.5 px-3 w-10 text-center">Status</th>
-                <th className="py-2.5 px-2.5 w-14 text-center">Jenis</th>
-                <th className="py-2.5 px-3 w-24">No SO</th>
-                <th className="py-2.5 px-3 w-28">No Faktur</th>
-                <th className={`py-2.5 px-3 w-28 font-semibold ${isDarkMode ? "bg-blue-950/30 text-blue-300" : "bg-blue-50 text-blue-800"}`}>
-                  Tgl Faktur
-                </th>
-                <th className={`py-2.5 px-3 w-28 font-semibold ${isDarkMode ? "bg-indigo-950/30 text-indigo-300" : "bg-indigo-50 text-indigo-800"}`}>
-                  Tgl Order
-                </th>
-                <th className="py-2.5 px-3">Nama Pelanggan</th>
-                <th className="py-2.5 px-2.5 w-14 text-center">Kat</th>
-                <th className="py-2.5 px-2.5 w-24 text-center">Produk</th>
-                <th className="py-2.5 px-4 w-32 text-right">Total (+PPN)</th>
-                <th className="py-2.5 px-4 w-32 text-center">Aksi / Cetak</th>
+                <th className={`${tablePadding} w-10 text-center`}>Status</th>
+                <th className={`${tablePadding} w-14 text-center`}>Jenis</th>
+                <th className={`${tablePadding} w-24`}>No SO</th>
+                <th className={`${tablePadding} w-28`}>No Faktur</th>
+                {cfg.showTxDate && (
+                  <th className={`${tablePadding} w-28 bg-blue-950/20 text-blue-300 font-semibold`}>
+                    Tgl Faktur
+                  </th>
+                )}
+                {cfg.showOrderDate && (
+                  <th className={`${tablePadding} w-28 bg-indigo-950/20 text-indigo-300 font-semibold`}>
+                    Tgl Order
+                  </th>
+                )}
+                {cfg.showCustomerName && (
+                  <th className={`${tablePadding}`}>Nama Pelanggan</th>
+                )}
+                <th className={`${tablePadding} w-14 text-center`}>Kat</th>
+                {cfg.showProductBadge && (
+                  <th className={`${tablePadding} w-24 text-center`}>Produk</th>
+                )}
+                {cfg.showTotal && (
+                  <th className={`${tablePadding} w-32 text-right`}>Total (+PPN)</th>
+                )}
+                <th className={`${tablePadding} w-32 text-center`}>Aksi / Cetak</th>
               </tr>
             </thead>
 
-            <tbody className={`divide-y font-medium ${isDarkMode ? "divide-slate-800/40" : "divide-slate-200"}`}>
+            <tbody className={`divide-y ${themeClasses.border} font-medium`}>
               {filtered.map((row) => {
                 const isSelected = selectedId === row.id;
                 return (
@@ -835,16 +974,15 @@ export default function SimulasiPage() {
                     onClick={() => setSelectedId(row.id)}
                     className={`transition-colors cursor-pointer ${
                       row.isDouble
-                        ? isDarkMode ? "bg-rose-950/20 hover:bg-rose-950/35" : "bg-rose-50 hover:bg-rose-100"
+                        ? "bg-rose-950/20 hover:bg-rose-950/30"
                         : row.isRetur
-                        ? isDarkMode ? "bg-amber-950/20 hover:bg-amber-950/35" : "bg-amber-50 hover:bg-amber-100"
+                        ? "bg-amber-950/20 hover:bg-amber-950/30"
                         : isSelected
-                        ? isDarkMode ? "bg-blue-950/25" : "bg-blue-50"
-                        : isDarkMode ? "hover:bg-slate-800/30" : "hover:bg-slate-50"
+                        ? "bg-blue-950/25"
+                        : "hover:bg-slate-800/30"
                     }`}
                   >
-                    {/* Checkbox */}
-                    <td className="py-2.5 px-3 text-center">
+                    <td className={`${tablePadding} text-center`}>
                       <button
                         type="button"
                         onClick={(e) => {
@@ -865,26 +1003,19 @@ export default function SimulasiPage() {
                       </button>
                     </td>
 
-                    {/* Jenis Badge */}
-                    <td className="py-2.5 px-2.5 text-center">
-                      <span
-                        className={`px-1.5 py-0.5 rounded text-[10px] font-bold font-mono ${
-                          row.jenis === "ORA"
-                            ? "bg-sky-500/15 text-sky-400 border border-sky-500/30"
-                            : "bg-indigo-500/15 text-indigo-400 border border-indigo-500/30"
-                        }`}
-                      >
+                    <td className={`${tablePadding} text-center`}>
+                      <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold font-mono ${
+                        row.jenis === "ORA" ? "bg-sky-500/15 text-sky-400 border border-sky-500/30" : "bg-indigo-500/15 text-indigo-400 border border-indigo-500/30"
+                      }`}>
                         {row.jenis}
                       </span>
                     </td>
 
-                    {/* No SO */}
-                    <td className="py-2.5 px-3 font-mono text-[11px]">
+                    <td className={`${tablePadding} font-mono text-[11px]`}>
                       {row.so}
                     </td>
 
-                    {/* No Faktur with double / retur tags */}
-                    <td className="py-2.5 px-3 font-mono font-bold flex items-center gap-1.5">
+                    <td className={`${tablePadding} font-mono font-bold flex items-center gap-1.5`}>
                       <span>{row.invoiceNumber}</span>
                       {row.isDouble && (
                         <span className="px-1 py-0.2 rounded text-[9px] font-bold bg-rose-500/20 text-rose-400 border border-rose-500/30">
@@ -898,70 +1029,53 @@ export default function SimulasiPage() {
                       )}
                     </td>
 
-                    {/* Tgl Faktur */}
-                    <td className={`py-2.5 px-3 font-mono text-[11px] font-semibold ${
-                      isDarkMode ? "text-blue-400 bg-blue-950/10" : "text-blue-700 bg-blue-50/50"
-                    }`}>
-                      {row.txDate}
-                    </td>
+                    {cfg.showTxDate && (
+                      <td className={`${tablePadding} font-mono text-[11px] font-semibold text-blue-400 bg-blue-950/10`}>
+                        {row.txDate}
+                      </td>
+                    )}
 
-                    {/* Tgl Order */}
-                    <td className={`py-2.5 px-3 font-mono text-[11px] font-semibold ${
-                      isDarkMode ? "text-indigo-400 bg-indigo-950/10" : "text-indigo-700 bg-indigo-50/50"
-                    }`}>
-                      {row.orderDate}
-                    </td>
+                    {cfg.showOrderDate && (
+                      <td className={`${tablePadding} font-mono text-[11px] font-semibold text-indigo-400 bg-indigo-950/10`}>
+                        {row.orderDate}
+                      </td>
+                    )}
 
-                    {/* Pelanggan */}
-                    <td className="py-2.5 px-3 font-semibold truncate max-w-sm">
-                      {row.customer}
-                    </td>
+                    {cfg.showCustomerName && (
+                      <td className={`${tablePadding} font-semibold truncate max-w-sm`}>
+                        {row.customer}
+                      </td>
+                    )}
 
-                    {/* Kategori Prioritas */}
-                    <td className="py-2.5 px-2.5 text-center">
-                      <span
-                        className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                          row.kat === "1P"
-                            ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30"
-                            : row.kat === "2P"
-                            ? "bg-sky-500/15 text-sky-400 border border-sky-500/30"
-                            : "bg-slate-700/30 text-slate-400 border border-slate-700"
-                        }`}
-                      >
+                    <td className={`${tablePadding} text-center`}>
+                      <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                        row.kat === "1P" ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30" : row.kat === "2P" ? "bg-sky-500/15 text-sky-400 border border-sky-500/30" : "bg-slate-700/30 text-slate-400 border border-slate-700"
+                      }`}>
                         {row.kat}
                       </span>
                     </td>
 
-                    {/* Produk */}
-                    <td className="py-2.5 px-2.5 text-center">
-                      <span
-                        className={`px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider ${
-                          row.katProduk === "CCP"
-                            ? "bg-cyan-500/15 text-cyan-400 border border-cyan-500/30"
-                            : row.katProduk === "PREKURSOR"
-                            ? "bg-purple-500/15 text-purple-400 border border-purple-500/30"
-                            : row.katProduk === "OOT"
-                            ? "bg-orange-500/15 text-orange-400 border border-orange-500/30"
-                            : row.katProduk === "ALKES"
-                            ? "bg-teal-500/15 text-teal-400 border border-teal-500/30"
-                            : isDarkMode ? "bg-slate-800 text-slate-400" : "bg-slate-200 text-slate-600"
-                        }`}
-                      >
-                        {row.katProduk}
-                      </span>
-                    </td>
+                    {cfg.showProductBadge && (
+                      <td className={`${tablePadding} text-center`}>
+                        <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider ${
+                          row.katProduk === "CCP" ? "bg-cyan-500/15 text-cyan-400 border border-cyan-500/30" : row.katProduk === "PREKURSOR" ? "bg-purple-500/15 text-purple-400 border border-purple-500/30" : row.katProduk === "OOT" ? "bg-orange-500/15 text-orange-400 border border-orange-500/30" : "bg-slate-800 text-slate-400"
+                        }`}>
+                          {row.katProduk}
+                        </span>
+                      </td>
+                    )}
 
-                    {/* Total Nilai */}
-                    <td className="py-2.5 px-4 text-right font-mono font-bold">
-                      {row.isRetur ? (
-                        <span className="text-amber-500">-Rp {formatRupiah(Math.abs(row.total))}</span>
-                      ) : (
-                        `Rp ${formatRupiah(row.total)}`
-                      )}
-                    </td>
+                    {cfg.showTotal && (
+                      <td className={`${tablePadding} text-right font-mono font-bold`}>
+                        {row.isRetur ? (
+                          <span className="text-amber-500">-Rp {formatRupiah(Math.abs(row.total))}</span>
+                        ) : (
+                          `Rp ${formatRupiah(row.total)}`
+                        )}
+                      </td>
+                    )}
 
-                    {/* Done Print Aksi */}
-                    <td className="py-2.5 px-4 text-center">
+                    <td className={`${tablePadding} text-center`}>
                       <button
                         type="button"
                         onClick={(e) => {
@@ -971,7 +1085,7 @@ export default function SimulasiPage() {
                         className={`px-2.5 py-1 rounded-md text-[10px] font-bold border transition-all cursor-pointer ${
                           row.printed
                             ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/25"
-                            : "bg-blue-600 border-blue-600 text-white hover:bg-blue-500 shadow-xs"
+                            : `${accentBtn.split(" ")[0]} border-transparent text-white hover:opacity-90`
                         }`}
                       >
                         {row.printed ? `✓ ${row.printedAt || "Print"}` : "Cetak"}
@@ -985,9 +1099,7 @@ export default function SimulasiPage() {
         </div>
 
         {/* Bottom Status Ribbon */}
-        <footer className={`h-[30px] shrink-0 px-4 border-t flex items-center justify-between text-[11px] select-none ${
-          isDarkMode ? "bg-[#0B101D] border-slate-800/80 text-slate-400" : "bg-slate-100 border-slate-200 text-slate-600"
-        }`}>
+        <footer className={`h-[30px] shrink-0 px-4 border-t ${themeClasses.border} ${themeClasses.surface} flex items-center justify-between text-[11px] ${themeClasses.textMuted} select-none`}>
           <div>
             Menampilkan <strong>{filtered.length}</strong> faktur aktif (Status: <span className="uppercase font-bold text-blue-500">{activeNav}</span>)
           </div>
@@ -1001,138 +1113,345 @@ export default function SimulasiPage() {
       </main>
 
       {/* ═════════════════════════════════════════════════════════════════════ */}
-      {/* ─── FULL SETTINGS SIDEBAR DRAWER ─────────────────────────────────── */}
+      {/* ─── LIVE UI STUDIO DRAWER (Panel Desain Sendiri) ─────────────────── */}
       {/* ═════════════════════════════════════════════════════════════════════ */}
-      {showSettingsPanel && (
+      {showStudioDrawer && (
         <>
           <div
-            className="fixed inset-0 z-40 bg-slate-900/40 backdrop-blur-xs"
-            onClick={() => setShowSettingsPanel(false)}
+            className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs"
+            onClick={() => setShowStudioDrawer(false)}
           />
-          <div className={`fixed top-0 right-0 h-full w-80 z-50 shadow-2xl flex flex-col transition-all duration-200 border-l ${
-            isDarkMode ? "bg-[#0D1528] border-slate-700 text-slate-100" : "bg-white border-slate-200 text-slate-900"
-          }`}>
+          <div className="fixed top-0 right-0 h-full w-96 z-50 shadow-2xl flex flex-col bg-[#0D1528] border-l border-slate-700 text-slate-100 animate-in slide-in-from-right duration-200">
             {/* Header */}
-            <div className={`px-5 py-4 border-b flex items-center justify-between ${
-              isDarkMode ? "border-slate-800 bg-[#0B1120]" : "border-slate-100 bg-slate-50"
-            }`}>
-              <div className="flex items-center gap-2">
-                <span className="text-base">⚙️</span>
-                <span className="font-bold text-sm">Pengaturan Sistem</span>
+            <div className="px-5 py-4 border-b border-slate-800 bg-[#0B1120] flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <span className="text-xl">🎨</span>
+                <div>
+                  <h2 className="font-extrabold text-sm text-white">Studio Desain UI</h2>
+                  <p className="text-[11px] text-slate-400">Sesuaikan tampilan langsung sesuai selera Anda</p>
+                </div>
               </div>
               <button
                 type="button"
-                onClick={() => setShowSettingsPanel(false)}
-                className="w-7 h-7 rounded-md flex items-center justify-center text-xs font-bold text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+                onClick={() => setShowStudioDrawer(false)}
+                className="w-7 h-7 rounded-md flex items-center justify-center text-xs font-bold text-slate-400 hover:text-white hover:bg-slate-800 cursor-pointer"
               >
                 ✕
               </button>
             </div>
 
-            {/* Menu Items */}
-            <div className="flex-1 overflow-y-auto py-3 px-4 space-y-1 text-xs">
-              <p className="text-[10px] font-bold uppercase tracking-widest px-1 pb-1 pt-2 text-slate-400">
-                Master Data
-              </p>
-
-              <button
-                type="button"
-                onClick={() => { setShowApotekModal(true); setShowSettingsPanel(false); }}
-                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium transition-colors text-left hover:bg-slate-800/60 cursor-pointer"
-              >
-                <span className="w-8 h-8 rounded-lg flex items-center justify-center text-base bg-slate-800 text-slate-300">🏢</span>
-                <div>
-                  <div className="font-semibold text-xs">Master Apotek</div>
-                  <div className="text-[11px] text-slate-400">Kelola prioritas 1P / 2P / 3P</div>
-                </div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => { setShowProductModal(true); setShowSettingsPanel(false); }}
-                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium transition-colors text-left hover:bg-slate-800/60 cursor-pointer"
-              >
-                <span className="w-8 h-8 rounded-lg flex items-center justify-center text-base bg-slate-800 text-slate-300">💊</span>
-                <div>
-                  <div className="font-semibold text-xs">Master Produk</div>
-                  <div className="text-[11px] text-slate-400">Farma, CCP, Prekursor, OOT, Alkes</div>
-                </div>
-              </button>
-
-              <div className="my-2 border-t border-slate-800" />
-
-              <p className="text-[10px] font-bold uppercase tracking-widest px-1 pb-1 text-slate-400">
-                Laporan & Ekspor
-              </p>
-
-              <button
-                type="button"
-                onClick={() => { setShowExportModal(true); setShowSettingsPanel(false); }}
-                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium transition-colors text-left hover:bg-slate-800/60 cursor-pointer"
-              >
-                <span className="w-8 h-8 rounded-lg flex items-center justify-center text-base bg-slate-800 text-slate-300">📥</span>
-                <div>
-                  <div className="font-semibold text-xs">Ekspor ke Excel</div>
-                  <div className="text-[11px] text-slate-400">Filter tanggal SO vs Faktur (.xlsx)</div>
-                </div>
-              </button>
-
-              <div className="my-2 border-t border-slate-800" />
-
-              <p className="text-[10px] font-bold uppercase tracking-widest px-1 pb-1 text-slate-400">
-                Tampilan & Akun
-              </p>
-
-              {/* Dark / Light Toggle */}
-              <div className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-slate-800/60">
-                <span className="w-8 h-8 rounded-lg flex items-center justify-center text-base bg-slate-800 text-amber-400">
-                  {isDarkMode ? "☀️" : "🌙"}
+            {/* Body Controls */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 text-xs custom-scrollbar">
+              {/* 1. Quick Presets */}
+              <div className="p-3 rounded-xl border border-slate-800 bg-[#0E1524] space-y-2">
+                <span className="font-bold text-[10px] uppercase tracking-wider text-slate-400">
+                  ⚡ Preset Cepat:
                 </span>
-                <div className="flex-1">
-                  <div className="font-semibold text-xs">Mode Tampilan</div>
-                  <div className="text-[11px] text-slate-400">{isDarkMode ? "Mode Gelap (Dark)" : "Mode Terang (Light)"}</div>
+                <div className="grid grid-cols-2 gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => applyPreset("operator-pro")}
+                    className="p-2 rounded-lg border border-slate-700 hover:border-blue-500 bg-slate-800/60 text-left cursor-pointer"
+                  >
+                    <div className="font-bold text-slate-200">Operator Pro</div>
+                    <div className="text-[10px] text-slate-400">Sidebar + Dark Obsidian</div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => applyPreset("stripe-clean")}
+                    className="p-2 rounded-lg border border-slate-700 hover:border-indigo-500 bg-slate-800/60 text-left cursor-pointer"
+                  >
+                    <div className="font-bold text-slate-200">Stripe Clean</div>
+                    <div className="text-[10px] text-slate-400">Top Bar + Off-White</div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => applyPreset("financial-terminal")}
+                    className="p-2 rounded-lg border border-slate-700 hover:border-cyan-500 bg-slate-800/60 text-left cursor-pointer"
+                  >
+                    <div className="font-bold text-slate-200">Financial Cockpit</div>
+                    <div className="text-[10px] text-slate-400">Navy + Ribbon + Cyan</div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => applyPreset("zen-minimal")}
+                    className="p-2 rounded-lg border border-slate-700 hover:border-emerald-500 bg-slate-800/60 text-left cursor-pointer"
+                  >
+                    <div className="font-bold text-slate-200">Zen Minimal</div>
+                    <div className="text-[10px] text-slate-400">No Cards + Max Table</div>
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setIsDarkMode(!isDarkMode)}
-                  className={`relative w-10 h-5 rounded-full transition-colors cursor-pointer ${isDarkMode ? "bg-blue-600" : "bg-slate-600"}`}
-                >
-                  <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all ${isDarkMode ? "left-5" : "left-0.5"}`} />
-                </button>
               </div>
 
-              {/* Changelog */}
-              <button
-                type="button"
-                onClick={() => { setShowChangelogModal(true); setShowSettingsPanel(false); }}
-                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium transition-colors text-left hover:bg-slate-800/60 cursor-pointer"
-              >
-                <span className="w-8 h-8 rounded-lg flex items-center justify-center text-base bg-blue-950/70 text-blue-400">📢</span>
-                <div>
-                  <div className="font-semibold text-xs">Info Pembaruan</div>
-                  <div className="text-[11px] text-slate-400">Catatan perubahan v2.2</div>
-                </div>
-              </button>
+              {/* 2. Layout Structure */}
+              <div className="space-y-1.5">
+                <label className="font-bold text-[10px] uppercase tracking-wider text-slate-400">
+                  1. Tata Letak Navigasi (Layout):
+                </label>
+                <div className="grid grid-cols-3 gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setCfg((prev) => ({ ...prev, layout: "sidebar" }))}
+                    className={`py-2 px-1 text-center rounded-lg border font-bold cursor-pointer transition-all ${
+                      cfg.layout === "sidebar"
+                        ? "bg-blue-600 border-blue-500 text-white shadow-xs"
+                        : "border-slate-700 bg-slate-800/60 text-slate-300 hover:bg-slate-800"
+                    }`}
+                  >
+                    Sidebar Kiri
+                  </button>
 
-              {/* Change Password */}
-              <button
-                type="button"
-                onClick={() => { setShowChangePasswordModal(true); setShowSettingsPanel(false); }}
-                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium transition-colors text-left hover:bg-slate-800/60 cursor-pointer"
-              >
-                <span className="w-8 h-8 rounded-lg flex items-center justify-center text-base bg-slate-800 text-slate-300">🔑</span>
-                <div>
-                  <div className="font-semibold text-xs">Ganti Password</div>
-                  <div className="text-[11px] text-slate-400">Ubah kredensial akun</div>
+                  <button
+                    type="button"
+                    onClick={() => setCfg((prev) => ({ ...prev, layout: "topbar" }))}
+                    className={`py-2 px-1 text-center rounded-lg border font-bold cursor-pointer transition-all ${
+                      cfg.layout === "topbar"
+                        ? "bg-blue-600 border-blue-500 text-white shadow-xs"
+                        : "border-slate-700 bg-slate-800/60 text-slate-300 hover:bg-slate-800"
+                    }`}
+                  >
+                    Top Bar
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setCfg((prev) => ({ ...prev, layout: "hybrid" }))}
+                    className={`py-2 px-1 text-center rounded-lg border font-bold cursor-pointer transition-all ${
+                      cfg.layout === "hybrid"
+                        ? "bg-blue-600 border-blue-500 text-white shadow-xs"
+                        : "border-slate-700 bg-slate-800/60 text-slate-300 hover:bg-slate-800"
+                    }`}
+                  >
+                    Command Full
+                  </button>
                 </div>
-              </button>
+              </div>
+
+              {/* 3. Theme Colors */}
+              <div className="space-y-1.5">
+                <label className="font-bold text-[10px] uppercase tracking-wider text-slate-400">
+                  2. Warna Latar Belakang (Background Theme):
+                </label>
+                <div className="grid grid-cols-2 gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setCfg((prev) => ({ ...prev, theme: "obsidian" }))}
+                    className={`p-2 rounded-lg border flex items-center gap-2 cursor-pointer ${
+                      cfg.theme === "obsidian" ? "border-blue-500 ring-2 ring-blue-500/30 bg-[#080C15]" : "border-slate-700 bg-[#080C15]"
+                    }`}
+                  >
+                    <span className="w-3.5 h-3.5 rounded-full bg-[#080C15] border border-white/40" />
+                    <span className="font-bold text-slate-200">Obsidian Dark</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setCfg((prev) => ({ ...prev, theme: "navy" }))}
+                    className={`p-2 rounded-lg border flex items-center gap-2 cursor-pointer ${
+                      cfg.theme === "navy" ? "border-blue-500 ring-2 ring-blue-500/30 bg-[#070D1E]" : "border-slate-700 bg-[#070D1E]"
+                    }`}
+                  >
+                    <span className="w-3.5 h-3.5 rounded-full bg-[#0B1530] border border-blue-400" />
+                    <span className="font-bold text-blue-200">Midnight Navy</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setCfg((prev) => ({ ...prev, theme: "zinc" }))}
+                    className={`p-2 rounded-lg border flex items-center gap-2 cursor-pointer ${
+                      cfg.theme === "zinc" ? "border-blue-500 ring-2 ring-blue-500/30 bg-[#121214]" : "border-slate-700 bg-[#121214]"
+                    }`}
+                  >
+                    <span className="w-3.5 h-3.5 rounded-full bg-[#18181B] border border-zinc-500" />
+                    <span className="font-bold text-zinc-200">Graphite Zinc</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setCfg((prev) => ({ ...prev, theme: "light" }))}
+                    className={`p-2 rounded-lg border flex items-center gap-2 cursor-pointer ${
+                      cfg.theme === "light" ? "border-blue-500 ring-2 ring-blue-500/30 bg-white" : "border-slate-700 bg-white"
+                    }`}
+                  >
+                    <span className="w-3.5 h-3.5 rounded-full bg-slate-100 border border-slate-300" />
+                    <span className="font-bold text-slate-900">Studio Light</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* 4. Accent Color */}
+              <div className="space-y-1.5">
+                <label className="font-bold text-[10px] uppercase tracking-wider text-slate-400">
+                  3. Warna Aksen Tombol (Accent Color):
+                </label>
+                <div className="flex items-center gap-2">
+                  {(["blue", "emerald", "cyan", "indigo", "amber", "rose"] as const).map((col) => (
+                    <button
+                      key={col}
+                      type="button"
+                      onClick={() => setCfg((prev) => ({ ...prev, accent: col }))}
+                      className={`w-8 h-8 rounded-full border-2 transition-transform cursor-pointer ${
+                        cfg.accent === col ? "scale-110 border-white ring-2 ring-white/30" : "border-transparent opacity-75 hover:opacity-100"
+                      } ${
+                        col === "blue" ? "bg-blue-600" : col === "emerald" ? "bg-emerald-600" : col === "cyan" ? "bg-cyan-600" : col === "indigo" ? "bg-indigo-600" : col === "amber" ? "bg-amber-600" : "bg-rose-600"
+                      }`}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              {/* 5. Density */}
+              <div className="space-y-1.5">
+                <label className="font-bold text-[10px] uppercase tracking-wider text-slate-400">
+                  4. Kerapatan Baris Tabel (Data Density):
+                </label>
+                <div className="grid grid-cols-3 gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setCfg((prev) => ({ ...prev, density: "compact" }))}
+                    className={`py-2 px-1 text-center rounded-lg border font-bold cursor-pointer ${
+                      cfg.density === "compact" ? "bg-blue-600 border-blue-500 text-white" : "border-slate-700 bg-slate-800/60 text-slate-300"
+                    }`}
+                  >
+                    Padat (28px)
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setCfg((prev) => ({ ...prev, density: "normal" }))}
+                    className={`py-2 px-1 text-center rounded-lg border font-bold cursor-pointer ${
+                      cfg.density === "normal" ? "bg-blue-600 border-blue-500 text-white" : "border-slate-700 bg-slate-800/60 text-slate-300"
+                    }`}
+                  >
+                    Standar (36px)
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setCfg((prev) => ({ ...prev, density: "spacious" }))}
+                    className={`py-2 px-1 text-center rounded-lg border font-bold cursor-pointer ${
+                      cfg.density === "spacious" ? "bg-blue-600 border-blue-500 text-white" : "border-slate-700 bg-slate-800/60 text-slate-300"
+                    }`}
+                  >
+                    Lega (44px)
+                  </button>
+                </div>
+              </div>
+
+              {/* 6. KPI Style */}
+              <div className="space-y-1.5">
+                <label className="font-bold text-[10px] uppercase tracking-wider text-slate-400">
+                  5. Penempatan Kartu Metrik / Telemetri:
+                </label>
+                <div className="grid grid-cols-2 gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setCfg((prev) => ({ ...prev, kpiStyle: "sidebar-docked" }))}
+                    className={`p-2 rounded-lg border font-bold text-left cursor-pointer ${
+                      cfg.kpiStyle === "sidebar-docked" ? "bg-blue-600 border-blue-500 text-white" : "border-slate-700 bg-slate-800/60 text-slate-300"
+                    }`}
+                  >
+                    Di Sidebar Kiri
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setCfg((prev) => ({ ...prev, kpiStyle: "ribbon-top" }))}
+                    className={`p-2 rounded-lg border font-bold text-left cursor-pointer ${
+                      cfg.kpiStyle === "ribbon-top" ? "bg-blue-600 border-blue-500 text-white" : "border-slate-700 bg-slate-800/60 text-slate-300"
+                    }`}
+                  >
+                    Pita Tipis Atas
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setCfg((prev) => ({ ...prev, kpiStyle: "cards-grid" }))}
+                    className={`p-2 rounded-lg border font-bold text-left cursor-pointer ${
+                      cfg.kpiStyle === "cards-grid" ? "bg-blue-600 border-blue-500 text-white" : "border-slate-700 bg-slate-800/60 text-slate-300"
+                    }`}
+                  >
+                    Kotak Grid Atas
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setCfg((prev) => ({ ...prev, kpiStyle: "hidden" }))}
+                    className={`p-2 rounded-lg border font-bold text-left cursor-pointer ${
+                      cfg.kpiStyle === "hidden" ? "bg-blue-600 border-blue-500 text-white" : "border-slate-700 bg-slate-800/60 text-slate-300"
+                    }`}
+                  >
+                    Sembunyikan (0 Kartu)
+                  </button>
+                </div>
+              </div>
+
+              {/* 7. Column Toggles */}
+              <div className="space-y-1.5">
+                <label className="font-bold text-[10px] uppercase tracking-wider text-slate-400">
+                  6. Kolom Tabel yang Ditampilkan:
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={cfg.showTxDate}
+                      onChange={(e) => setCfg((prev) => ({ ...prev, showTxDate: e.target.checked }))}
+                    />
+                    <span>Tgl Faktur</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={cfg.showOrderDate}
+                      onChange={(e) => setCfg((prev) => ({ ...prev, showOrderDate: e.target.checked }))}
+                    />
+                    <span>Tgl Order (SO)</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={cfg.showProductBadge}
+                      onChange={(e) => setCfg((prev) => ({ ...prev, showProductBadge: e.target.checked }))}
+                    />
+                    <span>Kategori Produk</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={cfg.showTotal}
+                      onChange={(e) => setCfg((prev) => ({ ...prev, showTotal: e.target.checked }))}
+                    />
+                    <span>Total Rupiah</span>
+                  </label>
+                </div>
+              </div>
             </div>
 
-            {/* Footer */}
-            <div className={`px-5 py-3 border-t text-[11px] ${
-              isDarkMode ? "border-slate-800 text-slate-500" : "border-slate-200 text-slate-400"
-            }`}>
-              Faktur Tracker v2.2 • Oracle ERP Live Tracker
+            {/* Footer: Copy / Apply */}
+            <div className="p-4 border-t border-slate-800 bg-[#0B1120] space-y-2">
+              <button
+                type="button"
+                onClick={copyConfigJson}
+                className="w-full py-2 px-3 rounded-xl text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <span>📋</span>
+                <span>{copiedConfig ? "✓ Konfigurasi Tersalin!" : "Salin Kode Konfigurasi"}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setShowStudioDrawer(false);
+                  alert("Desain Anda sedang aktif di simulasi ini! Anda bisa mengklik tombol 'Salin Kode Konfigurasi' lalu kirimkan ke saya jika ingin diterapkan permanen ke sistem utama.");
+                }}
+                className={`w-full py-2 px-3 rounded-xl text-xs font-bold cursor-pointer ${accentBtn}`}
+              >
+                Terapkan di Layar Ini
+              </button>
             </div>
           </div>
         </>
@@ -1141,38 +1460,33 @@ export default function SimulasiPage() {
       {/* ═════════════════════════════════════════════════════════════════════ */}
       {/* ─── FULL OPERATIONAL MODALS ───────────────────────────────────────── */}
       {/* ═════════════════════════════════════════════════════════════════════ */}
-
-      {/* Master Apotek Modal */}
       {showApotekModal && (
         <MasterApotekModal
           isOpen={showApotekModal}
           onClose={() => setShowApotekModal(false)}
           categoryOverrides={{}}
-          isDarkMode={isDarkMode}
+          isDarkMode={themeClasses.isDark}
         />
       )}
 
-      {/* Master Product Modal */}
       {showProductModal && (
         <MasterProductModal
           isOpen={showProductModal}
           onClose={() => setShowProductModal(false)}
           productOverrides={{}}
-          isDarkMode={isDarkMode}
+          isDarkMode={themeClasses.isDark}
         />
       )}
 
-      {/* Export Excel Modal */}
       {showExportModal && (
         <ExportExcelModal
           isOpen={showExportModal}
           onClose={() => setShowExportModal(false)}
           groups={exportGroups}
-          isDarkMode={isDarkMode}
+          isDarkMode={themeClasses.isDark}
         />
       )}
 
-      {/* Login / Switch User Modal */}
       {showLoginModal && (
         <LoginModal
           isOpen={showLoginModal}
@@ -1182,45 +1496,18 @@ export default function SimulasiPage() {
             setShowLoginModal(false);
           }}
           currentUser={currentUser}
-          isDarkMode={isDarkMode}
+          isDarkMode={themeClasses.isDark}
         />
       )}
 
-      {/* Change Password Modal */}
       {showChangePasswordModal && (
         <ChangePasswordModal
           isOpen={showChangePasswordModal}
           onClose={() => setShowChangePasswordModal(false)}
           userName={currentUser?.name || "Admin Gudang"}
-          isDarkMode={isDarkMode}
+          isDarkMode={themeClasses.isDark}
           onSuccess={() => {}}
         />
-      )}
-
-      {/* Changelog Modal */}
-      {showChangelogModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs">
-          <div className="max-w-md w-full rounded-2xl border border-slate-700 bg-[#0E1524] p-5 text-slate-100 space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <div className="font-bold text-sm flex items-center gap-2">
-                <span>📢</span>
-                <span>Info Pembaruan Sistem v2.2</span>
-              </div>
-              <button onClick={() => setShowChangelogModal(false)} className="text-slate-400 hover:text-white">✕</button>
-            </div>
-            <div className="text-xs space-y-2 leading-relaxed text-slate-300">
-              <p>• <strong>Arsitektur Baru:</strong> Sidebar Workspace navigasi instan untuk efisiensi operator gudang.</p>
-              <p>• <strong>Dua Tanggal Berdampingan:</strong> Kolom Tanggal Faktur & Tanggal Order terpisah jelas.</p>
-              <p>• <strong>Ekspor Excel Fleksibel:</strong> Mendukung penarikan berdasarkan Tanggal Masuk SO atau Tanggal Terfaktur.</p>
-            </div>
-            <button
-              onClick={() => setShowChangelogModal(false)}
-              className="w-full py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold"
-            >
-              Tutup & Mengerti
-            </button>
-          </div>
-        </div>
       )}
     </div>
   );
