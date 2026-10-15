@@ -1900,10 +1900,10 @@ export default function Home() {
                           ? "bg-blue-950/60 hover:bg-blue-900/80 text-blue-300 border-blue-500/30 shadow-xs"
                           : "bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-200 shadow-xs"
                       }`}
-                      title="Klik untuk melihat catatan pembaruan & perbaikan v2.1"
+                      title="Klik untuk melihat catatan pembaruan & perbaikan v2.2"
                     >
                       <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></span>
-                      v2.1
+                      v2.2
                     </button>
                   </div>
                   <span className={`text-[9px] hidden md:inline leading-none font-medium ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>
@@ -2289,7 +2289,7 @@ export default function Home() {
                   <span className={`w-8 h-8 rounded-lg flex items-center justify-center text-base shrink-0 ${isDarkMode ? "bg-blue-950/70 text-blue-400" : "bg-blue-50 text-blue-600"}`}>📢</span>
                   <div>
                     <div className="font-semibold text-xs">Info Pembaruan</div>
-                    <div className={`text-[11px] ${isDarkMode ? "text-slate-500" : "text-slate-400"}`}>Catatan perubahan sistem v2.1</div>
+                    <div className={`text-[11px] ${isDarkMode ? "text-slate-500" : "text-slate-400"}`}>Catatan perubahan sistem v2.2</div>
                   </div>
                 </button>
 
@@ -3278,11 +3278,11 @@ export default function Home() {
                       Catatan Pembaruan Sistem
                     </h2>
                     <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-amber-400 text-slate-950 shadow-xs">
-                      v2.1
+                      v2.2
                     </span>
                   </div>
                   <p className="text-xs text-blue-100 font-medium mt-0.5">
-                    Peningkatan kestabilan, sorting otomatis, & performa realtime
+                    Pita telemetri interaktif, kolom pencarian luas, optimasi GPU 60 FPS, & isolasi mutlak
                   </p>
                 </div>
               </div>
@@ -3298,7 +3298,103 @@ export default function Home() {
 
             {/* Modal Body: Structured Cards with Distinct Icon Badges & Bold Contrast */}
             <div className="overflow-y-auto p-4 sm:p-5 space-y-3 text-xs sm:text-sm custom-scrollbar">
-              {/* Item 1: Database & Strict Isolation */}
+              {/* Item 1: Interactive Telemetry Ribbon & Instant Filters */}
+              <div className={`p-3.5 rounded-xl border flex items-start gap-3 shadow-xs transition-all ${
+                isDarkMode
+                  ? "bg-[#11192e] border-slate-700/80 text-slate-200"
+                  : "bg-white border-slate-200/90 text-slate-800"
+              }`}>
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-base font-bold ${
+                  isDarkMode
+                    ? "bg-sky-950/70 border border-sky-700/60 text-sky-400"
+                    : "bg-sky-50 border border-sky-200 text-sky-700"
+                }`}>
+                  🎛️
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className={`font-bold text-sm ${isDarkMode ? "text-sky-400" : "text-sky-800"}`}>
+                      Pita Metrik Telemetri Interaktif (Klik-Langsung)
+                    </span>
+                    <span className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded ${
+                      isDarkMode
+                        ? "bg-sky-900/60 text-sky-300 border border-sky-700/50"
+                        : "bg-sky-100 text-sky-800"
+                    }`}>
+                      UI & FILTER
+                    </span>
+                  </div>
+                  <p className={`text-xs leading-relaxed ${isDarkMode ? "text-slate-300" : "text-slate-700"}`}>
+                    Kartu telemetri di bagian atas (<strong className={isDarkMode ? "text-white" : "text-slate-900 font-bold"}>Belum Terprint</strong>, <strong className={isDarkMode ? "text-white" : "text-slate-900 font-bold"}>Total Faktur</strong>, <strong className={isDarkMode ? "text-white" : "text-slate-900 font-bold"}>Double INV</strong>, dan <strong className={isDarkMode ? "text-white" : "text-slate-900 font-bold"}>Retur</strong>) kini berfungsi ganda sebagai tombol filter sekali klik dengan cincin indikator aktif (<span className="text-amber-400 font-bold">● Aktif</span>). Tab kecil duplikat telah dihilangkan dan kartu <strong className={isDarkMode ? "text-white" : "text-slate-900 font-bold"}>Total Faktur</strong> diposisikan berdampingan langsung di sebelah kanan <strong className={isDarkMode ? "text-white" : "text-slate-900 font-bold"}>Belum Terprint</strong>.
+                  </p>
+                </div>
+              </div>
+
+              {/* Item 2: Full-Width Search Input */}
+              <div className={`p-3.5 rounded-xl border flex items-start gap-3 shadow-xs transition-all ${
+                isDarkMode
+                  ? "bg-[#11192e] border-slate-700/80 text-slate-200"
+                  : "bg-white border-slate-200/90 text-slate-800"
+              }`}>
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-base font-bold ${
+                  isDarkMode
+                    ? "bg-teal-950/70 border border-teal-700/60 text-teal-400"
+                    : "bg-teal-50 border border-teal-200 text-teal-700"
+                }`}>
+                  🔍
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className={`font-bold text-sm ${isDarkMode ? "text-teal-400" : "text-teal-800"}`}>
+                      Kolom Pencarian Luas & Full-Width
+                    </span>
+                    <span className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded ${
+                      isDarkMode
+                        ? "bg-teal-900/60 text-teal-300 border border-teal-700/50"
+                        : "bg-teal-100 text-teal-800"
+                    }`}>
+                      PENCARIAN
+                    </span>
+                  </div>
+                  <p className={`text-xs leading-relaxed ${isDarkMode ? "text-slate-300" : "text-slate-700"}`}>
+                    Kotak pencarian kini membentang penuh (<strong className={isDarkMode ? "text-white" : "text-slate-900 font-bold"}>Full-Width Capsule</strong>) memberikan ruang yang lapang untuk mengetik nomor faktur, nomor SO, nama apotek/rumah sakit, maupun nama obat. Dilengkapi pintasan keyboard cepat (<strong className={isDarkMode ? "text-white" : "text-slate-900 font-bold"}>⌘K</strong>) dan tombol hapus (<strong className={isDarkMode ? "text-white" : "text-slate-900 font-bold"}>✕</strong>) sekali klik.
+                  </p>
+                </div>
+              </div>
+
+              {/* Item 3: 60 FPS GPU Acceleration & Smooth Navigation */}
+              <div className={`p-3.5 rounded-xl border flex items-start gap-3 shadow-xs transition-all ${
+                isDarkMode
+                  ? "bg-[#11192e] border-slate-700/80 text-slate-200"
+                  : "bg-white border-slate-200/90 text-slate-800"
+              }`}>
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-base font-bold ${
+                  isDarkMode
+                    ? "bg-amber-950/70 border border-amber-700/60 text-amber-400"
+                    : "bg-amber-50 border border-amber-200 text-amber-800"
+                }`}>
+                  🚀
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className={`font-bold text-sm ${isDarkMode ? "text-amber-400" : "text-amber-800"}`}>
+                      Optimasi Performa GPU 60 FPS (Bebas Lag & Delay)
+                    </span>
+                    <span className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded ${
+                      isDarkMode
+                        ? "bg-amber-900/60 text-amber-300 border border-amber-700/50"
+                        : "bg-amber-100 text-amber-800"
+                    }`}>
+                      PERFORMA
+                    </span>
+                  </div>
+                  <p className={`text-xs leading-relaxed ${isDarkMode ? "text-slate-300" : "text-slate-700"}`}>
+                    Efek filter blur bertingkat dan fixed attachment latar belakang yang berat telah dihapus total dan diganti dengan <strong className={isDarkMode ? "text-white" : "text-slate-900 font-bold"}>akselerasi hardware CSS (translateZ)</strong>. Scrolling ribuan baris, pengetikan, dan navigasi keyboard (<strong className={isDarkMode ? "text-white" : "text-slate-900 font-bold"}>Spasi / Panah</strong>) kini bergerak sangat halus dan responsif di seluruh perangkat.
+                  </p>
+                </div>
+              </div>
+
+              {/* Item 4: Strict Database Isolation */}
               <div className={`p-3.5 rounded-xl border flex items-start gap-3 shadow-xs transition-all ${
                 isDarkMode
                   ? "bg-[#11192e] border-slate-700/80 text-slate-200"
@@ -3314,7 +3410,7 @@ export default function Home() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
                     <span className={`font-bold text-sm ${isDarkMode ? "text-emerald-400" : "text-emerald-800"}`}>
-                      Pembersihan Database & Anti Data Hantu
+                      Isolasi Mutlak Database & Anti Data Hantu
                     </span>
                     <span className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded ${
                       isDarkMode
@@ -3325,103 +3421,7 @@ export default function Home() {
                     </span>
                   </div>
                   <p className={`text-xs leading-relaxed ${isDarkMode ? "text-slate-300" : "text-slate-700"}`}>
-                    Lebih dari <strong className={isDarkMode ? "text-white" : "text-slate-900 font-bold"}>1.300+ kunci anomali/usang</strong> telah dibersihkan secara tuntas. Diterapkan <strong className={isDarkMode ? "text-white" : "text-slate-900 font-bold"}>Isolasi Mutlak (Strict Key Isolation)</strong> antara faktur reguler (DOO) dan faktur ORA sehingga tidak akan pernah saling menimpa atau tertukar status cetaknya.
-                  </p>
-                </div>
-              </div>
-
-              {/* Item 2: Auto Streaming Sort */}
-              <div className={`p-3.5 rounded-xl border flex items-start gap-3 shadow-xs transition-all ${
-                isDarkMode
-                  ? "bg-[#11192e] border-slate-700/80 text-slate-200"
-                  : "bg-white border-slate-200/90 text-slate-800"
-              }`}>
-                <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-base font-bold ${
-                  isDarkMode
-                    ? "bg-blue-950/70 border border-blue-700/60 text-blue-400"
-                    : "bg-blue-50 border border-blue-200 text-blue-700"
-                }`}>
-                  ⚡
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className={`font-bold text-sm ${isDarkMode ? "text-blue-400" : "text-blue-800"}`}>
-                      Tab "Semua" Mengalir Otomatis & Tab Sederhana
-                    </span>
-                    <span className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded ${
-                      isDarkMode
-                        ? "bg-blue-900/60 text-blue-300 border border-blue-700/50"
-                        : "bg-blue-100 text-blue-800"
-                    }`}>
-                      SORTING
-                    </span>
-                  </div>
-                  <p className={`text-xs leading-relaxed ${isDarkMode ? "text-slate-300" : "text-slate-700"}`}>
-                    Di tab <strong className={isDarkMode ? "text-white" : "text-slate-900 font-bold"}>Semua</strong>, faktur yang belum terprint selalu berada di urutan teratas. Begitu ditandai cetak (Spasi), faktur langsung mengalir turun menyambung urutan faktur yang sudah diprint. Tab disederhanakan menjadi <strong className={isDarkMode ? "text-white" : "text-slate-900 font-bold"}>Belum Diprint, Semua, Double, dan Retur</strong>.
-                  </p>
-                </div>
-              </div>
-
-              {/* Item 3: Debounced Sync & No Lag */}
-              <div className={`p-3.5 rounded-xl border flex items-start gap-3 shadow-xs transition-all ${
-                isDarkMode
-                  ? "bg-[#11192e] border-slate-700/80 text-slate-200"
-                  : "bg-white border-slate-200/90 text-slate-800"
-              }`}>
-                <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-base font-bold ${
-                  isDarkMode
-                    ? "bg-indigo-950/70 border border-indigo-700/60 text-indigo-400"
-                    : "bg-indigo-50 border border-indigo-200 text-indigo-700"
-                }`}>
-                  🛡️
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className={`font-bold text-sm ${isDarkMode ? "text-indigo-400" : "text-indigo-800"}`}>
-                      Sinkronisasi Anti-Lag & Antrean Cerdas (Debounced Sync)
-                    </span>
-                    <span className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded ${
-                      isDarkMode
-                        ? "bg-indigo-900/60 text-indigo-300 border border-indigo-700/50"
-                        : "bg-indigo-100 text-indigo-800"
-                    }`}>
-                      SYNC REALTIME
-                    </span>
-                  </div>
-                  <p className={`text-xs leading-relaxed ${isDarkMode ? "text-slate-300" : "text-slate-700"}`}>
-                    Penyimpanan perubahan ke database kini menggunakan antrean cerdas. Menandai faktur bertubi-tubi tidak akan membuat koneksi internet tersendat atau browser freeze, dan semua komputer terhubung menerima update seketika tanpa tabrakan.
-                  </p>
-                </div>
-              </div>
-
-              {/* Item 4: Smooth Keyboard Navigation */}
-              <div className={`p-3.5 rounded-xl border flex items-start gap-3 shadow-xs transition-all ${
-                isDarkMode
-                  ? "bg-[#11192e] border-slate-700/80 text-slate-200"
-                  : "bg-white border-slate-200/90 text-slate-800"
-              }`}>
-                <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-base font-bold ${
-                  isDarkMode
-                    ? "bg-amber-950/70 border border-amber-700/60 text-amber-400"
-                    : "bg-amber-50 border border-amber-200 text-amber-800"
-                }`}>
-                  ⌨️
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className={`font-bold text-sm ${isDarkMode ? "text-amber-400" : "text-amber-800"}`}>
-                      Navigasi Keyboard Halus & Repeat Lock
-                    </span>
-                    <span className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded ${
-                      isDarkMode
-                        ? "bg-amber-900/60 text-amber-300 border border-amber-700/50"
-                        : "bg-amber-100 text-amber-800"
-                    }`}>
-                      NAVIGASI
-                    </span>
-                  </div>
-                  <p className={`text-xs leading-relaxed ${isDarkMode ? "text-slate-300" : "text-slate-700"}`}>
-                    Penekanan tombol Spasi dilindungi <strong className={isDarkMode ? "text-white" : "text-slate-900 font-bold"}>repeat lock (150ms debounce)</strong> agar faktur tidak tercentang bolak-balik saat tombol tidak sengaja tertahan. Navigasi baris (Panah Atas / Bawah) bergerak dengan scroll halus.
+                    Menjamin kepatuhan standar mutlak (<strong className={isDarkMode ? "text-white" : "text-slate-900 font-bold"}>LOCKED_RULES.md</strong>). Diterapkan <strong className={isDarkMode ? "text-white" : "text-slate-900 font-bold"}>Isolasi Partisi Ketat (Strict Key Isolation)</strong> antara faktur reguler (DOO) dan faktur ORA (<strong className={isDarkMode ? "text-white" : "text-slate-900 font-bold"}>-1P</strong>) sehingga status cetak tidak akan pernah tertukar atau saling menimpa.
                   </p>
                 </div>
               </div>
