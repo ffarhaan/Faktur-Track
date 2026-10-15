@@ -1177,7 +1177,7 @@ export default function Home() {
       }
       if (e.key === "ArrowRight" || e.key === "l") {
         e.preventDefault();
-        setSelectedColIdx((prev) => Math.min(10, prev + 1));
+        setSelectedColIdx((prev) => Math.min(11, prev + 1));
         return;
       }
       if (e.key === "ArrowLeft" || e.key === "h") {
@@ -1231,8 +1231,11 @@ export default function Home() {
             label = "Pelanggan";
           } else if (colIdx === 7) {
             textToCopy = currentRow.transactionDate && currentRow.transactionDate !== "-" ? currentRow.transactionDate : currentRow.orderDate;
-            label = "Tanggal Faktur";
-          } else if (colIdx === 10) {
+            label = "Tgl Faktur";
+          } else if (colIdx === 8) {
+            textToCopy = currentRow.orderDate && currentRow.orderDate !== "-" ? currentRow.orderDate : "-";
+            label = "Tgl Order";
+          } else if (colIdx === 11) {
             const grandTotal = Math.round(currentRow.totalHarga * 1.11 * 100) / 100;
             textToCopy = String(grandTotal);
             label = "Total (+PPN)";
@@ -2670,7 +2673,8 @@ export default function Home() {
                   <th className="px-2.5 py-1.5">Kat Produk</th>
                   <th className="px-2.5 py-1.5">Jenis</th>
                   <th className="px-2.5 py-1.5">Pelanggan</th>
-                  <th className="px-2.5 py-1.5" title="Tanggal Faktur (Transaction Date) & Tanggal Order (SO)">Tanggal</th>
+                  <th className="px-2.5 py-1.5" title="Tanggal Faktur / Invoice Date (Transaction Date)">Tgl Faktur</th>
+                  <th className="px-2.5 py-1.5" title="Tanggal Sales Order Masuk (Order Date)">Tgl Order</th>
                   <th className="px-2.5 py-1.5">Kat</th>
                   <th className="px-2.5 py-1.5">Done Print (Waktu)</th>
                   <th className="px-2.5 py-1.5 text-right" title="Grand Total sudah termasuk PPN 11% (sesuai faktur fisik)">Total (+PPN)</th>
@@ -2679,7 +2683,7 @@ export default function Home() {
               <tbody className={`divide-y ${isDarkMode ? "divide-slate-800/80" : "divide-slate-100"}`}>
                 {loading && records.length === 0 ? (
                   <tr>
-                    <td colSpan={11} className={`text-center py-8 ${isDarkMode ? "text-slate-400" : "text-slate-400"}`}>
+                    <td colSpan={12} className={`text-center py-8 ${isDarkMode ? "text-slate-400" : "text-slate-400"}`}>
                       <div className="flex flex-col items-center gap-1.5">
                         <span className="text-xl animate-spin text-blue-400">🔄</span>
                         <span className="text-xs font-medium">Memuat data faktur...</span>
@@ -2688,7 +2692,7 @@ export default function Home() {
                   </tr>
                 ) : filtered.length === 0 ? (
                   <tr>
-                    <td colSpan={11} className={`text-center py-8 ${isDarkMode ? "text-slate-400" : "text-slate-400"}`}>
+                    <td colSpan={12} className={`text-center py-8 ${isDarkMode ? "text-slate-400" : "text-slate-400"}`}>
                       <div className="flex flex-col items-center gap-1.5">
                         <span className="text-2xl">{filter === "belum" ? "🎉" : "📄"}</span>
                         <span className="text-xs font-medium">
@@ -2890,30 +2894,38 @@ export default function Home() {
                             {g.customerName}
                           </td>
 
-                          {/* Col 7: Tanggal (Transaction Date & Order Date) */}
+                          {/* Col 7: Tgl Faktur (Transaction Date) */}
                           <td
-                            className={`px-2.5 py-1.5 whitespace-nowrap ${getCellCls(7)}`}
+                            className={`px-2.5 py-1.5 whitespace-nowrap font-mono text-xs font-semibold ${
+                              isDarkMode ? "text-slate-200" : "text-slate-800"
+                            } ${getCellCls(7)}`}
                             onClick={(e) => {
                               e.stopPropagation();
                               onSelectCell(7);
                             }}
                           >
-                            <div className={`font-mono text-xs font-semibold ${isDarkMode ? "text-slate-200" : "text-slate-800"}`}>
-                              {g.transactionDate && g.transactionDate !== "-" ? g.transactionDate : g.orderDate}
-                            </div>
-                            {g.orderDate && g.orderDate !== "-" && (
-                              <div className={`text-[10px] font-mono ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>
-                                SO: {g.orderDate}
-                              </div>
-                            )}
+                            {g.transactionDate && g.transactionDate !== "-" ? g.transactionDate : g.orderDate}
                           </td>
 
-                          {/* Col 8: Kat (Editable Dropdown) */}
+                          {/* Col 8: Tgl Order (Order Date / SO) */}
                           <td
-                            className={`px-2.5 py-1.5 whitespace-nowrap ${getCellCls(8)}`}
+                            className={`px-2.5 py-1.5 whitespace-nowrap font-mono text-xs ${
+                              isDarkMode ? "text-slate-400" : "text-slate-500"
+                            } ${getCellCls(8)}`}
                             onClick={(e) => {
                               e.stopPropagation();
                               onSelectCell(8);
+                            }}
+                          >
+                            {g.orderDate && g.orderDate !== "-" ? g.orderDate : "-"}
+                          </td>
+
+                          {/* Col 9: Kat (Editable Dropdown) */}
+                          <td
+                            className={`px-2.5 py-1.5 whitespace-nowrap ${getCellCls(9)}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onSelectCell(9);
                             }}
                           >
                             <select
@@ -2949,12 +2961,12 @@ export default function Home() {
                             </select>
                           </td>
 
-                          {/* Col 9: Done Print Waktu */}
+                          {/* Col 10: Done Print Waktu */}
                           <td
-                            className={`px-2.5 py-1.5 whitespace-nowrap font-mono text-[10px] ${getCellCls(9)}`}
+                            className={`px-2.5 py-1.5 whitespace-nowrap font-mono text-[10px] ${getCellCls(10)}`}
                             onClick={(e) => {
                               e.stopPropagation();
-                              onSelectCell(9);
+                              onSelectCell(10);
                             }}
                           >
                             {g.allPrinted && g.printedAt ? (
@@ -2979,7 +2991,7 @@ export default function Home() {
                             )}
                           </td>
 
-                          {/* Col 10: Total Harga (Grand Total include PPN 11%) */}
+                          {/* Col 11: Total Harga (Grand Total include PPN 11%) */}
                           <td
                             className={`px-2.5 py-1.5 text-right font-medium whitespace-nowrap ${
                               g.isRetur || g.totalHarga < 0
@@ -2987,10 +2999,10 @@ export default function Home() {
                                 : isDarkMode
                                 ? "text-slate-100"
                                 : "text-slate-900"
-                            } ${getCellCls(10)}`}
+                            } ${getCellCls(11)}`}
                             onClick={(e) => {
                               e.stopPropagation();
-                              onSelectCell(10);
+                              onSelectCell(11);
                             }}
                           >
                             <div className="font-mono font-semibold">
@@ -3005,7 +3017,7 @@ export default function Home() {
                         {/* Expanded Detail Rows */}
                         {isExpanded && (
                           <tr className={isDarkMode ? "bg-[#080d19] border-b border-slate-800" : "bg-slate-50/80 border-b border-slate-200"}>
-                            <td colSpan={11} className="p-3">
+                            <td colSpan={12} className="p-3">
                               <div className={`border rounded-xl p-3 shadow-xs space-y-3 ${
                                 isDarkMode ? "bg-[#0e1628] border-slate-700/70 text-slate-200 shadow-black/40" : "bg-white border-slate-200 text-slate-800"
                               }`}>
