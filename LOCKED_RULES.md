@@ -180,10 +180,32 @@ Dokumen ini adalah acuan baku dan permanen untuk seluruh pengembangan, pemelihar
 
 ---
 
-### 3. KLAUSUL INTEGRITAS MUTLAK (INVIOLABILITY CLAUSE)
+### 3. ARSITEKTUR EFISIENSI EKSTRIM & PORTABILITAS DATABASE (DATABASE MIGRATION & EXTREME EFFICIENCY - LOCKED)
 
-> **DILARANG MERUBAH LOGIKA DASAR PADA PERMINTAAN FITUR BARU APAPUN:**
-> Setiap penambahan fitur, perubahan tampilan, atau optimasi di masa mendatang **WAJIB** tunduk pada dokumen `LOCKED_RULES.md` ini dan **TIDAK BOLEH** merusak atau mengubah:
+Dokumen ini secara permanen mengunci prinsip efisiensi kuota dan kompresi data untuk database saat ini (Firestore) maupun jika sistem dipindahkan ke database lain di masa mendatang:
+
+1. **Prinsip Chunking Portabel (Portable Document Chunking - LOCKED)**:
+   - Jika database dipindahkan (misal ke project Firebase baru, Supabase, PostgreSQL, CouchDB, MongoDB, dll), logika **Chunking (~200 s/d 250 faktur per kantung dokumen)** WAJIB TETAP DIPERTAHANKAN.
+   - **Alasan**: Menghindari pemborosan kuota baca (reads/queries). Membaca 10.000 faktur hanya membutuhkan ~40 s/d 50 reads dokumen, bukan 10.000 reads individual.
+2. **Pembersihan Data Mentah di Browser (Client-Side Extreme Data Pruning - LOCKED)**:
+   - File dari Oracle (berukuran 20 MB – 30 MB+) WAJIB langsung dibersihkan di memori browser pengguna sebelum dikirim ke database:
+     - Seluruh kolom sampah (session ID, token sistem Oracle, batch ID internal, format styling XML) dibuang 100%.
+     - Hanya 7 atribut inti yang disimpan: No Invoice, No SO, Nama Pelanggan, Nama Barang, Qty, Satuan, Total Harga.
+     - Rincian item dikelompokkan ke dalam array ringkas `extra.items` per invoice, mencegah pengulangan nama apotek dan invoice yang redundan.
+   - **Hasil**: Ukuran data mengecil drastis 90%–95% (dari puluhan MB menjadi hanya ~1–2 MB di database cloud).
+3. **Isolasi Mutlak Operasi Tulis Cetak (Partitioned Print State Writes - LOCKED)**:
+   - Status cetak dan timestamp selesai cetak WAJIB diisolasi pada dokumen partisi terpisah (`print_state_partitions`).
+   - Menandai cetak faktur HANYA menulis dokumen kecil (< 5 KB), dan DILARANG KERAS memicu penulisan ulang seluruh chunk data faktur.
+4. **Pemrosesan Murni di Memori Klien (Zero-Read Filtering & Sorting - LOCKED)**:
+   - Seluruh operasi pencarian keyword, filtering (ALKES, OOT, CCP, PREKURSOR, FARMA, Belum Cetak, Retur), pengurutan, dan paginasi WAJIB diproses 100% di memori browser (RAM perangkat).
+   - Memastikan **0 reads tambahan** ke database saat pengguna berinteraksi dengan tabel.
+
+---
+
+### 4. KLAUSUL INTEGRITAS MUTLAK (INVIOLABILITY CLAUSE)
+
+> **DILARANG MERUBAH LOGIKA DASAR PADA PERMINTAAN FITUR BARU ATAU MIGRASI DATABASE APAPUN:**
+> Setiap penambahan fitur, perubahan tampilan, atau migrasi database di masa mendatang **WAJIB** tunduk pada dokumen `LOCKED_RULES.md` ini dan **TIDAK BOLEH** merusak atau mengubah:
 > 1. Isolasi mutlak DOO vs ORA
 > 2. Jaminan anti-reappearance faktur yang sudah dicetak
 > 3. Jaminan faktur baru masuk ke Belum Terprint
@@ -191,5 +213,6 @@ Dokumen ini adalah acuan baku dan permanen untuk seluruh pengembangan, pemelihar
 > 5. Retensi kustom kategori apotek dan produk
 > 6. Aturan baku urutan Hook React (Top-Level Hooks Only)
 > 7. Arsitektur performa kilat `baseGroups` dan eliminasi loading palsu
-> 8. Sistem hak akses role pengguna dan proteksi stranger.
+> 8. Sistem hak akses role pengguna dan proteksi stranger
+> 9. Arsitektur efisiensi ekstrim (Chunking, Data Pruning, dan Zero-Read Client Filtering).
 
