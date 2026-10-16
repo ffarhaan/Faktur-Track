@@ -1855,7 +1855,7 @@ export default function Home() {
   };
 
   return (
-    <div className={`min-h-screen flex flex-col font-sans transition-colors duration-150 relative overflow-hidden ${
+    <div className={`min-h-screen flex flex-col font-sans relative overflow-hidden ${
       isDarkMode
         ? "dark mesh-bg-dark text-slate-100 selection:bg-blue-500/30"
         : "mesh-bg-light text-slate-800 selection:bg-blue-500/20"
@@ -1947,8 +1947,8 @@ export default function Home() {
                       className="fixed inset-0 z-40"
                       onClick={() => setShowOnlinePopover(false)}
                     />
-                    <div className={`absolute left-0 mt-1.5 w-72 sm:w-80 rounded-2xl shadow-2xl border p-3.5 z-50 transition-all backdrop-blur-xl ${
-                      isDarkMode ? "bg-[#10192E]/95 border-white/[0.1] text-slate-100 shadow-black/60" : "bg-white/95 border-slate-200 text-slate-800 shadow-slate-300/50"
+                    <div className={`absolute left-0 mt-1.5 w-72 sm:w-80 rounded-2xl shadow-2xl border p-3.5 z-50 ${
+                      isDarkMode ? "bg-[#10192E] border-slate-700 text-slate-100 shadow-black/60" : "bg-white border-slate-200 text-slate-800 shadow-slate-300/50"
                     }`}>
                       <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-200 dark:border-slate-700/60">
                         <div className="flex items-center gap-1.5 font-bold text-xs">
@@ -2159,7 +2159,7 @@ export default function Home() {
           <>
             {/* Backdrop */}
             <div
-              className="fixed inset-0 z-40 bg-slate-900/30 backdrop-blur-xs"
+              className="fixed inset-0 z-40 bg-slate-900/50"
               onClick={() => setShowSettingsPanel(false)}
             />
             {/* Panel */}
@@ -2377,19 +2377,19 @@ export default function Home() {
           <button
             type="button"
             onClick={() => { setFilter(filter === "belum" ? "all" : "belum"); setPage(0); }}
-            className={`py-1.5 px-2 flex flex-col justify-between items-center text-center transition-all cursor-pointer group ${
+            className={`py-1.5 px-2 flex flex-col justify-between items-center text-center cursor-pointer group ${
               filter === "belum"
                 ? (isDarkMode ? "bg-amber-500/15 ring-2 ring-inset ring-amber-500/60 shadow-inner" : "bg-amber-100/70 ring-2 ring-inset ring-amber-500/60")
                 : (isDarkMode ? "hover:bg-white/[0.04]" : "hover:bg-slate-100/60")
             }`}
             title="Klik untuk filter Belum Terprint"
           >
-            <span className={`text-[10px] font-semibold tracking-tight transition-colors ${
+            <span className={`text-[10px] font-semibold tracking-tight ${
               filter === "belum" ? "text-amber-400 font-bold" : (isDarkMode ? "text-slate-400 group-hover:text-slate-200" : "text-slate-600 group-hover:text-slate-900")
             }`}>
               Belum Terprint
             </span>
-            <div className={`my-0.5 px-2.5 py-0.2 rounded-full font-black text-xs sm:text-sm font-mono tracking-tight shadow-xs border transition-transform group-hover:scale-105 ${
+            <div className={`my-0.5 px-2.5 py-0.2 rounded-full font-black text-xs sm:text-sm font-mono tracking-tight shadow-xs border ${
               isDarkMode
                 ? "bg-gradient-to-r from-amber-500/25 to-amber-600/35 border-amber-500/40 text-amber-300 shadow-amber-950/40"
                 : "bg-gradient-to-r from-amber-200/70 to-amber-300/80 border-amber-400/80 text-amber-950 shadow-amber-200/50"
@@ -2405,19 +2405,19 @@ export default function Home() {
           <button
             type="button"
             onClick={() => { setFilter("all"); setPage(0); }}
-            className={`py-1.5 px-2 flex flex-col justify-between items-center text-center transition-all cursor-pointer group ${
+            className={`py-1.5 px-2 flex flex-col justify-between items-center text-center cursor-pointer group ${
               filter === "all"
                 ? (isDarkMode ? "bg-sky-500/15 ring-2 ring-inset ring-sky-500/60 shadow-inner" : "bg-sky-100/70 ring-2 ring-inset ring-sky-500/60")
                 : (isDarkMode ? "hover:bg-white/[0.04]" : "hover:bg-slate-100/60")
             }`}
             title="Klik untuk tampilkan Semua Faktur"
           >
-            <span className={`text-[10px] font-semibold tracking-tight transition-colors ${
+            <span className={`text-[10px] font-semibold tracking-tight ${
               filter === "all" ? "text-sky-400 font-bold" : (isDarkMode ? "text-slate-400 group-hover:text-slate-200" : "text-slate-600 group-hover:text-slate-900")
             }`}>
               Total Faktur
             </span>
-            <div className={`my-0.5 font-black text-sm sm:text-base font-mono tracking-tight transition-transform group-hover:scale-105 ${isDarkMode ? "text-white" : "text-slate-900"}`}>
+            <div className={`my-0.5 font-black text-sm sm:text-base font-mono tracking-tight ${isDarkMode ? "text-white" : "text-slate-900"}`}>
               {stats.totalCount}
             </div>
             <span className={`text-[9px] font-medium leading-none ${
@@ -2496,19 +2496,19 @@ export default function Home() {
           <button
             type="button"
             onClick={() => { setFilter(filter === "double" ? "all" : "double"); setPage(0); }}
-            className={`py-1.5 px-2 flex flex-col justify-between items-center text-center transition-all cursor-pointer group ${
+            className={`py-1.5 px-2 flex flex-col justify-between items-center text-center cursor-pointer group ${
               filter === "double"
                 ? (isDarkMode ? "bg-rose-500/15 ring-2 ring-inset ring-rose-500/60 shadow-inner" : "bg-rose-100/70 ring-2 ring-inset ring-rose-500/60")
                 : (isDarkMode ? "hover:bg-white/[0.04]" : "hover:bg-slate-100/60")
             }`}
             title="Klik untuk filter Double INV"
           >
-            <span className={`text-[10px] font-semibold tracking-tight transition-colors ${
+            <span className={`text-[10px] font-semibold tracking-tight ${
               filter === "double" ? "text-rose-400 font-bold" : (isDarkMode ? "text-slate-400 group-hover:text-slate-200" : "text-slate-600 group-hover:text-slate-900")
             }`}>
               Double INV
             </span>
-            <div className={`my-0.5 px-2 py-0.2 rounded-full font-black text-xs sm:text-sm font-mono tracking-tight shadow-xs border transition-transform group-hover:scale-105 ${
+            <div className={`my-0.5 px-2 py-0.2 rounded-full font-black text-xs sm:text-sm font-mono tracking-tight shadow-xs border ${
               isDarkMode
                 ? "bg-gradient-to-r from-rose-500/25 to-rose-600/35 border-rose-500/40 text-rose-300 shadow-rose-950/40"
                 : "bg-gradient-to-r from-rose-200/70 to-rose-300/80 border-rose-400/80 text-rose-950 shadow-rose-200/50"
@@ -2524,19 +2524,19 @@ export default function Home() {
           <button
             type="button"
             onClick={() => { setFilter(filter === "retur" ? "all" : "retur"); setPage(0); }}
-            className={`py-1.5 px-2 flex flex-col justify-between items-center text-center transition-all cursor-pointer group ${
+            className={`py-1.5 px-2 flex flex-col justify-between items-center text-center cursor-pointer group ${
               filter === "retur"
                 ? (isDarkMode ? "bg-amber-500/15 ring-2 ring-inset ring-amber-500/60 shadow-inner" : "bg-amber-100/70 ring-2 ring-inset ring-amber-500/60")
                 : (isDarkMode ? "hover:bg-white/[0.04]" : "hover:bg-slate-100/60")
             }`}
             title="Klik untuk filter Retur"
           >
-            <span className={`text-[10px] font-semibold tracking-tight transition-colors ${
+            <span className={`text-[10px] font-semibold tracking-tight ${
               filter === "retur" ? "text-amber-400 font-bold" : (isDarkMode ? "text-slate-400 group-hover:text-slate-200" : "text-slate-600 group-hover:text-slate-900")
             }`}>
               Retur
             </span>
-            <div className={`my-0.5 px-2 py-0.2 rounded-full font-black text-xs sm:text-sm font-mono tracking-tight shadow-xs border transition-transform group-hover:scale-105 ${
+            <div className={`my-0.5 px-2 py-0.2 rounded-full font-black text-xs sm:text-sm font-mono tracking-tight shadow-xs border ${
               isDarkMode
                 ? "bg-gradient-to-r from-amber-500/25 to-amber-600/35 border-amber-500/40 text-amber-300 shadow-amber-950/40"
                 : "bg-gradient-to-r from-amber-200/70 to-amber-300/80 border-amber-400/80 text-amber-950 shadow-amber-200/50"
@@ -2668,10 +2668,10 @@ export default function Home() {
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
-                <tr className={`border-b font-semibold transition-colors ${
+                <tr className={`border-b font-semibold ${
                   isDarkMode
-                    ? "bg-[#101A2E]/80 border-white/[0.08] text-slate-300"
-                    : "bg-white/60 border-slate-200/60 text-slate-700 backdrop-blur-md"
+                    ? "bg-[#0f172a] border-slate-800 text-slate-300"
+                    : "bg-slate-50 border-slate-200 text-slate-700"
                 }`}>
                   <th className="px-2.5 py-1.5 w-7 text-center">#</th>
                   <th className="px-2.5 py-1.5 w-10 text-center">Print</th>
@@ -2740,7 +2740,7 @@ export default function Home() {
                             setSelectedRowIndex(rowIdx);
                             toggleExpand(g.key);
                           }}
-                          className={`cursor-pointer transition-colors ${
+                          className={`cursor-pointer ${
                             isRowSelected
                               ? (isDarkMode
                                   ? "bg-[#1d3567] border-l-4 border-l-blue-400 text-white shadow-xs"
@@ -2778,7 +2778,7 @@ export default function Home() {
                             <button
                               type="button"
                               disabled={currentUser?.role === "readonly"}
-                              className={`w-5 h-5 rounded flex items-center justify-center text-[11px] font-bold transition-all shadow-xs ${
+                              className={`w-5 h-5 rounded flex items-center justify-center text-[11px] font-bold shadow-xs ${
                                 currentUser?.role === "readonly"
                                   ? "cursor-not-allowed opacity-50"
                                   : ""
@@ -2941,7 +2941,7 @@ export default function Home() {
                               onChange={(e) => {
                                 handleUpdateCategory(g.invoiceKey, e.target.value as "1P" | "2P" | "3P", g.customerName);
                               }}
-                              className={`px-1.5 py-0.2 rounded text-[10px] font-bold border transition-colors ${
+                              className={`px-1.5 py-0.2 rounded text-[10px] font-bold border ${
                                 currentUser?.role === "readonly" ? "cursor-not-allowed opacity-70" : "cursor-pointer"
                               } ${
                                 isDarkMode
@@ -3251,7 +3251,7 @@ export default function Home() {
       {/* Changelog & System Update Notes Modal (v2.1) - High Contrast & Polished Design */}
       {showChangelogModal && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/70 backdrop-blur-xs animate-in fade-in duration-150"
+          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/75 animate-in fade-in duration-150"
           onClick={() => setShowChangelogModal(false)}
         >
           <div

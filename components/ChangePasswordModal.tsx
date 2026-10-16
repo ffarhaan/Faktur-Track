@@ -63,7 +63,7 @@ export default function ChangePasswordModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-black/70 animate-in fade-in duration-150">
       <div
         className={`w-full max-w-sm rounded-xl p-4 shadow-xl border transition-all ${
           isDarkMode
