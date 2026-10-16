@@ -117,6 +117,8 @@ export interface FakturGroup {
   printedAt: string | null;
   printedBy?: string | null;
   searchStr?: string;
+  invNum?: number;
+  printTimeMs?: number;
 }
 
 export interface UploadNotification {
