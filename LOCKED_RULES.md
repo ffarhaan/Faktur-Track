@@ -204,8 +204,8 @@ Dokumen ini secara permanen mengunci prinsip efisiensi kuota dan kompresi data u
 
 ### 4. KLAUSUL INTEGRITAS MUTLAK (INVIOLABILITY CLAUSE)
 
-> **DILARANG MERUBAH LOGIKA DASAR PADA PERMINTAAN FITUR BARU ATAU MIGRASI DATABASE APAPUN:**
-> Setiap penambahan fitur, perubahan tampilan, atau migrasi database di masa mendatang **WAJIB** tunduk pada dokumen `LOCKED_RULES.md` ini dan **TIDAK BOLEH** merusak atau mengubah:
+> **DILARANG MERUBAH LOGIKA DASAR PADA PERMINTAAN FITUR BARU APAPUN:**
+> Setiap penambahan fitur, perubahan tampilan, atau optimasi di masa mendatang **WAJIB** tunduk pada dokumen `LOCKED_RULES.md` ini dan **TIDAK BOLEH** merusak atau mengubah:
 > 1. Isolasi mutlak DOO vs ORA
 > 2. Jaminan anti-reappearance faktur yang sudah dicetak
 > 3. Jaminan faktur baru masuk ke Belum Terprint
