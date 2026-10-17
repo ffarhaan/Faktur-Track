@@ -221,7 +221,9 @@ export default function Home() {
   const [katFilter, setKatFilter] = useState<KatFilter>("all");
   const [jenisFilter, setJenisFilter] = useState<JenisFilter>("all");
   const [klasFilter, setKlasFilter] = useState<KlasFilter>("all");
-  const [dateFilter, setDateFilter] = useState<string>("all");
+  const [txDateFilter, setTxDateFilter] = useState<string>("all");
+  const [orderDateFilter, setOrderDateFilter] = useState<string>("all");
+  const [dashboardDateBasis, setDashboardDateBasis] = useState<"tx" | "order">("tx");
   const [dashboardStartDate, setDashboardStartDate] = useState<string>("");
   const [dashboardEndDate, setDashboardEndDate] = useState<string>("");
   const [search, setSearch] = useState("");
@@ -893,11 +895,19 @@ export default function Home() {
     return { maxOraStr, max1PDooStr, max2PStr, max3PStr };
   }, [baseGroups]);
 
-  // 3. Unique dates (transactionDate & orderDate) for filter dropdown
-  const availableDates = useMemo(() => {
+  // 3. Unique Transaction Dates (Tanggal Faktur / Tx)
+  const availableTxDates = useMemo(() => {
     const set = new Set<string>();
     for (const r of records) {
       if (r.transactionDate && r.transactionDate !== "-") set.add(r.transactionDate);
+    }
+    return Array.from(set).sort((a, b) => parseDateMs(b) - parseDateMs(a));
+  }, [records]);
+
+  // Unique Order Dates (Tanggal SO / Order Date)
+  const availableOrderDates = useMemo(() => {
+    const set = new Set<string>();
+    for (const r of records) {
       if (r.orderDate && r.orderDate !== "-") set.add(r.orderDate);
     }
     return Array.from(set).sort((a, b) => parseDateMs(b) - parseDateMs(a));
@@ -941,7 +951,8 @@ export default function Home() {
 
     for (let i = 0; i < grouped.length; i++) {
       const g = grouped[i];
-      const d = g.transactionDate || g.orderDate;
+      // Strictly separate based on dashboardDateBasis
+      const d = dashboardDateBasis === "tx" ? (g.transactionDate || g.orderDate) : (g.orderDate || g.transactionDate);
       const dMs = d && d !== "-" ? parseDateMs(d) : 0;
 
       // Apply accurate millisecond-based Dashboard Date Range Filter
@@ -968,14 +979,14 @@ export default function Home() {
       existing.totalRp += (g.totalHarga || 0);
       custMap.set(cName, existing);
 
-      if (dMs > 0) {
+      if (dMs > 0 && d) {
         if (!minDateMs || dMs < minDateMs) {
           minDateMs = dMs;
-          minDateStr = d;
+          minDateStr = String(d);
         }
         if (!maxDateMs || dMs > maxDateMs) {
           maxDateMs = dMs;
-          maxDateStr = d;
+          maxDateStr = String(d);
         }
       }
     }
@@ -1026,8 +1037,11 @@ export default function Home() {
       result = result.filter((g) => g.isRetur);
     }
 
-    if (dateFilter !== "all") {
-      result = result.filter((g) => g.orderDate === dateFilter);
+    if (txDateFilter !== "all") {
+      result = result.filter((g) => g.transactionDate === txDateFilter);
+    }
+    if (orderDateFilter !== "all") {
+      result = result.filter((g) => g.orderDate === orderDateFilter);
     }
     if (katFilter !== "all") {
       result = result.filter((g) => g.kategori === katFilter);
@@ -1064,7 +1078,7 @@ export default function Home() {
     }
 
     return result;
-  }, [grouped, filter, katFilter, jenisFilter, klasFilter, dateFilter, deferredSearch]);
+  }, [grouped, filter, katFilter, jenisFilter, klasFilter, txDateFilter, orderDateFilter, deferredSearch]);
 
   const totalPages = Math.ceil(filtered.length / ROWS_PER_PAGE);
   const pageData = filtered.slice(page * ROWS_PER_PAGE, (page + 1) * ROWS_PER_PAGE);
@@ -2557,9 +2571,36 @@ export default function Home() {
                 
                 {/* DATE RANGE FILTER CONTROLS */}
                 <div className="flex flex-wrap items-center gap-2">
-                  {/* Quick Select from Actual Available Dates */}
+                  {/* Basis Tanggal Switcher */}
+                  <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg border border-slate-300 dark:border-slate-700 text-xs">
+                    <button
+                      type="button"
+                      onClick={() => setDashboardDateBasis("tx")}
+                      className={`px-2 py-0.5 rounded font-bold transition-all ${
+                        dashboardDateBasis === "tx"
+                          ? (isDarkMode ? "bg-white text-black" : "bg-black text-white")
+                          : (isDarkMode ? "text-slate-400 hover:text-white" : "text-slate-600 hover:text-black")
+                      }`}
+                      title="Hitung berdasarkan Tanggal Faktur (Tx Date)"
+                    >
+                      Tanggal Faktur (Tx)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDashboardDateBasis("order")}
+                      className={`px-2 py-0.5 rounded font-bold transition-all ${
+                        dashboardDateBasis === "order"
+                          ? (isDarkMode ? "bg-white text-black" : "bg-black text-white")
+                          : (isDarkMode ? "text-slate-400 hover:text-white" : "text-slate-600 hover:text-black")
+                      }`}
+                      title="Hitung berdasarkan Tanggal SO (Order Date)"
+                    >
+                      Tanggal SO (Order)
+                    </button>
+                  </div>
+
+                  {/* Quick Select from Actual Available Dates based on selected basis */}
                   <div className="flex items-center gap-1 text-xs">
-                    <span className="text-[11px] text-slate-500 font-semibold">Pilih Tanggal:</span>
                     <select
                       value={dashboardStartDate === dashboardEndDate && dashboardStartDate ? dashboardStartDate : "custom"}
                       onChange={(e) => {
@@ -2568,7 +2609,6 @@ export default function Home() {
                           setDashboardStartDate("");
                           setDashboardEndDate("");
                         } else if (val !== "custom") {
-                          // convert DD/MM/YYYY to YYYY-MM-DD for consistency
                           if (/^\d{2}\/\d{2}\/\d{4}$/.test(val)) {
                             const [d, m, y] = val.split("/");
                             const iso = `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
@@ -2584,8 +2624,8 @@ export default function Home() {
                         isDarkMode ? "bg-slate-900 border-slate-700 text-white" : "bg-white border-slate-300 text-slate-900"
                       }`}
                     >
-                      <option value="all">Semua Tanggal Data</option>
-                      {availableDates.map((d) => (
+                      <option value="all">Semua Tanggal ({dashboardDateBasis === "tx" ? "Tx" : "SO"})</option>
+                      {(dashboardDateBasis === "tx" ? availableTxDates : availableOrderDates).map((d) => (
                         <option key={d} value={d}>
                           {d}
                         </option>
@@ -2658,7 +2698,7 @@ export default function Home() {
                 }`}>
                   <div className="text-xs text-slate-500 font-semibold">Basis Penarikan</div>
                   <div className="text-base sm:text-lg font-black text-slate-900 dark:text-white mt-2">
-                    Tanggal Faktur (Tx)
+                    {dashboardDateBasis === "tx" ? "Tanggal Faktur (Tx)" : "Tanggal SO (Order Date)"}
                   </div>
                 </div>
               </div>
@@ -3079,18 +3119,36 @@ export default function Home() {
             <option value="farma">Farma</option>
           </select>
 
-          {/* Filter Tanggal */}
+          {/* Filter Tanggal Faktur (Tx Date) */}
           <select
-            value={dateFilter}
-            onChange={(e) => { setDateFilter(e.target.value); setPage(0); }}
-            className={`w-full px-2.5 py-1 rounded-md text-xs font-bold focus:outline-none transition-colors border ${
+            value={txDateFilter}
+            onChange={(e) => { setTxDateFilter(e.target.value); setPage(0); }}
+            className={`w-full px-2 py-1 rounded-md text-xs font-bold focus:outline-none transition-colors border ${
               isDarkMode
                 ? "bg-slate-900 border-slate-700 text-white"
                 : "bg-slate-50 border-slate-300 text-slate-900"
             }`}
+            title="Filter berdasarkan Tanggal Faktur (Tx)"
           >
-            <option value="all">Semua Tanggal</option>
-            {availableDates.map((d) => (
+            <option value="all">Tgl Faktur (Tx): Semua</option>
+            {availableTxDates.map((d) => (
+              <option key={d} value={d}>{d}</option>
+            ))}
+          </select>
+
+          {/* Filter Tanggal SO (Order Date) */}
+          <select
+            value={orderDateFilter}
+            onChange={(e) => { setOrderDateFilter(e.target.value); setPage(0); }}
+            className={`w-full px-2 py-1 rounded-md text-xs font-bold focus:outline-none transition-colors border ${
+              isDarkMode
+                ? "bg-slate-900 border-slate-700 text-white"
+                : "bg-slate-50 border-slate-300 text-slate-900"
+            }`}
+            title="Filter berdasarkan Tanggal SO (Order Date)"
+          >
+            <option value="all">Tgl SO: Semua</option>
+            {availableOrderDates.map((d) => (
               <option key={d} value={d}>{d}</option>
             ))}
           </select>
