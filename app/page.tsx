@@ -924,6 +924,8 @@ export default function Home() {
     let doubleCount = 0;
     let returCount = 0;
     let totalNilaiRp = 0;
+    let minDateMs = 0;
+    let maxDateMs = 0;
     let minDateStr = "";
     let maxDateStr = "";
     const soSet = new Set<string>();
@@ -932,13 +934,18 @@ export default function Home() {
     const prodCounts: Record<string, number> = { PREKURSOR: 0, OOT: 0, CCP: 0, ALKES: 0, FARMA: 0 };
     const custMap = new Map<string, { count: number; totalRp: number }>();
 
+    const filterStartMs = dashboardStartDate ? parseDateMs(dashboardStartDate) : 0;
+    // Set end date to end of that day (23:59:59)
+    const filterEndMs = dashboardEndDate ? parseDateMs(dashboardEndDate) + (24 * 60 * 60 * 1000 - 1) : 0;
+
     for (let i = 0; i < grouped.length; i++) {
       const g = grouped[i];
       const d = g.transactionDate || g.orderDate;
+      const dMs = d && d !== "-" ? parseDateMs(d) : 0;
 
-      // Apply Dashboard Date Range Filter if set
-      if (dashboardStartDate && d && d < dashboardStartDate) continue;
-      if (dashboardEndDate && d && d > dashboardEndDate) continue;
+      // Apply accurate millisecond-based Dashboard Date Range Filter
+      if (filterStartMs > 0 && dMs < filterStartMs) continue;
+      if (filterEndMs > 0 && dMs > filterEndMs) continue;
 
       if (g.allPrinted) sudahCount++;
       else belumCount++;
@@ -960,9 +967,15 @@ export default function Home() {
       existing.totalRp += (g.totalHarga || 0);
       custMap.set(cName, existing);
 
-      if (d && d !== "-") {
-        if (!minDateStr || d < minDateStr) minDateStr = d;
-        if (!maxDateStr || d > maxDateStr) maxDateStr = d;
+      if (dMs > 0) {
+        if (!minDateMs || dMs < minDateMs) {
+          minDateMs = dMs;
+          minDateStr = d;
+        }
+        if (!maxDateMs || dMs > maxDateMs) {
+          maxDateMs = dMs;
+          maxDateStr = d;
+        }
       }
     }
 
@@ -2543,8 +2556,46 @@ export default function Home() {
                 
                 {/* DATE RANGE FILTER CONTROLS */}
                 <div className="flex flex-wrap items-center gap-2">
+                  {/* Quick Select from Actual Available Dates */}
                   <div className="flex items-center gap-1 text-xs">
-                    <span className="text-[11px] text-slate-500 font-semibold">Dari:</span>
+                    <span className="text-[11px] text-slate-500 font-semibold">Pilih Tanggal:</span>
+                    <select
+                      value={dashboardStartDate === dashboardEndDate && dashboardStartDate ? dashboardStartDate : "custom"}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val === "all") {
+                          setDashboardStartDate("");
+                          setDashboardEndDate("");
+                        } else if (val !== "custom") {
+                          // convert DD/MM/YYYY to YYYY-MM-DD for consistency
+                          if (/^\d{2}\/\d{2}\/\d{4}$/.test(val)) {
+                            const [d, m, y] = val.split("/");
+                            const iso = `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
+                            setDashboardStartDate(iso);
+                            setDashboardEndDate(iso);
+                          } else {
+                            setDashboardStartDate(val);
+                            setDashboardEndDate(val);
+                          }
+                        }
+                      }}
+                      className={`px-2 py-1 text-xs rounded-lg border font-mono ${
+                        isDarkMode ? "bg-slate-900 border-slate-700 text-white" : "bg-white border-slate-300 text-slate-900"
+                      }`}
+                    >
+                      <option value="all">Semua Tanggal Data</option>
+                      {availableDates.map((d) => (
+                        <option key={d} value={d}>
+                          {d}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <span className="text-slate-400 text-xs">|</span>
+
+                  <div className="flex items-center gap-1 text-xs">
+                    <span className="text-[11px] text-slate-500 font-semibold">Rentang:</span>
                     <input
                       type="date"
                       value={dashboardStartDate}
@@ -2555,7 +2606,7 @@ export default function Home() {
                     />
                   </div>
                   <div className="flex items-center gap-1 text-xs">
-                    <span className="text-[11px] text-slate-500 font-semibold">s/d:</span>
+                    <span className="text-[11px] text-slate-500 font-semibold">s/d</span>
                     <input
                       type="date"
                       value={dashboardEndDate}
@@ -2569,7 +2620,7 @@ export default function Home() {
                     <button
                       type="button"
                       onClick={() => { setDashboardStartDate(""); setDashboardEndDate(""); }}
-                      className="px-2 py-1 bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 rounded-lg text-xs font-bold transition"
+                      className="px-2.5 py-1 bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 rounded-lg text-xs font-bold transition"
                       title="Reset filter tanggal"
                     >
                       Reset
