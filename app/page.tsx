@@ -222,6 +222,8 @@ export default function Home() {
   const [jenisFilter, setJenisFilter] = useState<JenisFilter>("all");
   const [klasFilter, setKlasFilter] = useState<KlasFilter>("all");
   const [dateFilter, setDateFilter] = useState<string>("all");
+  const [dashboardStartDate, setDashboardStartDate] = useState<string>("");
+  const [dashboardEndDate, setDashboardEndDate] = useState<string>("");
   const [search, setSearch] = useState("");
   const deferredSearch = useDeferredValue(search);
   const [page, setPage] = useState(0);
@@ -915,7 +917,7 @@ export default function Home() {
     });
   }, [baseGroups, printedInvoices, printedAtMap, printedByMap]);
 
-  // 5. Precomputed Stats & Counts (Single O(N) pass, eliminates 70,000 redundant loop iterations)
+  // 5. Precomputed Stats & Counts (Single O(N) pass, with optional dashboard date range)
   const stats = useMemo(() => {
     let belumCount = 0;
     let sudahCount = 0;
@@ -932,6 +934,12 @@ export default function Home() {
 
     for (let i = 0; i < grouped.length; i++) {
       const g = grouped[i];
+      const d = g.transactionDate || g.orderDate;
+
+      // Apply Dashboard Date Range Filter if set
+      if (dashboardStartDate && d && d < dashboardStartDate) continue;
+      if (dashboardEndDate && d && d > dashboardEndDate) continue;
+
       if (g.allPrinted) sudahCount++;
       else belumCount++;
       if (g.isDoubleInv) doubleCount++;
@@ -952,7 +960,6 @@ export default function Home() {
       existing.totalRp += (g.totalHarga || 0);
       custMap.set(cName, existing);
 
-      const d = g.transactionDate || g.orderDate;
       if (d && d !== "-") {
         if (!minDateStr || d < minDateStr) minDateStr = d;
         if (!maxDateStr || d > maxDateStr) maxDateStr = d;
@@ -964,11 +971,13 @@ export default function Home() {
       .sort((a, b) => b.totalRp - a.totalRp)
       .slice(0, 5);
 
+    const totalActiveCount = belumCount + sudahCount;
+
     return {
       totalSO: soSet.size,
       belumCount,
       sudahCount,
-      totalCount: grouped.length,
+      totalCount: totalActiveCount,
       doubleCount,
       returCount,
       totalNilaiRp,
@@ -978,7 +987,7 @@ export default function Home() {
       prodCounts,
       topCustomers,
     };
-  }, [grouped]);
+  }, [grouped, dashboardStartDate, dashboardEndDate]);
 
   // 6. Filtered Faktur Groups (Instant single-string matching & 0ms numeric sorting)
   const filtered = useMemo(() => {
@@ -2531,8 +2540,44 @@ export default function Home() {
                     PRATINJAU DATA TERPILIH:
                   </span>
                 </div>
-                <div className="text-lg sm:text-2xl font-black font-mono text-emerald-600 dark:text-emerald-400">
-                  RP {Math.round(stats.totalNilaiRp).toLocaleString("id-ID")}
+                
+                {/* DATE RANGE FILTER CONTROLS */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex items-center gap-1 text-xs">
+                    <span className="text-[11px] text-slate-500 font-semibold">Dari:</span>
+                    <input
+                      type="date"
+                      value={dashboardStartDate}
+                      onChange={(e) => setDashboardStartDate(e.target.value)}
+                      className={`px-2 py-1 text-xs rounded-lg border font-mono ${
+                        isDarkMode ? "bg-slate-900 border-slate-700 text-white" : "bg-white border-slate-300 text-slate-900"
+                      }`}
+                    />
+                  </div>
+                  <div className="flex items-center gap-1 text-xs">
+                    <span className="text-[11px] text-slate-500 font-semibold">s/d:</span>
+                    <input
+                      type="date"
+                      value={dashboardEndDate}
+                      onChange={(e) => setDashboardEndDate(e.target.value)}
+                      className={`px-2 py-1 text-xs rounded-lg border font-mono ${
+                        isDarkMode ? "bg-slate-900 border-slate-700 text-white" : "bg-white border-slate-300 text-slate-900"
+                      }`}
+                    />
+                  </div>
+                  {(dashboardStartDate || dashboardEndDate) && (
+                    <button
+                      type="button"
+                      onClick={() => { setDashboardStartDate(""); setDashboardEndDate(""); }}
+                      className="px-2 py-1 bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 rounded-lg text-xs font-bold transition"
+                      title="Reset filter tanggal"
+                    >
+                      Reset
+                    </button>
+                  )}
+                  <div className="text-lg sm:text-2xl font-black font-mono text-emerald-600 dark:text-emerald-400 ml-2">
+                    RP {Math.round(stats.totalNilaiRp).toLocaleString("id-ID")}
+                  </div>
                 </div>
               </div>
 
