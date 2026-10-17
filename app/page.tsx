@@ -934,8 +934,35 @@ export default function Home() {
     });
   }, [baseGroups, printedInvoices, printedAtMap, printedByMap]);
 
-  // 5. Precomputed Stats & Counts (Single O(N) pass, with optional dashboard date range)
-  const stats = useMemo(() => {
+  // 5A. Workspace Stats (Penuh & Independen - Tidak pernah terpengaruh filter tanggal Dashboard!)
+  const workspaceStats = useMemo(() => {
+    let belumCount = 0;
+    let sudahCount = 0;
+    let doubleCount = 0;
+    let returCount = 0;
+    const soSet = new Set<string>();
+
+    for (let i = 0; i < grouped.length; i++) {
+      const g = grouped[i];
+      if (g.allPrinted) sudahCount++;
+      else belumCount++;
+      if (g.isDoubleInv) doubleCount++;
+      if (g.isRetur) returCount++;
+      if (g.so && g.so !== "-") soSet.add(g.so);
+    }
+
+    return {
+      totalSO: soSet.size,
+      belumCount,
+      sudahCount,
+      totalCount: grouped.length,
+      doubleCount,
+      returCount,
+    };
+  }, [grouped]);
+
+  // 5B. Dashboard Stats (HANYA untuk Halaman Dashboard - Mengikuti rentang tanggal Dashboard)
+  const dashboardStats = useMemo(() => {
     let belumCount = 0;
     let sudahCount = 0;
     let doubleCount = 0;
@@ -952,13 +979,11 @@ export default function Home() {
     const custMap = new Map<string, { count: number; totalRp: number }>();
 
     const filterStartMs = dashboardStartDate ? parseDateMs(dashboardStartDate) : 0;
-    // If end date is specified, use end of that day. If only start date is specified, treat it as that single day!
     const effectiveEndStr = dashboardEndDate || dashboardStartDate;
     const filterEndMs = effectiveEndStr ? parseDateMs(effectiveEndStr) + (24 * 60 * 60 * 1000 - 1) : 0;
 
     for (let i = 0; i < grouped.length; i++) {
       const g = grouped[i];
-      // Strictly separate based on dashboardDateBasis
       const d = dashboardDateBasis === "tx" ? (g.transactionDate || g.orderDate) : (g.orderDate || g.transactionDate);
       const dMs = d && d !== "-" ? parseDateMs(d) : 0;
 
@@ -1019,7 +1044,7 @@ export default function Home() {
       prodCounts,
       topCustomers,
     };
-  }, [grouped, dashboardStartDate, dashboardEndDate]);
+  }, [grouped, dashboardDateBasis, dashboardStartDate, dashboardEndDate]);
 
   // 6. Filtered Faktur Groups (Instant single-string matching & 0ms numeric sorting)
   const filtered = useMemo(() => {
@@ -2316,7 +2341,7 @@ export default function Home() {
                       <span>📊</span> PRATINJAU DATA TERPILIH:
                     </span>
                     <span className="text-xs font-mono font-black text-emerald-600 dark:text-emerald-400">
-                      RP {Math.round(stats.totalNilaiRp).toLocaleString("id-ID")}
+                      RP {Math.round(dashboardStats.totalNilaiRp).toLocaleString("id-ID")}
                     </span>
                   </div>
 
@@ -2327,7 +2352,7 @@ export default function Home() {
                     }`}>
                       <div className="text-[10px] text-slate-500 font-semibold">Total SO Terfaktur</div>
                       <div className="text-sm font-black font-mono mt-1 text-slate-900 dark:text-white">
-                        {stats.totalSO}
+                        {dashboardStats.totalSO}
                       </div>
                     </div>
 
@@ -2336,7 +2361,7 @@ export default function Home() {
                     }`}>
                       <div className="text-[10px] text-slate-500 font-semibold">Total Lembar Faktur</div>
                       <div className="text-sm font-black font-mono mt-1 text-slate-900 dark:text-white">
-                        {stats.totalCount}
+                        {dashboardStats.totalCount}
                       </div>
                     </div>
 
@@ -2344,8 +2369,8 @@ export default function Home() {
                       isDarkMode ? "bg-[#0c1220] border-slate-800" : "bg-white border-slate-200"
                     }`}>
                       <div className="text-[10px] text-slate-500 font-semibold">Basis Penarikan</div>
-                      <div className="text-xs font-black mt-1 text-slate-900 dark:text-white truncate" title="Tanggal Faktur (Tx)">
-                        Tanggal Faktur
+                      <div className="text-xs font-black mt-1 text-slate-900 dark:text-white truncate" title={dashboardDateBasis === "tx" ? "Tanggal Faktur (Tx)" : "Tanggal SO (Order)"}>
+                        {dashboardDateBasis === "tx" ? "Tanggal Faktur" : "Tanggal SO"}
                       </div>
                     </div>
                   </div>
@@ -2356,7 +2381,7 @@ export default function Home() {
                   }`}>
                     <span>💡</span>
                     <span className="leading-relaxed">
-                      Menarik <strong>{stats.totalCount} faktur</strong> yang diterbitkan pada rentang <strong>{stats.dateRangeStr}</strong> (mencakup <strong>{stats.totalSO} SO</strong>).
+                      Menarik <strong>{dashboardStats.totalCount} faktur</strong> yang diterbitkan pada rentang <strong>{dashboardStats.dateRangeStr}</strong> (mencakup <strong>{dashboardStats.totalSO} SO</strong>).
                     </span>
                   </div>
                 </div>
@@ -2364,7 +2389,7 @@ export default function Home() {
                 {/* Section: Status Pengerjaan */}
                 <div className="space-y-1.5">
                   <p className={`text-[10px] font-bold uppercase tracking-widest px-1 ${isDarkMode ? "text-slate-500" : "text-slate-400"}`}>
-                    Progress Pengerjaan Cetak
+                    Progress Pengerjaan Cetak (Keseluruhan)
                   </p>
                   <div className="grid grid-cols-2 gap-2">
                     <div className={`p-2.5 rounded-lg border flex flex-col justify-between ${
@@ -2372,7 +2397,7 @@ export default function Home() {
                     }`}>
                       <span className="text-[10px] font-semibold text-slate-500">Belum Terprint</span>
                       <span className="text-base font-black font-mono text-slate-900 dark:text-white mt-1">
-                        {stats.belumCount}
+                        {workspaceStats.belumCount}
                       </span>
                     </div>
                     <div className={`p-2.5 rounded-lg border flex flex-col justify-between ${
@@ -2380,7 +2405,7 @@ export default function Home() {
                     }`}>
                       <span className="text-[10px] font-semibold text-slate-500">Selesai Print</span>
                       <span className="text-base font-black font-mono text-slate-900 dark:text-white mt-1">
-                        {stats.sudahCount}
+                        {workspaceStats.sudahCount}
                       </span>
                     </div>
                   </div>
@@ -2660,7 +2685,7 @@ export default function Home() {
                   )}
 
                   <div className="text-lg sm:text-2xl font-black font-mono text-emerald-600 dark:text-emerald-400 ml-2">
-                    RP {Math.round(stats.totalNilaiRp).toLocaleString("id-ID")}
+                    RP {Math.round(dashboardStats.totalNilaiRp).toLocaleString("id-ID")}
                   </div>
                 </div>
               </div>
@@ -2672,7 +2697,7 @@ export default function Home() {
                 }`}>
                   <div className="text-xs text-slate-500 font-semibold">Total SO Terfaktur</div>
                   <div className="text-2xl sm:text-3xl font-black font-mono text-blue-600 dark:text-blue-400 mt-1">
-                    {stats.totalSO}
+                    {dashboardStats.totalSO}
                   </div>
                 </div>
 
@@ -2681,7 +2706,7 @@ export default function Home() {
                 }`}>
                   <div className="text-xs text-slate-500 font-semibold">Total Lembar Faktur</div>
                   <div className="text-2xl sm:text-3xl font-black font-mono text-indigo-600 dark:text-indigo-400 mt-1">
-                    {stats.totalCount}
+                    {dashboardStats.totalCount}
                   </div>
                 </div>
 
@@ -2701,7 +2726,7 @@ export default function Home() {
               }`}>
                 <span className="text-base">💡</span>
                 <span>
-                  Menarik <strong>{stats.totalCount} faktur</strong> yang diterbitkan pada rentang <strong>{stats.dateRangeStr}</strong> (mencakup <strong>{stats.totalSO} SO</strong>).
+                  Menarik <strong>{dashboardStats.totalCount} faktur</strong> yang diterbitkan pada rentang <strong>{dashboardStats.dateRangeStr}</strong> (mencakup <strong>{dashboardStats.totalSO} SO</strong>).
                 </span>
               </div>
             </div>
@@ -2715,7 +2740,7 @@ export default function Home() {
                 <div className="flex items-center justify-between mb-3">
                   <span className="font-bold text-xs uppercase tracking-wider text-slate-500">Status Cetak</span>
                   <span className="text-xs font-mono font-bold">
-                    {stats.totalCount > 0 ? Math.round((stats.sudahCount / stats.totalCount) * 100) : 0}% Selesai
+                    {dashboardStats.totalCount > 0 ? Math.round((dashboardStats.sudahCount / dashboardStats.totalCount) * 100) : 0}% Selesai
                   </span>
                 </div>
                 
@@ -2723,18 +2748,18 @@ export default function Home() {
                 <div className="w-full bg-slate-200 dark:bg-slate-800 h-3 rounded-full overflow-hidden flex mb-4">
                   <div
                     className="bg-emerald-500 h-full transition-all duration-300"
-                    style={{ width: `${stats.totalCount > 0 ? (stats.sudahCount / stats.totalCount) * 100 : 0}%` }}
+                    style={{ width: `${dashboardStats.totalCount > 0 ? (dashboardStats.sudahCount / dashboardStats.totalCount) * 100 : 0}%` }}
                   />
                 </div>
 
                 <div className="grid grid-cols-2 gap-2 text-center">
                   <div className="p-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-[#090d18]">
                     <div className="text-[10px] text-slate-500 font-semibold">Belum Cetak</div>
-                    <div className="text-lg font-black font-mono mt-0.5">{stats.belumCount}</div>
+                    <div className="text-lg font-black font-mono mt-0.5">{dashboardStats.belumCount}</div>
                   </div>
                   <div className="p-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-[#090d18]">
                     <div className="text-[10px] text-slate-500 font-semibold">Sudah Dicetak</div>
-                    <div className="text-lg font-black font-mono mt-0.5 text-emerald-600 dark:text-emerald-400">{stats.sudahCount}</div>
+                    <div className="text-lg font-black font-mono mt-0.5 text-emerald-600 dark:text-emerald-400">{dashboardStats.sudahCount}</div>
                   </div>
                 </div>
               </div>
@@ -2749,15 +2774,15 @@ export default function Home() {
                 <div className="space-y-2">
                   <div className="flex items-center justify-between text-xs p-2 rounded-lg bg-slate-50 dark:bg-[#090d18] border border-slate-200 dark:border-slate-800">
                     <span className="font-bold">1P (ORA + DOO)</span>
-                    <span className="font-mono font-bold">{stats.katCounts["1P"]} faktur</span>
+                    <span className="font-mono font-bold">{dashboardStats.katCounts["1P"]} faktur</span>
                   </div>
                   <div className="flex items-center justify-between text-xs p-2 rounded-lg bg-slate-50 dark:bg-[#090d18] border border-slate-200 dark:border-slate-800">
                     <span className="font-bold">2P</span>
-                    <span className="font-mono font-bold">{stats.katCounts["2P"]} faktur</span>
+                    <span className="font-mono font-bold">{dashboardStats.katCounts["2P"]} faktur</span>
                   </div>
                   <div className="flex items-center justify-between text-xs p-2 rounded-lg bg-slate-50 dark:bg-[#090d18] border border-slate-200 dark:border-slate-800">
                     <span className="font-bold">3P</span>
-                    <span className="font-mono font-bold">{stats.katCounts["3P"]} faktur</span>
+                    <span className="font-mono font-bold">{dashboardStats.katCounts["3P"]} faktur</span>
                   </div>
                 </div>
               </div>
@@ -2772,19 +2797,19 @@ export default function Home() {
                 <div className="grid grid-cols-2 gap-2 text-xs">
                   <div className="p-2 rounded-lg bg-slate-50 dark:bg-[#090d18] border border-slate-200 dark:border-slate-800">
                     <div className="text-[10px] text-slate-500 font-semibold">PREKURSOR</div>
-                    <div className="text-sm font-bold font-mono mt-0.5">{stats.prodCounts.PREKURSOR}</div>
+                    <div className="text-sm font-bold font-mono mt-0.5">{dashboardStats.prodCounts.PREKURSOR}</div>
                   </div>
                   <div className="p-2 rounded-lg bg-slate-50 dark:bg-[#090d18] border border-slate-200 dark:border-slate-800">
                     <div className="text-[10px] text-slate-500 font-semibold">OOT</div>
-                    <div className="text-sm font-bold font-mono mt-0.5">{stats.prodCounts.OOT}</div>
+                    <div className="text-sm font-bold font-mono mt-0.5">{dashboardStats.prodCounts.OOT}</div>
                   </div>
                   <div className="p-2 rounded-lg bg-slate-50 dark:bg-[#090d18] border border-slate-200 dark:border-slate-800">
                     <div className="text-[10px] text-slate-500 font-semibold">CCP</div>
-                    <div className="text-sm font-bold font-mono mt-0.5">{stats.prodCounts.CCP}</div>
+                    <div className="text-sm font-bold font-mono mt-0.5">{dashboardStats.prodCounts.CCP}</div>
                   </div>
                   <div className="p-2 rounded-lg bg-slate-50 dark:bg-[#090d18] border border-slate-200 dark:border-slate-800">
                     <div className="text-[10px] text-slate-500 font-semibold">ALKES</div>
-                    <div className="text-sm font-bold font-mono mt-0.5">{stats.prodCounts.ALKES}</div>
+                    <div className="text-sm font-bold font-mono mt-0.5">{dashboardStats.prodCounts.ALKES}</div>
                   </div>
                 </div>
               </div>
@@ -2798,7 +2823,7 @@ export default function Home() {
                 Top 5 Outlet / Pelanggan Terbesar
               </span>
               <div className="divide-y divide-slate-200 dark:divide-slate-800">
-                {stats.topCustomers.map((c, idx) => (
+                {dashboardStats.topCustomers.map((c, idx) => (
                   <div key={idx} className="py-2.5 flex items-center justify-between text-xs">
                     <div className="flex items-center gap-2">
                       <span className="w-5 h-5 rounded-full bg-slate-200 dark:bg-slate-800 flex items-center justify-center font-bold text-[10px]">
@@ -2855,7 +2880,7 @@ export default function Home() {
                 ? "bg-slate-800 border-slate-600 text-white"
                 : "bg-slate-100 border-slate-300 text-slate-900"
             }`}>
-              {stats.belumCount}
+              {workspaceStats.belumCount}
             </div>
             <span className={`text-[9px] font-bold leading-none ${isDarkMode ? "text-slate-300" : "text-slate-700"}`}>
               {filter === "belum" ? "● Aktif" : "Sisa Antrean"}
@@ -2879,7 +2904,7 @@ export default function Home() {
               Total Faktur
             </span>
             <div className={`my-0.5 font-black text-xs sm:text-sm font-mono tracking-tight ${isDarkMode ? "text-white" : "text-slate-900"}`}>
-              {stats.totalCount}
+              {workspaceStats.totalCount}
             </div>
             <span className={`text-[9px] font-bold leading-none ${
               filter === "all" ? (isDarkMode ? "text-white" : "text-slate-900") : (isDarkMode ? "text-slate-400" : "text-slate-500")
@@ -2894,7 +2919,7 @@ export default function Home() {
               Total SO
             </span>
             <div className={`my-0.5 font-black text-xs sm:text-sm font-mono tracking-tight ${isDarkMode ? "text-white" : "text-slate-900"}`}>
-              {stats.totalSO}
+              {workspaceStats.totalSO}
             </div>
             <span className={`text-[9px] font-semibold leading-none ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>
               SO Terdata
@@ -2974,7 +2999,7 @@ export default function Home() {
                 ? "bg-slate-800 border-slate-600 text-white"
                 : "bg-slate-100 border-slate-300 text-slate-900"
             }`}>
-              {stats.doubleCount}
+              {workspaceStats.doubleCount}
             </div>
             <span className={`text-[9px] font-bold leading-none ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>
               {filter === "double" ? "● Aktif" : "Perlu Cek"}
@@ -3002,7 +3027,7 @@ export default function Home() {
                 ? "bg-slate-800 border-slate-600 text-white"
                 : "bg-slate-100 border-slate-300 text-slate-900"
             }`}>
-              {stats.returCount}
+              {workspaceStats.returCount}
             </div>
             <span className={`text-[9px] font-bold leading-none ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>
               {filter === "retur" ? "● Aktif" : "Faktur Retur"}
