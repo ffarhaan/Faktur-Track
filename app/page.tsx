@@ -216,6 +216,7 @@ export default function Home() {
   const [records, setRecords] = useState<FakturRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [mainView, setMainView] = useState<"workspace" | "dashboard">("workspace");
   const [filter, setFilter] = useState<Filter>("belum");
   const [katFilter, setKatFilter] = useState<KatFilter>("all");
   const [jenisFilter, setJenisFilter] = useState<JenisFilter>("all");
@@ -924,6 +925,10 @@ export default function Home() {
     let minDateStr = "";
     let maxDateStr = "";
     const soSet = new Set<string>();
+    const katCounts = { "1P": 0, "2P": 0, "3P": 0 };
+    const jenisCounts = { DOO: 0, ORA: 0 };
+    const prodCounts: Record<string, number> = { PREKURSOR: 0, OOT: 0, CCP: 0, ALKES: 0, FARMA: 0 };
+    const custMap = new Map<string, { count: number; totalRp: number }>();
 
     for (let i = 0; i < grouped.length; i++) {
       const g = grouped[i];
@@ -934,12 +939,30 @@ export default function Home() {
       if (g.so && g.so !== "-") soSet.add(g.so);
       totalNilaiRp += (g.totalHarga || 0);
 
+      if (g.kategori in katCounts) katCounts[g.kategori as "1P" | "2P" | "3P"]++;
+      if (g.jenisTransaksi in jenisCounts) jenisCounts[g.jenisTransaksi as "DOO" | "ORA"]++;
+
+      const pKat = (g.kategoriProduk || "FARMA").toUpperCase();
+      if (pKat in prodCounts) prodCounts[pKat]++;
+      else prodCounts.FARMA++;
+
+      const cName = g.customerName || "Tanpa Nama";
+      const existing = custMap.get(cName) || { count: 0, totalRp: 0 };
+      existing.count += 1;
+      existing.totalRp += (g.totalHarga || 0);
+      custMap.set(cName, existing);
+
       const d = g.transactionDate || g.orderDate;
       if (d && d !== "-") {
         if (!minDateStr || d < minDateStr) minDateStr = d;
         if (!maxDateStr || d > maxDateStr) maxDateStr = d;
       }
     }
+
+    const topCustomers = Array.from(custMap.entries())
+      .map(([name, data]) => ({ name, ...data }))
+      .sort((a, b) => b.totalRp - a.totalRp)
+      .slice(0, 5);
 
     return {
       totalSO: soSet.size,
@@ -950,6 +973,10 @@ export default function Home() {
       returCount,
       totalNilaiRp,
       dateRangeStr: minDateStr && maxDateStr ? (minDateStr === maxDateStr ? minDateStr : `${minDateStr} s/d ${maxDateStr}`) : "Semua Data",
+      katCounts,
+      jenisCounts,
+      prodCounts,
+      topCustomers,
     };
   }, [grouped]);
 
@@ -1897,21 +1924,48 @@ export default function Home() {
           <div className="flex flex-wrap items-center justify-between gap-2">
             {/* Left: Brand & Live Online Users Widget */}
             <div className="flex items-center gap-2 sm:gap-2.5">
-              {/* Dashboard & Settings Drawer Toggle Button */}
+              <div className="flex items-center gap-1 bg-slate-200/70 dark:bg-slate-800/80 p-0.5 rounded-lg border border-slate-300 dark:border-slate-700">
+                <button
+                  type="button"
+                  onClick={() => setMainView("workspace")}
+                  className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-bold transition-all cursor-pointer ${
+                    mainView === "workspace"
+                      ? (isDarkMode ? "bg-white text-black shadow-sm" : "bg-black text-white shadow-sm")
+                      : (isDarkMode ? "text-slate-300 hover:text-white" : "text-slate-700 hover:text-black")
+                  }`}
+                >
+                  <span>📋</span>
+                  <span>Faktur</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMainView("dashboard")}
+                  className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-bold transition-all cursor-pointer ${
+                    mainView === "dashboard"
+                      ? (isDarkMode ? "bg-white text-black shadow-sm" : "bg-black text-white shadow-sm")
+                      : (isDarkMode ? "text-slate-300 hover:text-white" : "text-slate-700 hover:text-black")
+                  }`}
+                >
+                  <span>📊</span>
+                  <span>Dashboard</span>
+                </button>
+              </div>
+
+              {/* Settings Drawer Toggle Button */}
               <button
                 type="button"
                 onClick={() => setShowSettingsPanel(true)}
                 className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold border transition-all cursor-pointer shadow-2xs ${
                   isDarkMode
-                    ? "bg-slate-800 hover:bg-slate-700 text-white border-slate-700"
-                    : "bg-black text-white hover:bg-slate-800 border-black"
+                    ? "bg-slate-800/80 hover:bg-slate-700 text-slate-200 border-slate-700"
+                    : "bg-white hover:bg-slate-100 text-slate-800 border-slate-300"
                 }`}
-                title="Buka Dashboard & Pengaturan"
+                title="Buka Pengaturan"
               >
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 6h16M4 12h16M4 18h7" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
                 </svg>
-                <span className="hidden sm:inline">DASHBOARD</span>
+                <span className="hidden sm:inline">Menu</span>
               </button>
 
               <div className="flex items-center gap-2">
@@ -2461,6 +2515,190 @@ export default function Home() {
           </div>
         )}
 
+        {/* VIEW CONDITIONAL: FULL DASHBOARD ANALYTICS OR WORKSPACE */}
+        {mainView === "dashboard" ? (
+          <div className="space-y-3 animate-in fade-in duration-200">
+            {/* PRATINJAU DATA TERPILIH HERO BANNER (From user's image) */}
+            <div className={`p-4 sm:p-5 rounded-2xl border shadow-sm ${
+              isDarkMode
+                ? "bg-[#0f172a] border-slate-800 text-white"
+                : "bg-white border-slate-200 text-slate-900"
+            }`}>
+              <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-200 dark:border-slate-800">
+                <div className="flex items-center gap-2">
+                  <span className="text-xl">📊</span>
+                  <span className="font-black text-sm tracking-wide text-slate-600 dark:text-slate-300">
+                    PRATINJAU DATA TERPILIH:
+                  </span>
+                </div>
+                <div className="text-lg sm:text-2xl font-black font-mono text-emerald-600 dark:text-emerald-400">
+                  RP {Math.round(stats.totalNilaiRp).toLocaleString("id-ID")}
+                </div>
+              </div>
+
+              {/* 3 Metric Box Horizontal */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4">
+                <div className={`p-4 rounded-xl border text-center ${
+                  isDarkMode ? "bg-[#090d18] border-slate-800" : "bg-slate-50 border-slate-200"
+                }`}>
+                  <div className="text-xs text-slate-500 font-semibold">Total SO Terfaktur</div>
+                  <div className="text-2xl sm:text-3xl font-black font-mono text-blue-600 dark:text-blue-400 mt-1">
+                    {stats.totalSO}
+                  </div>
+                </div>
+
+                <div className={`p-4 rounded-xl border text-center ${
+                  isDarkMode ? "bg-[#090d18] border-slate-800" : "bg-slate-50 border-slate-200"
+                }`}>
+                  <div className="text-xs text-slate-500 font-semibold">Total Lembar Faktur</div>
+                  <div className="text-2xl sm:text-3xl font-black font-mono text-indigo-600 dark:text-indigo-400 mt-1">
+                    {stats.totalCount}
+                  </div>
+                </div>
+
+                <div className={`p-4 rounded-xl border text-center ${
+                  isDarkMode ? "bg-[#090d18] border-slate-800" : "bg-slate-50 border-slate-200"
+                }`}>
+                  <div className="text-xs text-slate-500 font-semibold">Basis Penarikan</div>
+                  <div className="text-base sm:text-lg font-black text-slate-900 dark:text-white mt-2">
+                    Tanggal Faktur (Tx)
+                  </div>
+                </div>
+              </div>
+
+              {/* Notice Banner */}
+              <div className={`mt-4 p-3 rounded-xl border text-xs flex items-center gap-2.5 ${
+                isDarkMode ? "bg-[#090d18] border-slate-800 text-slate-300" : "bg-blue-50/60 border-blue-200 text-slate-800"
+              }`}>
+                <span className="text-base">💡</span>
+                <span>
+                  Menarik <strong>{stats.totalCount} faktur</strong> yang diterbitkan pada rentang <strong>{stats.dateRangeStr}</strong> (mencakup <strong>{stats.totalSO} SO</strong>).
+                </span>
+              </div>
+            </div>
+
+            {/* GRID ANALYTICS CARDS */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              {/* Card 1: Progress Print */}
+              <div className={`p-4 rounded-2xl border ${
+                isDarkMode ? "bg-[#0f172a] border-slate-800" : "bg-white border-slate-200"
+              }`}>
+                <div className="flex items-center justify-between mb-3">
+                  <span className="font-bold text-xs uppercase tracking-wider text-slate-500">Status Cetak</span>
+                  <span className="text-xs font-mono font-bold">
+                    {stats.totalCount > 0 ? Math.round((stats.sudahCount / stats.totalCount) * 100) : 0}% Selesai
+                  </span>
+                </div>
+                
+                {/* Progress bar */}
+                <div className="w-full bg-slate-200 dark:bg-slate-800 h-3 rounded-full overflow-hidden flex mb-4">
+                  <div
+                    className="bg-emerald-500 h-full transition-all duration-300"
+                    style={{ width: `${stats.totalCount > 0 ? (stats.sudahCount / stats.totalCount) * 100 : 0}%` }}
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 text-center">
+                  <div className="p-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-[#090d18]">
+                    <div className="text-[10px] text-slate-500 font-semibold">Belum Cetak</div>
+                    <div className="text-lg font-black font-mono mt-0.5">{stats.belumCount}</div>
+                  </div>
+                  <div className="p-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-[#090d18]">
+                    <div className="text-[10px] text-slate-500 font-semibold">Sudah Dicetak</div>
+                    <div className="text-lg font-black font-mono mt-0.5 text-emerald-600 dark:text-emerald-400">{stats.sudahCount}</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Card 2: Kategori Faktur (1P, 2P, 3P & ORA) */}
+              <div className={`p-4 rounded-2xl border ${
+                isDarkMode ? "bg-[#0f172a] border-slate-800" : "bg-white border-slate-200"
+              }`}>
+                <span className="font-bold text-xs uppercase tracking-wider text-slate-500 block mb-3">
+                  Klasifikasi Kategori Pajak
+                </span>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-xs p-2 rounded-lg bg-slate-50 dark:bg-[#090d18] border border-slate-200 dark:border-slate-800">
+                    <span className="font-bold">1P (ORA + DOO)</span>
+                    <span className="font-mono font-bold">{stats.katCounts["1P"]} faktur</span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs p-2 rounded-lg bg-slate-50 dark:bg-[#090d18] border border-slate-200 dark:border-slate-800">
+                    <span className="font-bold">2P</span>
+                    <span className="font-mono font-bold">{stats.katCounts["2P"]} faktur</span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs p-2 rounded-lg bg-slate-50 dark:bg-[#090d18] border border-slate-200 dark:border-slate-800">
+                    <span className="font-bold">3P</span>
+                    <span className="font-mono font-bold">{stats.katCounts["3P"]} faktur</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Card 3: Distribusi Kategori Produk */}
+              <div className={`p-4 rounded-2xl border ${
+                isDarkMode ? "bg-[#0f172a] border-slate-800" : "bg-white border-slate-200"
+              }`}>
+                <span className="font-bold text-xs uppercase tracking-wider text-slate-500 block mb-3">
+                  Kategori Produk
+                </span>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="p-2 rounded-lg bg-slate-50 dark:bg-[#090d18] border border-slate-200 dark:border-slate-800">
+                    <div className="text-[10px] text-slate-500 font-semibold">PREKURSOR</div>
+                    <div className="text-sm font-bold font-mono mt-0.5">{stats.prodCounts.PREKURSOR}</div>
+                  </div>
+                  <div className="p-2 rounded-lg bg-slate-50 dark:bg-[#090d18] border border-slate-200 dark:border-slate-800">
+                    <div className="text-[10px] text-slate-500 font-semibold">OOT</div>
+                    <div className="text-sm font-bold font-mono mt-0.5">{stats.prodCounts.OOT}</div>
+                  </div>
+                  <div className="p-2 rounded-lg bg-slate-50 dark:bg-[#090d18] border border-slate-200 dark:border-slate-800">
+                    <div className="text-[10px] text-slate-500 font-semibold">CCP</div>
+                    <div className="text-sm font-bold font-mono mt-0.5">{stats.prodCounts.CCP}</div>
+                  </div>
+                  <div className="p-2 rounded-lg bg-slate-50 dark:bg-[#090d18] border border-slate-200 dark:border-slate-800">
+                    <div className="text-[10px] text-slate-500 font-semibold">ALKES</div>
+                    <div className="text-sm font-bold font-mono mt-0.5">{stats.prodCounts.ALKES}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* TOP 5 OUTLET / CUSTOMER TERBESAR */}
+            <div className={`p-4 rounded-2xl border ${
+              isDarkMode ? "bg-[#0f172a] border-slate-800" : "bg-white border-slate-200"
+            }`}>
+              <span className="font-bold text-xs uppercase tracking-wider text-slate-500 block mb-3">
+                Top 5 Outlet / Pelanggan Terbesar
+              </span>
+              <div className="divide-y divide-slate-200 dark:divide-slate-800">
+                {stats.topCustomers.map((c, idx) => (
+                  <div key={idx} className="py-2.5 flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-2">
+                      <span className="w-5 h-5 rounded-full bg-slate-200 dark:bg-slate-800 flex items-center justify-center font-bold text-[10px]">
+                        {idx + 1}
+                      </span>
+                      <span className="font-semibold text-slate-900 dark:text-white">{c.name}</span>
+                      <span className="text-[10px] text-slate-500 font-mono">({c.count} faktur)</span>
+                    </div>
+                    <span className="font-mono font-bold text-slate-900 dark:text-white">
+                      Rp {Math.round(c.totalRp).toLocaleString("id-ID")}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* QUICK BUTTON TO RETURN TO WORKSPACE */}
+            <div className="text-center pt-2">
+              <button
+                type="button"
+                onClick={() => setMainView("workspace")}
+                className="px-5 py-2.5 bg-black dark:bg-white text-white dark:text-black font-bold text-xs rounded-xl shadow-md hover:opacity-90 transition active:scale-95"
+              >
+                ➔ Kembali ke Antrean Kerja Faktur
+              </button>
+            </div>
+          </div>
+        ) : (
+          <>
         {/* 9 Metric KPI - SINGLE COMPACT MONOCHROME CAPSULE */}
         <div className={`rounded-xl overflow-hidden grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-9 divide-y sm:divide-y-0 sm:divide-x border ${
           isDarkMode
@@ -3290,6 +3528,8 @@ export default function Home() {
             </div>
           )}
         </div>
+        </>
+        )}
       </main>
 
       {/* Master Modals */}
