@@ -893,10 +893,11 @@ export default function Home() {
     return { maxOraStr, max1PDooStr, max2PStr, max3PStr };
   }, [baseGroups]);
 
-  // 3. Unique order dates for filter dropdown
+  // 3. Unique dates (transactionDate & orderDate) for filter dropdown
   const availableDates = useMemo(() => {
     const set = new Set<string>();
     for (const r of records) {
+      if (r.transactionDate && r.transactionDate !== "-") set.add(r.transactionDate);
       if (r.orderDate && r.orderDate !== "-") set.add(r.orderDate);
     }
     return Array.from(set).sort((a, b) => parseDateMs(b) - parseDateMs(a));
