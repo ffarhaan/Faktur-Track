@@ -2369,37 +2369,37 @@ export default function Home() {
           </div>
         )}
 
-        {/* 9 Metric KPI - SINGLE COMPACT FROSTED GLASS CAPSULE (Interactive Filter Ribbon) */}
-        <div className={`glass-panel rounded-xl overflow-hidden grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-9 divide-y sm:divide-y-0 sm:divide-x ${
+        {/* 9 Metric KPI - SINGLE COMPACT CLEAN CAPSULE (High-Contrast Filter Ribbon) */}
+        <div className={`glass-panel rounded-xl overflow-hidden grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-9 divide-y sm:divide-y-0 sm:divide-x border-2 ${
           isDarkMode
-            ? "divide-white/[0.08]"
-            : "divide-slate-200/60"
+            ? "border-slate-800 divide-slate-800/80 bg-[#0c1220]"
+            : "border-slate-300 divide-slate-200 bg-white"
         }`}>
           {/* Cell 1: Belum Terprint (Clickable Filter) */}
           <button
             type="button"
             onClick={() => { setFilter(filter === "belum" ? "all" : "belum"); setPage(0); }}
-            className={`py-1.5 px-2 flex flex-col justify-between items-center text-center cursor-pointer group ${
+            className={`py-2 px-2 flex flex-col justify-between items-center text-center cursor-pointer group transition-colors ${
               filter === "belum"
-                ? (isDarkMode ? "bg-amber-500/15 ring-2 ring-inset ring-amber-500/60 shadow-inner" : "bg-amber-100/70 ring-2 ring-inset ring-amber-500/60")
-                : (isDarkMode ? "hover:bg-white/[0.04]" : "hover:bg-slate-100/60")
+                ? (isDarkMode ? "bg-amber-500/20 ring-2 ring-inset ring-amber-500/80" : "bg-amber-100/80 ring-2 ring-inset ring-amber-500")
+                : (isDarkMode ? "hover:bg-slate-800/60" : "hover:bg-slate-100")
             }`}
             title="Klik untuk filter Belum Terprint"
           >
-            <span className={`text-[10px] font-semibold tracking-tight ${
-              filter === "belum" ? "text-amber-400 font-bold" : (isDarkMode ? "text-slate-400 group-hover:text-slate-200" : "text-slate-600 group-hover:text-slate-900")
+            <span className={`text-[11px] font-black uppercase tracking-wider ${
+              filter === "belum" ? "text-amber-500 font-black" : (isDarkMode ? "text-slate-300 group-hover:text-white" : "text-slate-700 group-hover:text-black")
             }`}>
               Belum Terprint
             </span>
-            <div className={`my-0.5 px-2.5 py-0.2 rounded-full font-black text-xs sm:text-sm font-mono tracking-tight shadow-xs border ${
+            <div className={`my-0.5 px-3 py-0.5 rounded-lg font-black text-sm sm:text-base font-mono tracking-tight border ${
               isDarkMode
-                ? "bg-gradient-to-r from-amber-500/25 to-amber-600/35 border-amber-500/40 text-amber-300 shadow-amber-950/40"
-                : "bg-gradient-to-r from-amber-200/70 to-amber-300/80 border-amber-400/80 text-amber-950 shadow-amber-200/50"
+                ? "bg-amber-500/15 border-amber-500/40 text-amber-300"
+                : "bg-amber-100 border-amber-400 text-amber-950 font-black"
             }`}>
               {stats.belumCount}
             </div>
-            <span className={`text-[9px] font-bold leading-none ${isDarkMode ? "text-amber-400/90" : "text-amber-700"}`}>
-              {filter === "belum" ? "● Aktif" : "Sisa Tugas"}
+            <span className={`text-[10px] font-bold leading-none ${isDarkMode ? "text-amber-400" : "text-amber-800"}`}>
+              {filter === "belum" ? "● Aktif" : "Sisa Antrean"}
             </span>
           </button>
 
@@ -2407,89 +2407,89 @@ export default function Home() {
           <button
             type="button"
             onClick={() => { setFilter("all"); setPage(0); }}
-            className={`py-1.5 px-2 flex flex-col justify-between items-center text-center cursor-pointer group ${
+            className={`py-2 px-2 flex flex-col justify-between items-center text-center cursor-pointer group transition-colors ${
               filter === "all"
-                ? (isDarkMode ? "bg-sky-500/15 ring-2 ring-inset ring-sky-500/60 shadow-inner" : "bg-sky-100/70 ring-2 ring-inset ring-sky-500/60")
-                : (isDarkMode ? "hover:bg-white/[0.04]" : "hover:bg-slate-100/60")
+                ? (isDarkMode ? "bg-slate-800 ring-2 ring-inset ring-white" : "bg-slate-200 ring-2 ring-inset ring-slate-900")
+                : (isDarkMode ? "hover:bg-slate-800/60" : "hover:bg-slate-100")
             }`}
             title="Klik untuk tampilkan Semua Faktur"
           >
-            <span className={`text-[10px] font-semibold tracking-tight ${
-              filter === "all" ? "text-sky-400 font-bold" : (isDarkMode ? "text-slate-400 group-hover:text-slate-200" : "text-slate-600 group-hover:text-slate-900")
+            <span className={`text-[11px] font-black uppercase tracking-wider ${
+              filter === "all" ? (isDarkMode ? "text-white" : "text-slate-900") : (isDarkMode ? "text-slate-300 group-hover:text-white" : "text-slate-700 group-hover:text-black")
             }`}>
               Total Faktur
             </span>
             <div className={`my-0.5 font-black text-sm sm:text-base font-mono tracking-tight ${isDarkMode ? "text-white" : "text-slate-900"}`}>
               {stats.totalCount}
             </div>
-            <span className={`text-[9px] font-medium leading-none ${
-              filter === "all" ? (isDarkMode ? "text-sky-400 font-bold" : "text-sky-700 font-bold") : (isDarkMode ? "text-slate-400" : "text-slate-500")
+            <span className={`text-[10px] font-bold leading-none ${
+              filter === "all" ? (isDarkMode ? "text-white" : "text-slate-900") : (isDarkMode ? "text-slate-400" : "text-slate-500")
             }`}>
-              {filter === "all" ? "● Semua Aktif" : "Semua Faktur"}
+              {filter === "all" ? "● Semua Aktif" : "Semua Data"}
             </span>
           </button>
 
           {/* Cell 3: Total SO */}
-          <div className="py-1.5 px-2 flex flex-col justify-between items-center text-center">
-            <span className={`text-[10px] font-semibold tracking-tight ${isDarkMode ? "text-slate-400" : "text-slate-600"}`}>
+          <div className="py-2 px-2 flex flex-col justify-between items-center text-center">
+            <span className={`text-[11px] font-black uppercase tracking-wider ${isDarkMode ? "text-slate-300" : "text-slate-700"}`}>
               Total SO
             </span>
             <div className={`my-0.5 font-black text-sm sm:text-base font-mono tracking-tight ${isDarkMode ? "text-white" : "text-slate-900"}`}>
               {stats.totalSO}
             </div>
-            <span className={`text-[9px] font-medium leading-none ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>
+            <span className={`text-[10px] font-semibold leading-none ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>
               SO Terdata
             </span>
           </div>
 
           {/* Cell 4: 1P ORA */}
-          <div className="py-1.5 px-2 flex flex-col justify-between items-center text-center">
-            <span className={`text-[10px] font-semibold tracking-tight ${isDarkMode ? "text-slate-400" : "text-slate-600"}`}>
+          <div className="py-2 px-2 flex flex-col justify-between items-center text-center">
+            <span className={`text-[11px] font-black uppercase tracking-wider ${isDarkMode ? "text-slate-300" : "text-slate-700"}`}>
               1P (ORA)
             </span>
-            <div className={`my-0.5 font-bold text-xs sm:text-sm font-mono ${isDarkMode ? "text-sky-200" : "text-slate-900"}`}>
+            <div className={`my-0.5 font-black text-xs sm:text-sm font-mono ${isDarkMode ? "text-white" : "text-slate-900"}`}>
               {highestInvoices.maxOraStr}
             </div>
-            <span className={`text-[9px] font-medium leading-none truncate max-w-full px-0.5 ${isDarkMode ? "text-slate-400" : "text-slate-500"}`} title={invoiceProgression?.rangeOra || ""}>
+            <span className={`text-[10px] font-semibold leading-none truncate max-w-full px-0.5 ${isDarkMode ? "text-slate-400" : "text-slate-500"}`} title={invoiceProgression?.rangeOra || ""}>
               {invoiceProgression?.rangeOra ? `R: ${invoiceProgression.rangeOra}` : "Belum ada"}
             </span>
           </div>
 
           {/* Cell 5: 1P DOO */}
-          <div className="py-1.5 px-2 flex flex-col justify-between items-center text-center">
-            <span className={`text-[10px] font-semibold tracking-tight ${isDarkMode ? "text-slate-400" : "text-slate-600"}`}>
+          <div className="py-2 px-2 flex flex-col justify-between items-center text-center">
+            <span className={`text-[11px] font-black uppercase tracking-wider ${isDarkMode ? "text-slate-300" : "text-slate-700"}`}>
               1P (DOO)
             </span>
-            <div className={`my-0.5 font-bold text-xs sm:text-sm font-mono ${isDarkMode ? "text-teal-200" : "text-slate-900"}`}>
+            <div className={`my-0.5 font-black text-xs sm:text-sm font-mono ${isDarkMode ? "text-white" : "text-slate-900"}`}>
               {highestInvoices.max1PDooStr}
             </div>
-            <span className={`text-[9px] font-medium leading-none truncate max-w-full px-0.5 ${isDarkMode ? "text-slate-400" : "text-slate-500"}`} title={invoiceProgression?.range1PDoo || ""}>
+            <span className={`text-[10px] font-semibold leading-none truncate max-w-full px-0.5 ${isDarkMode ? "text-slate-400" : "text-slate-500"}`} title={invoiceProgression?.range1PDoo || ""}>
               {invoiceProgression?.range1PDoo ? `R: ${invoiceProgression.range1PDoo}` : "Belum ada"}
             </span>
           </div>
 
           {/* Cell 6: 2P */}
-          <div className="py-1.5 px-2 flex flex-col justify-between items-center text-center">
-            <span className={`text-[10px] font-semibold tracking-tight ${isDarkMode ? "text-slate-400" : "text-slate-600"}`}>
+          <div className="py-2 px-2 flex flex-col justify-between items-center text-center">
+            <span className={`text-[11px] font-black uppercase tracking-wider ${isDarkMode ? "text-slate-300" : "text-slate-700"}`}>
               2P
             </span>
-            <div className={`my-0.5 font-bold text-xs sm:text-sm font-mono ${isDarkMode ? "text-emerald-200" : "text-slate-900"}`}>
+            <div className={`my-0.5 font-black text-xs sm:text-sm font-mono ${isDarkMode ? "text-white" : "text-slate-900"}`}>
               {highestInvoices.max2PStr}
             </div>
-            <span className={`text-[9px] font-medium leading-none truncate max-w-full px-0.5 ${isDarkMode ? "text-slate-400" : "text-slate-500"}`} title={invoiceProgression?.range2P || ""}>
+            <span className={`text-[10px] font-semibold leading-none truncate max-w-full px-0.5 ${isDarkMode ? "text-slate-400" : "text-slate-500"}`} title={invoiceProgression?.range2P || ""}>
               {invoiceProgression?.range2P ? `R: ${invoiceProgression.range2P}` : "Belum ada"}
             </span>
           </div>
 
           {/* Cell 7: 3P */}
-          <div className="py-1.5 px-2 flex flex-col justify-between items-center text-center">
-            <span className={`text-[10px] font-semibold tracking-tight ${isDarkMode ? "text-slate-400" : "text-slate-600"}`}>
+          <div className="py-2 px-2 flex flex-col justify-between items-center text-center">
+            <span className={`text-[11px] font-black uppercase tracking-wider ${isDarkMode ? "text-slate-300" : "text-slate-700"}`}>
               3P
             </span>
-            <div className={`my-0.5 font-bold text-xs sm:text-sm font-mono ${isDarkMode ? "text-purple-200" : "text-slate-900"}`}>
+            <div className={`my-0.5 font-black text-xs sm:text-sm font-mono ${isDarkMode ? "text-white" : "text-slate-900"}`}>
               {highestInvoices.max3PStr}
             </div>
-            <span className={`text-[9px] font-medium leading-none truncate max-w-full px-0.5 ${isDarkMode ? "text-slate-400" : "text-slate-500"}`} title={invoiceProgression?.range3P || ""}>
+            <span className={`text-[10px] font-semibold leading-none truncate max-w-full px-0.5 ${isDarkMode ? "text-slate-400" : "text-slate-500"}`} title={invoiceProgression?.range3P || ""}>
               {invoiceProgression?.range3P ? `R: ${invoiceProgression.range3P}` : "Belum ada"}
             </span>
           </div>
@@ -2498,26 +2498,26 @@ export default function Home() {
           <button
             type="button"
             onClick={() => { setFilter(filter === "double" ? "all" : "double"); setPage(0); }}
-            className={`py-1.5 px-2 flex flex-col justify-between items-center text-center cursor-pointer group ${
+            className={`py-2 px-2 flex flex-col justify-between items-center text-center cursor-pointer group transition-colors ${
               filter === "double"
-                ? (isDarkMode ? "bg-rose-500/15 ring-2 ring-inset ring-rose-500/60 shadow-inner" : "bg-rose-100/70 ring-2 ring-inset ring-rose-500/60")
-                : (isDarkMode ? "hover:bg-white/[0.04]" : "hover:bg-slate-100/60")
+                ? (isDarkMode ? "bg-rose-500/20 ring-2 ring-inset ring-rose-500" : "bg-rose-100 ring-2 ring-inset ring-rose-500")
+                : (isDarkMode ? "hover:bg-slate-800/60" : "hover:bg-slate-100")
             }`}
             title="Klik untuk filter Double INV"
           >
-            <span className={`text-[10px] font-semibold tracking-tight ${
-              filter === "double" ? "text-rose-400 font-bold" : (isDarkMode ? "text-slate-400 group-hover:text-slate-200" : "text-slate-600 group-hover:text-slate-900")
+            <span className={`text-[11px] font-black uppercase tracking-wider ${
+              filter === "double" ? "text-rose-500 font-black" : (isDarkMode ? "text-slate-300 group-hover:text-white" : "text-slate-700 group-hover:text-black")
             }`}>
               Double INV
             </span>
-            <div className={`my-0.5 px-2 py-0.2 rounded-full font-black text-xs sm:text-sm font-mono tracking-tight shadow-xs border ${
+            <div className={`my-0.5 px-2.5 py-0.5 rounded-lg font-black text-sm sm:text-base font-mono tracking-tight border ${
               isDarkMode
-                ? "bg-gradient-to-r from-rose-500/25 to-rose-600/35 border-rose-500/40 text-rose-300 shadow-rose-950/40"
-                : "bg-gradient-to-r from-rose-200/70 to-rose-300/80 border-rose-400/80 text-rose-950 shadow-rose-200/50"
+                ? "bg-rose-500/15 border-rose-500/40 text-rose-300"
+                : "bg-rose-100 border-rose-300 text-rose-900"
             }`}>
               {stats.doubleCount}
             </div>
-            <span className={`text-[9px] font-bold leading-none ${isDarkMode ? "text-rose-400/90" : "text-rose-700"}`}>
+            <span className={`text-[10px] font-bold leading-none ${isDarkMode ? "text-rose-400" : "text-rose-800"}`}>
               {filter === "double" ? "● Aktif" : "Perlu Cek"}
             </span>
           </button>
@@ -2526,51 +2526,53 @@ export default function Home() {
           <button
             type="button"
             onClick={() => { setFilter(filter === "retur" ? "all" : "retur"); setPage(0); }}
-            className={`py-1.5 px-2 flex flex-col justify-between items-center text-center cursor-pointer group ${
+            className={`py-2 px-2 flex flex-col justify-between items-center text-center cursor-pointer group transition-colors ${
               filter === "retur"
-                ? (isDarkMode ? "bg-amber-500/15 ring-2 ring-inset ring-amber-500/60 shadow-inner" : "bg-amber-100/70 ring-2 ring-inset ring-amber-500/60")
-                : (isDarkMode ? "hover:bg-white/[0.04]" : "hover:bg-slate-100/60")
+                ? (isDarkMode ? "bg-amber-500/20 ring-2 ring-inset ring-amber-500" : "bg-amber-100 ring-2 ring-inset ring-amber-500")
+                : (isDarkMode ? "hover:bg-slate-800/60" : "hover:bg-slate-100")
             }`}
             title="Klik untuk filter Retur"
           >
-            <span className={`text-[10px] font-semibold tracking-tight ${
-              filter === "retur" ? "text-amber-400 font-bold" : (isDarkMode ? "text-slate-400 group-hover:text-slate-200" : "text-slate-600 group-hover:text-slate-900")
+            <span className={`text-[11px] font-black uppercase tracking-wider ${
+              filter === "retur" ? "text-amber-500 font-black" : (isDarkMode ? "text-slate-300 group-hover:text-white" : "text-slate-700 group-hover:text-black")
             }`}>
               Retur
             </span>
-            <div className={`my-0.5 px-2 py-0.2 rounded-full font-black text-xs sm:text-sm font-mono tracking-tight shadow-xs border ${
+            <div className={`my-0.5 px-2.5 py-0.5 rounded-lg font-black text-sm sm:text-base font-mono tracking-tight border ${
               isDarkMode
-                ? "bg-gradient-to-r from-amber-500/25 to-amber-600/35 border-amber-500/40 text-amber-300 shadow-amber-950/40"
-                : "bg-gradient-to-r from-amber-200/70 to-amber-300/80 border-amber-400/80 text-amber-950 shadow-amber-200/50"
+                ? "bg-amber-500/15 border-amber-500/40 text-amber-300"
+                : "bg-amber-100 border-amber-300 text-amber-900"
             }`}>
               {stats.returCount}
             </div>
-            <span className={`text-[9px] font-bold leading-none ${isDarkMode ? "text-amber-400/90" : "text-amber-700"}`}>
+            <span className={`text-[10px] font-bold leading-none ${isDarkMode ? "text-amber-400" : "text-amber-800"}`}>
               {filter === "retur" ? "● Aktif" : "Faktur Retur"}
             </span>
           </button>
         </div>
 
-        {/* Search Bar & Quick Action Section - Full Width Sleek Floating Capsule */}
+        {/* Search Bar & Quick Action Section - Full Width Sleek Capsule */}
         <div className="flex items-center gap-2 w-full">
           {/* Expanded Full-Width Search Input Capsule */}
-          <div className="glass-capsule relative flex items-center rounded-xl flex-1 min-w-0">
-            <span className="pl-3 text-sm text-slate-400">🔍</span>
+          <div className={`relative flex items-center rounded-xl flex-1 min-w-0 border-2 ${
+            isDarkMode ? "bg-[#0c1220] border-slate-800" : "bg-white border-slate-300"
+          }`}>
+            <span className="pl-3.5 text-base text-slate-400">🔍</span>
             <input
               ref={searchInputRef}
               type="text"
-              placeholder="Cari no faktur, no SO, nama pelanggan, produk obat..."
+              placeholder="Cari no faktur, no SO, nama pelanggan, produk obat... (Ctrl+K)"
               value={search}
               onChange={(e) => { setSearch(e.target.value); setPage(0); }}
-              className={`w-full pl-2.5 pr-14 py-1.5 rounded-xl text-xs sm:text-sm focus:outline-none transition-colors bg-transparent ${
-                isDarkMode ? "text-slate-100 placeholder:text-slate-500" : "text-slate-900 placeholder:text-slate-500"
+              className={`w-full pl-2.5 pr-14 py-2 rounded-xl text-xs sm:text-sm font-bold focus:outline-none transition-colors bg-transparent ${
+                isDarkMode ? "text-white placeholder:text-slate-500" : "text-slate-900 placeholder:text-slate-400"
               }`}
             />
             {search && (
               <button
                 type="button"
                 onClick={() => { setSearch(""); setPage(0); searchInputRef.current?.focus(); }}
-                className={`mr-8 px-1.5 py-0.5 rounded text-xs transition-colors cursor-pointer ${
+                className={`mr-8 px-2 py-0.5 rounded text-xs font-bold transition-colors cursor-pointer ${
                   isDarkMode ? "text-slate-400 hover:text-white" : "text-slate-500 hover:text-slate-900"
                 }`}
                 title="Hapus pencarian"
@@ -2578,8 +2580,8 @@ export default function Home() {
                 ✕
               </button>
             )}
-            <span className={`absolute right-2 text-[9px] font-mono px-1.5 py-0.5 rounded border pointer-events-none ${
-              isDarkMode ? "bg-slate-800/80 text-slate-400 border-slate-700/80" : "bg-white/80 text-slate-600 border-slate-200/80 shadow-2xs"
+            <span className={`absolute right-2.5 text-[10px] font-mono font-bold px-1.5 py-0.5 rounded border pointer-events-none ${
+              isDarkMode ? "bg-slate-800 text-slate-300 border-slate-700" : "bg-slate-100 text-slate-700 border-slate-300 shadow-2xs"
             }`}>
               ⌘K
             </span>
@@ -2589,7 +2591,7 @@ export default function Home() {
           {unprintedCountInFiltered > 0 && currentUser?.role !== "readonly" && (
             <button
               onClick={handleMarkAllPrinted}
-              className="px-3 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-md shadow-emerald-900/20 cursor-pointer shrink-0 active:scale-95"
+              className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100 rounded-xl text-xs sm:text-sm font-black transition-all flex items-center gap-1.5 shadow-md cursor-pointer shrink-0 active:scale-95"
             >
               <span>✓</span>
               <span>Tandai Semua Selesai ({unprintedCountInFiltered})</span>
@@ -2597,16 +2599,18 @@ export default function Home() {
           )}
         </div>
 
-        {/* Filter Dropdowns - Compact Frosted Glass Row */}
-        <div className="glass-capsule p-1 sm:p-1.5 rounded-xl grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+        {/* Filter Dropdowns - Clean High-Contrast Row */}
+        <div className={`p-1.5 rounded-xl border-2 grid grid-cols-2 sm:grid-cols-4 gap-2 ${
+          isDarkMode ? "bg-[#0c1220] border-slate-800" : "bg-white border-slate-300"
+        }`}>
           {/* Kategori Filter */}
           <select
             value={katFilter}
             onChange={(e) => { setKatFilter(e.target.value as KatFilter); setPage(0); }}
-            className={`w-full px-2 py-0.5 sm:py-1 rounded-lg text-xs font-medium focus:outline-none transition-colors border ${
+            className={`w-full px-3 py-1.5 rounded-lg text-xs sm:text-sm font-bold focus:outline-none transition-colors border-2 ${
               isDarkMode
-                ? "bg-[#0B101D]/80 border-white/[0.08] text-slate-200"
-                : "bg-white/80 border-white/90 text-slate-800 shadow-2xs"
+                ? "bg-slate-900 border-slate-700 text-white"
+                : "bg-slate-50 border-slate-300 text-slate-900"
             }`}
           >
             <option value="all">Semua Kategori (1P/2P/3P)</option>
@@ -2619,10 +2623,10 @@ export default function Home() {
           <select
             value={jenisFilter}
             onChange={(e) => { setJenisFilter(e.target.value as JenisFilter); setPage(0); }}
-            className={`w-full px-2 py-0.5 sm:py-1 rounded-lg text-xs font-medium focus:outline-none transition-colors border ${
+            className={`w-full px-3 py-1.5 rounded-lg text-xs sm:text-sm font-bold focus:outline-none transition-colors border-2 ${
               isDarkMode
-                ? "bg-[#0B101D]/80 border-white/[0.08] text-slate-200"
-                : "bg-white/80 border-white/90 text-slate-800 shadow-2xs"
+                ? "bg-slate-900 border-slate-700 text-white"
+                : "bg-slate-50 border-slate-300 text-slate-900"
             }`}
           >
             <option value="all">Semua Jenis (ORA/DOO)</option>
@@ -2634,10 +2638,10 @@ export default function Home() {
           <select
             value={klasFilter}
             onChange={(e) => { setKlasFilter(e.target.value as KlasFilter); setPage(0); }}
-            className={`w-full px-2 py-0.5 sm:py-1 rounded-lg text-xs font-medium focus:outline-none transition-colors border ${
+            className={`w-full px-3 py-1.5 rounded-lg text-xs sm:text-sm font-bold focus:outline-none transition-colors border-2 ${
               isDarkMode
-                ? "bg-[#0B101D]/80 border-white/[0.08] text-slate-200"
-                : "bg-white/80 border-white/90 text-slate-800 shadow-2xs"
+                ? "bg-slate-900 border-slate-700 text-white"
+                : "bg-slate-50 border-slate-300 text-slate-900"
             }`}
           >
             <option value="all">Semua Produk</option>
@@ -2652,10 +2656,10 @@ export default function Home() {
           <select
             value={dateFilter}
             onChange={(e) => { setDateFilter(e.target.value); setPage(0); }}
-            className={`w-full px-2 py-0.5 sm:py-1 rounded-lg text-xs font-medium focus:outline-none transition-colors border ${
+            className={`w-full px-3 py-1.5 rounded-lg text-xs sm:text-sm font-bold focus:outline-none transition-colors border-2 ${
               isDarkMode
-                ? "bg-[#0B101D]/80 border-white/[0.08] text-slate-200"
-                : "bg-white/80 border-white/90 text-slate-800 shadow-2xs"
+                ? "bg-slate-900 border-slate-700 text-white"
+                : "bg-slate-50 border-slate-300 text-slate-900"
             }`}
           >
             <option value="all">Semua Tanggal</option>
@@ -2665,37 +2669,39 @@ export default function Home() {
           </select>
         </div>
 
-        {/* Faktur Table Card - Frosted Crystal Glass Canvas */}
-        <div className="glass-panel rounded-xl overflow-hidden">
+        {/* Faktur Table Card - Clean High-Contrast Table Canvas */}
+        <div className={`rounded-xl overflow-hidden border-2 ${
+          isDarkMode ? "bg-[#0b101b] border-slate-800" : "bg-white border-slate-300 shadow-sm"
+        }`}>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
-                <tr className={`border-b font-semibold ${
+                <tr className={`border-b-2 font-black text-xs sm:text-sm tracking-wider uppercase ${
                   isDarkMode
-                    ? "bg-[#0f172a] border-slate-800 text-slate-300"
-                    : "bg-slate-50 border-slate-200 text-slate-700"
+                    ? "bg-[#0c1322] border-slate-800 text-slate-200"
+                    : "bg-slate-100 border-slate-300 text-slate-800"
                 }`}>
-                  <th className="px-2.5 py-1.5 w-7 text-center">#</th>
-                  <th className="px-2.5 py-1.5 w-10 text-center">Print</th>
-                  <th className="px-2.5 py-1.5">No SO</th>
-                  <th className="px-2.5 py-1.5">No Invoice</th>
-                  <th className="px-2.5 py-1.5">Kat Produk</th>
-                  <th className="px-2.5 py-1.5">Jenis</th>
-                  <th className="px-2.5 py-1.5">Pelanggan</th>
-                  <th className="px-2.5 py-1.5" title="Tanggal Faktur / Invoice Date (Transaction Date)">Tgl Faktur</th>
-                  <th className="px-2.5 py-1.5" title="Tanggal Sales Order Masuk (Order Date)">Tgl Order</th>
-                  <th className="px-2.5 py-1.5">Kat</th>
-                  <th className="px-2.5 py-1.5">Done Print (Waktu)</th>
-                  <th className="px-2.5 py-1.5 text-right" title="Grand Total sudah termasuk PPN 11% (sesuai faktur fisik)">Total (+PPN)</th>
+                  <th className="px-3 py-2.5 w-8 text-center">#</th>
+                  <th className="px-3 py-2.5 w-12 text-center">Print</th>
+                  <th className="px-3 py-2.5">No SO</th>
+                  <th className="px-3 py-2.5">No Invoice</th>
+                  <th className="px-3 py-2.5">Kat Produk</th>
+                  <th className="px-3 py-2.5">Jenis</th>
+                  <th className="px-3 py-2.5">Pelanggan</th>
+                  <th className="px-3 py-2.5" title="Tanggal Faktur / Invoice Date (Transaction Date)">Tgl Faktur</th>
+                  <th className="px-3 py-2.5" title="Tanggal Sales Order Masuk (Order Date)">Tgl Order</th>
+                  <th className="px-3 py-2.5">Kat</th>
+                  <th className="px-3 py-2.5">Done Print (Waktu)</th>
+                  <th className="px-3 py-2.5 text-right" title="Grand Total sudah termasuk PPN 11% (sesuai faktur fisik)">Total (+PPN)</th>
                 </tr>
               </thead>
-              <tbody className={`divide-y ${isDarkMode ? "divide-white/[0.04]" : "divide-slate-100"}`}>
+              <tbody className={`divide-y-2 ${isDarkMode ? "divide-slate-800/80" : "divide-slate-200"}`}>
                 {loading && records.length === 0 ? (
                   <tr>
                     <td colSpan={12} className={`text-center py-8 ${isDarkMode ? "text-slate-400" : "text-slate-400"}`}>
                       <div className="flex flex-col items-center gap-1.5">
                         <span className="text-xl animate-spin text-blue-400">🔄</span>
-                        <span className="text-xs font-medium">Memuat data faktur...</span>
+                        <span className="text-xs font-bold">Memuat data faktur...</span>
                       </div>
                     </td>
                   </tr>
@@ -2704,7 +2710,7 @@ export default function Home() {
                     <td colSpan={12} className={`text-center py-8 ${isDarkMode ? "text-slate-400" : "text-slate-400"}`}>
                       <div className="flex flex-col items-center gap-1.5">
                         <span className="text-2xl">{filter === "belum" ? "🎉" : "📄"}</span>
-                        <span className="text-xs font-medium">
+                        <span className="text-xs font-bold">
                           {filter === "belum"
                             ? "Semua faktur sudah dicetak (tidak ada yang belum)."
                             : filter === "sudah"
@@ -2725,8 +2731,8 @@ export default function Home() {
                     const getCellCls = (colIdx: number) =>
                       isRowSelected && selectedColIdx === colIdx
                         ? (isDarkMode
-                            ? "ring-2 ring-blue-400 ring-inset bg-blue-900/70 text-white font-semibold"
-                            : "ring-2 ring-blue-600 ring-inset bg-blue-100/90 font-semibold")
+                            ? "ring-2 ring-blue-400 ring-inset bg-blue-900/70 text-white font-bold"
+                            : "ring-2 ring-blue-600 ring-inset bg-blue-100 font-bold")
                         : "";
 
                     const onSelectCell = (colIdx: number) => {
@@ -2742,21 +2748,21 @@ export default function Home() {
                             setSelectedRowIndex(rowIdx);
                             toggleExpand(g.key);
                           }}
-                          className={`cursor-pointer ${
+                          className={`cursor-pointer transition-colors ${
                             isRowSelected
                               ? (isDarkMode
-                                  ? "bg-[#1d3567] border-l-4 border-l-blue-400 text-white shadow-xs"
-                                  : "bg-blue-50/90 border-l-4 border-l-blue-600 shadow-xs")
+                                  ? "bg-[#182642] border-l-4 border-l-blue-400 text-white"
+                                  : "bg-blue-50 border-l-4 border-l-blue-600 text-slate-900")
                               : g.isDoubleInv
-                              ? (isDarkMode ? "bg-rose-950/35 hover:bg-rose-900/50" : "bg-rose-50/70 hover:bg-rose-100/70")
+                              ? (isDarkMode ? "bg-rose-950/30 hover:bg-rose-900/40" : "bg-rose-50/80 hover:bg-rose-100/80")
                               : g.allPrinted
-                              ? (isDarkMode ? "bg-emerald-950/30 hover:bg-emerald-900/40" : "bg-emerald-50/40 hover:bg-emerald-100/50")
-                              : (isDarkMode ? "hover:bg-[#182644]/70" : "hover:bg-slate-50")
+                              ? (isDarkMode ? "opacity-60 hover:opacity-100 bg-[#090e18]" : "opacity-65 hover:opacity-100 bg-slate-50/70")
+                              : (isDarkMode ? "hover:bg-[#121b2d] bg-[#0b101b]" : "hover:bg-slate-50 bg-white")
                           }`}
                         >
                           {/* Col 0: Expand */}
                           <td
-                            className={`px-2.5 py-1.5 text-center text-[10px] ${
+                            className={`px-3 py-2 text-center text-xs font-bold ${
                               isDarkMode ? "text-slate-400" : "text-slate-400"
                             } ${getCellCls(0)}`}
                             onClick={(e) => {
@@ -2770,7 +2776,7 @@ export default function Home() {
 
                           {/* Col 1: Print Checkbox */}
                           <td
-                            className={`px-2.5 py-1.5 text-center ${getCellCls(1)}`}
+                            className={`px-3 py-2 text-center ${getCellCls(1)}`}
                             onClick={(e) => {
                               e.stopPropagation();
                               onSelectCell(1);
@@ -2780,16 +2786,16 @@ export default function Home() {
                             <button
                               type="button"
                               disabled={currentUser?.role === "readonly"}
-                              className={`w-5 h-5 rounded flex items-center justify-center text-[11px] font-bold shadow-xs ${
+                              className={`w-6 h-6 rounded-lg flex items-center justify-center text-xs font-black shadow-xs transition-all ${
                                 currentUser?.role === "readonly"
                                   ? "cursor-not-allowed opacity-50"
                                   : ""
                               } ${
                                 g.allPrinted
-                                  ? "bg-emerald-600 text-white hover:bg-orange-500"
+                                  ? "bg-slate-200 dark:bg-slate-800 text-emerald-600 dark:text-emerald-400 border border-slate-300 dark:border-slate-700 hover:bg-rose-600 hover:text-white"
                                   : isDarkMode
-                                  ? "bg-[#182542] text-slate-400 border border-slate-700/80 hover:bg-emerald-600 hover:text-white"
-                                  : "bg-slate-200 text-slate-600 hover:bg-emerald-500 hover:text-white"
+                                  ? "bg-white text-slate-900 hover:bg-slate-200 shadow-md"
+                                  : "bg-slate-900 text-white hover:bg-slate-800 shadow-md"
                               }`}
                               title={
                                 currentUser?.role === "readonly"
@@ -2805,26 +2811,26 @@ export default function Home() {
 
                           {/* Col 2: No SO */}
                           <td
-                            className={`px-2.5 py-1.5 font-mono font-medium whitespace-nowrap ${
-                              isDarkMode ? "text-slate-200" : "text-slate-900"
+                            className={`px-3 py-2 font-mono font-bold text-xs sm:text-sm whitespace-nowrap ${
+                              isDarkMode ? "text-slate-200" : "text-slate-800"
                             } ${getCellCls(2)}`}
                             onClick={(e) => {
                               e.stopPropagation();
                               onSelectCell(2);
                             }}
                           >
-                            <div className="flex items-center gap-1">
+                            <div className="flex items-center gap-1.5">
                               <span>{g.so}</span>
                               {g.isDoubleInv && (
-                                <span className="text-rose-400 font-bold" title="Double Invoice Detected">⚠</span>
+                                <span className="text-rose-500 font-bold" title="Double Invoice Detected">⚠</span>
                               )}
                             </div>
                           </td>
 
                           {/* Col 3: No Invoice */}
                           <td
-                            className={`px-2.5 py-1.5 font-mono font-bold whitespace-nowrap ${
-                              isDarkMode ? "text-sky-400" : "text-blue-700"
+                            className={`px-3 py-2 font-mono font-black text-xs sm:text-sm whitespace-nowrap ${
+                              isDarkMode ? "text-white" : "text-slate-900"
                             } ${getCellCls(3)}`}
                             onClick={(e) => {
                               e.stopPropagation();
@@ -2835,10 +2841,10 @@ export default function Home() {
                               <span>{g.invoiceNumber}</span>
                               {g.isRetur && (
                                 <span
-                                  className={`px-1.5 py-0.2 rounded text-[9px] font-extrabold uppercase border ${
+                                  className={`px-1.5 py-0.2 rounded text-[10px] font-black uppercase border ${
                                     isDarkMode
-                                      ? "bg-rose-950/90 text-rose-300 border-rose-600/70"
-                                      : "bg-rose-100 text-rose-700 border-rose-300"
+                                      ? "bg-rose-950 text-rose-300 border-rose-700/80"
+                                      : "bg-rose-100 text-rose-800 border-rose-300"
                                   }`}
                                   title="Faktur Retur / Credit Memo (Nilai Minus)"
                                 >
@@ -2850,23 +2856,21 @@ export default function Home() {
 
                           {/* Col 4: Kat Produk */}
                           <td
-                            className={`px-2.5 py-1.5 whitespace-nowrap ${getCellCls(4)}`}
+                            className={`px-3 py-2 whitespace-nowrap ${getCellCls(4)}`}
                             onClick={(e) => {
                               e.stopPropagation();
                               onSelectCell(4);
                             }}
                           >
                             <span
-                              className={`inline-block px-1.5 py-0.2 rounded text-[9px] font-bold border ${
-                                g.kategoriProduk === "ALKES"
-                                  ? (isDarkMode ? "bg-teal-950/80 text-teal-300 border-teal-700/60" : "bg-teal-50 text-teal-800 border-teal-200")
-                                  : g.kategoriProduk === "CCP"
-                                  ? (isDarkMode ? "bg-sky-950/80 text-sky-300 border-sky-700/60" : "bg-sky-50 text-sky-800 border-sky-200")
-                                  : g.kategoriProduk === "PREKURSOR"
-                                  ? (isDarkMode ? "bg-amber-950/80 text-amber-300 border-amber-700/60" : "bg-amber-50 text-amber-900 border-amber-200")
+                              className={`inline-block px-2 py-0.5 rounded-md text-[11px] font-bold border ${
+                                g.kategoriProduk === "PREKURSOR"
+                                  ? (isDarkMode ? "bg-amber-950/40 text-amber-300 border-amber-600/50" : "bg-amber-50 text-amber-900 border-amber-300")
                                   : g.kategoriProduk === "OOT"
-                                  ? (isDarkMode ? "bg-purple-950/80 text-purple-300 border-purple-700/60" : "bg-purple-50 text-purple-900 border-purple-200")
-                                  : (isDarkMode ? "bg-indigo-950/80 text-indigo-300 border-indigo-700/60" : "bg-indigo-50 text-indigo-700 border-indigo-200")
+                                  ? (isDarkMode ? "bg-purple-950/40 text-purple-300 border-purple-600/50" : "bg-purple-50 text-purple-900 border-purple-300")
+                                  : g.kategoriProduk === "CCP"
+                                  ? (isDarkMode ? "bg-sky-950/40 text-sky-300 border-sky-600/50" : "bg-sky-50 text-sky-900 border-sky-300")
+                                  : (isDarkMode ? "bg-slate-800/80 text-slate-300 border-slate-700" : "bg-slate-100 text-slate-800 border-slate-300")
                               }`}
                             >
                               {g.kategoriProduk}
@@ -2875,16 +2879,16 @@ export default function Home() {
 
                           {/* Col 5: Jenis */}
                           <td
-                            className={`px-2.5 py-1.5 whitespace-nowrap ${getCellCls(5)}`}
+                            className={`px-3 py-2 whitespace-nowrap ${getCellCls(5)}`}
                             onClick={(e) => {
                               e.stopPropagation();
                               onSelectCell(5);
                             }}
                           >
-                            <span className={`inline-block px-1.5 py-0.2 rounded text-[9px] font-bold ${
+                            <span className={`inline-block px-2 py-0.5 rounded-md text-[11px] font-mono font-black border ${
                               g.jenisTransaksi === "ORA"
-                                ? (isDarkMode ? "bg-blue-950/90 text-blue-300 border border-blue-700/60" : "bg-blue-100 text-blue-800")
-                                : (isDarkMode ? "bg-emerald-950/90 text-emerald-300 border border-emerald-700/60" : "bg-emerald-100 text-emerald-800")
+                                ? (isDarkMode ? "bg-slate-800 text-white border-slate-600" : "bg-slate-200 text-slate-900 border-slate-400")
+                                : (isDarkMode ? "bg-slate-800/50 text-slate-300 border-slate-700" : "bg-slate-100 text-slate-700 border-slate-300")
                             }`}>
                               {g.jenisTransaksi}
                             </span>
@@ -2892,8 +2896,8 @@ export default function Home() {
 
                           {/* Col 6: Pelanggan */}
                           <td
-                            className={`px-2.5 py-1.5 max-w-xs truncate font-medium ${
-                              isDarkMode ? "text-slate-200" : "text-slate-700"
+                            className={`px-3 py-2 max-w-xs truncate font-bold text-xs sm:text-sm ${
+                              isDarkMode ? "text-slate-100" : "text-slate-900"
                             } ${getCellCls(6)}`}
                             onClick={(e) => {
                               e.stopPropagation();
@@ -2905,8 +2909,8 @@ export default function Home() {
 
                           {/* Col 7: Tgl Faktur (Transaction Date) */}
                           <td
-                            className={`px-2.5 py-1.5 whitespace-nowrap font-mono text-xs font-semibold ${
-                              isDarkMode ? "text-slate-200" : "text-slate-800"
+                            className={`px-3 py-2 whitespace-nowrap font-mono text-xs font-bold ${
+                              isDarkMode ? "text-slate-300" : "text-slate-800"
                             } ${getCellCls(7)}`}
                             onClick={(e) => {
                               e.stopPropagation();
@@ -2918,7 +2922,7 @@ export default function Home() {
 
                           {/* Col 8: Tgl Order (Order Date / SO) */}
                           <td
-                            className={`px-2.5 py-1.5 whitespace-nowrap font-mono text-xs ${
+                            className={`px-3 py-2 whitespace-nowrap font-mono text-xs font-semibold ${
                               isDarkMode ? "text-slate-400" : "text-slate-500"
                             } ${getCellCls(8)}`}
                             onClick={(e) => {
@@ -2931,7 +2935,7 @@ export default function Home() {
 
                           {/* Col 9: Kat (Editable Dropdown) */}
                           <td
-                            className={`px-2.5 py-1.5 whitespace-nowrap ${getCellCls(9)}`}
+                            className={`px-3 py-2 whitespace-nowrap ${getCellCls(9)}`}
                             onClick={(e) => {
                               e.stopPropagation();
                               onSelectCell(9);
@@ -2943,20 +2947,12 @@ export default function Home() {
                               onChange={(e) => {
                                 handleUpdateCategory(g.invoiceKey, e.target.value as "1P" | "2P" | "3P", g.customerName);
                               }}
-                              className={`px-1.5 py-0.2 rounded text-[10px] font-bold border ${
+                              className={`px-2 py-0.5 rounded-md text-xs font-black border-2 ${
                                 currentUser?.role === "readonly" ? "cursor-not-allowed opacity-70" : "cursor-pointer"
                               } ${
                                 isDarkMode
-                                  ? g.kategori === "1P"
-                                    ? "bg-[#182a4d] text-blue-300 border-blue-600/60"
-                                    : g.kategori === "2P"
-                                    ? "bg-[#143329] text-emerald-300 border-emerald-600/60"
-                                    : "bg-[#2f1b47] text-purple-300 border-purple-600/60"
-                                  : g.kategori === "1P"
-                                  ? "bg-blue-100 text-blue-700 border-transparent hover:border-slate-300"
-                                  : g.kategori === "2P"
-                                  ? "bg-emerald-100 text-emerald-700 border-transparent hover:border-slate-300"
-                                  : "bg-purple-100 text-purple-700 border-transparent hover:border-slate-300"
+                                  ? "bg-slate-800 text-white border-slate-700 hover:border-slate-500"
+                                  : "bg-white text-slate-900 border-slate-300 hover:border-slate-500"
                               }`}
                               title={
                                 currentUser?.role === "readonly"
@@ -2972,7 +2968,7 @@ export default function Home() {
 
                           {/* Col 10: Done Print Waktu */}
                           <td
-                            className={`px-2.5 py-1.5 whitespace-nowrap font-mono text-[10px] ${getCellCls(10)}`}
+                            className={`px-3 py-2 whitespace-nowrap font-mono text-xs ${getCellCls(10)}`}
                             onClick={(e) => {
                               e.stopPropagation();
                               onSelectCell(10);
@@ -2980,33 +2976,33 @@ export default function Home() {
                           >
                             {g.allPrinted && g.printedAt ? (
                               <div className="flex flex-col gap-0.5">
-                                <span className={`inline-flex items-center gap-1 px-1.5 py-0.2 rounded border ${
+                                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border font-bold text-xs ${
                                   isDarkMode
-                                    ? "text-emerald-300 bg-emerald-950/90 border-emerald-700/60"
-                                    : "text-emerald-800 bg-emerald-50 border-emerald-200"
+                                    ? "text-emerald-300 bg-emerald-950/80 border-emerald-700/60"
+                                    : "text-emerald-900 bg-emerald-50 border-emerald-300"
                                 }`}>
                                   ⏱ {formatPrintTime(g.printedAt)}
                                 </span>
                                 {g.printedBy && (
-                                  <span className={`text-[9px] font-sans font-medium px-0.5 ${
-                                    isDarkMode ? "text-emerald-400/80" : "text-emerald-700/90"
+                                  <span className={`text-[10px] font-sans font-bold px-0.5 ${
+                                    isDarkMode ? "text-emerald-400" : "text-emerald-800"
                                   }`}>
                                     oleh: <strong>{String(g.printedBy)}</strong>
                                   </span>
                                 )}
                               </div>
                             ) : (
-                              <span className={isDarkMode ? "text-slate-600" : "text-slate-300"}>-</span>
+                              <span className={isDarkMode ? "text-slate-600 font-bold" : "text-slate-300 font-bold"}>-</span>
                             )}
                           </td>
 
                           {/* Col 11: Total Harga (Grand Total include PPN 11%) */}
                           <td
-                            className={`px-2.5 py-1.5 text-right font-medium whitespace-nowrap ${
+                            className={`px-3 py-2 text-right font-medium whitespace-nowrap ${
                               g.isRetur || g.totalHarga < 0
-                                ? "text-rose-500 font-bold"
+                                ? "text-rose-500 font-black"
                                 : isDarkMode
-                                ? "text-slate-100"
+                                ? "text-white"
                                 : "text-slate-900"
                             } ${getCellCls(11)}`}
                             onClick={(e) => {
@@ -3014,10 +3010,10 @@ export default function Home() {
                               onSelectCell(11);
                             }}
                           >
-                            <div className="font-mono font-semibold">
+                            <div className="font-mono font-black text-xs sm:text-sm">
                               {formatRupiah(Math.round(g.totalHarga * 1.11 * 100) / 100)}
                             </div>
-                            <div className={`text-[10px] font-mono ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>
+                            <div className={`text-[10px] font-mono font-bold ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>
                               DPP: {formatRupiah(Math.round(g.totalHarga * 100) / 100)}
                             </div>
                           </td>
