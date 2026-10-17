@@ -49,9 +49,15 @@ function parseInvNum(invs: string | string[]): number {
 
 function parseDateMs(dStr: string): number {
   if (!dStr || dStr === "-") return 0;
-  if (/^\d{2}\/\d{2}\/\d{4}$/.test(dStr)) {
+  // Handle DD/MM/YYYY (local date)
+  if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(dStr)) {
     const [d, m, y] = dStr.split("/").map(Number);
-    return new Date(y, m - 1, d).getTime();
+    return new Date(y, m - 1, d, 0, 0, 0, 0).getTime();
+  }
+  // Handle YYYY-MM-DD from HTML date input (force local date, NOT UTC!)
+  if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(dStr)) {
+    const [y, m, d] = dStr.split("-").map(Number);
+    return new Date(y, m - 1, d, 0, 0, 0, 0).getTime();
   }
   const t = Date.parse(dStr);
   return isNaN(t) ? 0 : t;
@@ -946,8 +952,9 @@ export default function Home() {
     const custMap = new Map<string, { count: number; totalRp: number }>();
 
     const filterStartMs = dashboardStartDate ? parseDateMs(dashboardStartDate) : 0;
-    // Set end date to end of that day (23:59:59)
-    const filterEndMs = dashboardEndDate ? parseDateMs(dashboardEndDate) + (24 * 60 * 60 * 1000 - 1) : 0;
+    // If end date is specified, use end of that day. If only start date is specified, treat it as that single day!
+    const effectiveEndStr = dashboardEndDate || dashboardStartDate;
+    const filterEndMs = effectiveEndStr ? parseDateMs(effectiveEndStr) + (24 * 60 * 60 * 1000 - 1) : 0;
 
     for (let i = 0; i < grouped.length; i++) {
       const g = grouped[i];
