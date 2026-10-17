@@ -2606,44 +2606,9 @@ export default function Home() {
                     </button>
                   </div>
 
-                  {/* Quick Select from Actual Available Dates based on selected basis */}
-                  <div className="flex items-center gap-1 text-xs">
-                    <select
-                      value={dashboardStartDate === dashboardEndDate && dashboardStartDate ? dashboardStartDate : "custom"}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        if (val === "all") {
-                          setDashboardStartDate("");
-                          setDashboardEndDate("");
-                        } else if (val !== "custom") {
-                          if (/^\d{2}\/\d{2}\/\d{4}$/.test(val)) {
-                            const [d, m, y] = val.split("/");
-                            const iso = `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
-                            setDashboardStartDate(iso);
-                            setDashboardEndDate(iso);
-                          } else {
-                            setDashboardStartDate(val);
-                            setDashboardEndDate(val);
-                          }
-                        }
-                      }}
-                      className={`px-2 py-1 text-xs rounded-lg border font-mono ${
-                        isDarkMode ? "bg-slate-900 border-slate-700 text-white" : "bg-white border-slate-300 text-slate-900"
-                      }`}
-                    >
-                      <option value="all">Semua Tanggal ({dashboardDateBasis === "tx" ? "Tx" : "SO"})</option>
-                      {(dashboardDateBasis === "tx" ? availableTxDates : availableOrderDates).map((d) => (
-                        <option key={d} value={d}>
-                          {d}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <span className="text-slate-400 text-xs">|</span>
-
-                  <div className="flex items-center gap-1 text-xs">
-                    <span className="text-[11px] text-slate-500 font-semibold">Rentang:</span>
+                  {/* Direct, Clean Date Range Controls */}
+                  <div className="flex items-center gap-1.5 text-xs">
+                    <span className="text-[11px] text-slate-500 font-semibold">Dari:</span>
                     <input
                       type="date"
                       value={dashboardStartDate}
@@ -2653,8 +2618,8 @@ export default function Home() {
                       }`}
                     />
                   </div>
-                  <div className="flex items-center gap-1 text-xs">
-                    <span className="text-[11px] text-slate-500 font-semibold">s/d</span>
+                  <div className="flex items-center gap-1.5 text-xs">
+                    <span className="text-[11px] text-slate-500 font-semibold">s/d:</span>
                     <input
                       type="date"
                       value={dashboardEndDate}
@@ -2664,16 +2629,36 @@ export default function Home() {
                       }`}
                     />
                   </div>
+
+                  {/* Preset Buttons */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const now = new Date();
+                      const pad = (n: number) => String(n).padStart(2, "0");
+                      const todayStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+                      setDashboardStartDate(todayStr);
+                      setDashboardEndDate(todayStr);
+                    }}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-bold border transition ${
+                      isDarkMode ? "bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700" : "bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300"
+                    }`}
+                    title="Filter Hari Ini"
+                  >
+                    Hari Ini
+                  </button>
+
                   {(dashboardStartDate || dashboardEndDate) && (
                     <button
                       type="button"
                       onClick={() => { setDashboardStartDate(""); setDashboardEndDate(""); }}
                       className="px-2.5 py-1 bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 rounded-lg text-xs font-bold transition"
-                      title="Reset filter tanggal"
+                      title="Tampilkan Semua Data"
                     >
-                      Reset
+                      Semua
                     </button>
                   )}
+
                   <div className="text-lg sm:text-2xl font-black font-mono text-emerald-600 dark:text-emerald-400 ml-2">
                     RP {Math.round(stats.totalNilaiRp).toLocaleString("id-ID")}
                   </div>
