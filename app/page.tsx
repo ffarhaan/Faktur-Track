@@ -2374,8 +2374,8 @@ export default function Home() {
                 isDarkMode ? "border-slate-800 bg-[#090d18]" : "border-slate-200 bg-slate-50"
               }`}>
                 <div className="flex items-center gap-2">
-                  <div className="w-2.5 h-2.5 rounded-full bg-emerald-500"></div>
-                  <span className="font-black text-xs uppercase tracking-wider">Dashboard & Pengaturan</span>
+                  <div className="w-2.5 h-2.5 rounded-full bg-blue-500"></div>
+                  <span className="font-black text-xs uppercase tracking-wider">Menu &amp; Pengaturan</span>
                 </div>
                 <button
                   type="button"
@@ -2391,89 +2391,6 @@ export default function Home() {
 
               {/* Drawer Scrollable Body */}
               <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                
-                {/* PRATINJAU DATA TERPILIH (CARD DARI MOCKUP USER) */}
-                <div className={`p-4 rounded-xl border ${
-                  isDarkMode
-                    ? "bg-[#11192e] border-slate-800"
-                    : "bg-slate-50 border-slate-200"
-                }`}>
-                  <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-800">
-                    <span className="text-[11px] font-black uppercase tracking-wider flex items-center gap-1.5 text-slate-600 dark:text-slate-300">
-                      <span>📊</span> PRATINJAU DATA TERPILIH:
-                    </span>
-                    <span className="text-xs font-mono font-black text-emerald-600 dark:text-emerald-400">
-                      RP {Math.round(dashboardStats.totalNilaiRp).toLocaleString("id-ID")}
-                    </span>
-                  </div>
-
-                  {/* 3 Metric Box Horizontal */}
-                  <div className="grid grid-cols-3 gap-2 mt-3">
-                    <div className={`p-2.5 rounded-lg border text-center ${
-                      isDarkMode ? "bg-[#0c1220] border-slate-800" : "bg-white border-slate-200"
-                    }`}>
-                      <div className="text-[10px] text-slate-500 font-semibold">Total SO Terfaktur</div>
-                      <div className="text-sm font-black font-mono mt-1 text-slate-900 dark:text-white">
-                        {dashboardStats.totalSO}
-                      </div>
-                    </div>
-
-                    <div className={`p-2.5 rounded-lg border text-center ${
-                      isDarkMode ? "bg-[#0c1220] border-slate-800" : "bg-white border-slate-200"
-                    }`}>
-                      <div className="text-[10px] text-slate-500 font-semibold">Total Lembar Faktur</div>
-                      <div className="text-sm font-black font-mono mt-1 text-slate-900 dark:text-white">
-                        {dashboardStats.totalCount}
-                      </div>
-                    </div>
-
-                    <div className={`p-2.5 rounded-lg border text-center ${
-                      isDarkMode ? "bg-[#0c1220] border-slate-800" : "bg-white border-slate-200"
-                    }`}>
-                      <div className="text-[10px] text-slate-500 font-semibold">Basis Penarikan</div>
-                      <div className="text-xs font-black mt-1 text-slate-900 dark:text-white truncate" title={dashboardDateBasis === "tx" ? "Tanggal Faktur (Tx)" : "Tanggal SO (Order)"}>
-                        {dashboardDateBasis === "tx" ? "Tanggal Faktur" : "Tanggal SO"}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Info Notice Box */}
-                  <div className={`mt-3 p-2.5 rounded-lg border text-[11px] flex items-start gap-2 ${
-                    isDarkMode ? "bg-[#0a0f1c] border-slate-800 text-slate-300" : "bg-white border-slate-200 text-slate-700"
-                  }`}>
-                    <span>💡</span>
-                    <span className="leading-relaxed">
-                      Menarik <strong>{dashboardStats.totalCount} faktur</strong> yang diterbitkan pada rentang <strong>{dashboardStats.dateRangeStr}</strong> (mencakup <strong>{dashboardStats.totalSO} SO</strong>).
-                    </span>
-                  </div>
-                </div>
-
-                {/* Section: Status Pengerjaan */}
-                <div className="space-y-1.5">
-                  <p className={`text-[10px] font-bold uppercase tracking-widest px-1 ${isDarkMode ? "text-slate-500" : "text-slate-400"}`}>
-                    Progress Pengerjaan Cetak (Keseluruhan)
-                  </p>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className={`p-2.5 rounded-lg border flex flex-col justify-between ${
-                      isDarkMode ? "bg-slate-900 border-slate-800" : "bg-slate-50 border-slate-200"
-                    }`}>
-                      <span className="text-[10px] font-semibold text-slate-500">Belum Terprint</span>
-                      <span className="text-base font-black font-mono text-slate-900 dark:text-white mt-1">
-                        {workspaceStats.belumCount}
-                      </span>
-                    </div>
-                    <div className={`p-2.5 rounded-lg border flex flex-col justify-between ${
-                      isDarkMode ? "bg-slate-900 border-slate-800" : "bg-slate-50 border-slate-200"
-                    }`}>
-                      <span className="text-[10px] font-semibold text-slate-500">Selesai Print</span>
-                      <span className="text-base font-black font-mono text-slate-900 dark:text-white mt-1">
-                        {workspaceStats.sudahCount}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className={`h-px ${isDarkMode ? "bg-slate-800" : "bg-slate-200"}`}></div>
 
                 {/* Section: Master Data */}
                 <div className="space-y-1">

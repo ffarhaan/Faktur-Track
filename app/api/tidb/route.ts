@@ -42,7 +42,7 @@ export async function GET(req: Request) {
         kategori_produk, status_cetak, printed_at, printed_by,
         total_harga, items_json
       FROM fakturs_archive 
-      ORDER BY no_faktur DESC;`
+      ORDER BY no_faktur DESC LIMIT 100000;`
     )) as Array<{
       invoice_key: string;
       no_faktur: string;
