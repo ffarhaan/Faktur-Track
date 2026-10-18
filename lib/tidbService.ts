@@ -116,7 +116,6 @@ export async function fetchTiDBDelta(sinceTimestamp: number): Promise<FirestoreF
   try {
     const res = await fetch(`/api/tidb?action=delta&since=${sinceTimestamp}`, {
       method: "GET",
-      headers: { "Cache-Control": "no-cache" },
     });
     if (!res.ok) return null;
     const data = await res.json();
@@ -134,7 +133,6 @@ export async function fetchFaktursFromTiDB(): Promise<{ fakturs: FirestoreFaktur
   try {
     const res = await fetch("/api/tidb", {
       method: "GET",
-      headers: { "Cache-Control": "no-cache" },
     });
     if (!res.ok) {
       console.warn("[TiDB Read] HTTP error:", res.status);

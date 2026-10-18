@@ -189,13 +189,22 @@ export async function GET(req: Request) {
       };
     });
 
-    return Response.json({
-      success: true,
-      count: docs.length,
-      fakturs: docs,
-      maxUpdated,
-      timestamp: Date.now(),
-    });
+    return Response.json(
+      {
+        success: true,
+        count: docs.length,
+        fakturs: docs,
+        maxUpdated,
+        timestamp: Date.now(),
+      },
+      {
+        headers: {
+          "Cache-Control": "public, s-maxage=86400, stale-while-revalidate=86400",
+          "CDN-Cache-Control": "public, s-maxage=86400",
+          "Vercel-CDN-Cache-Control": "public, s-maxage=86400",
+        },
+      }
+    );
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     console.warn("TiDB GET error:", message);
