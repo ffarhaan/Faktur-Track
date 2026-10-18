@@ -1987,7 +1987,7 @@ export default function Home() {
       )}
 
       {/* Main Container */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-2 sm:p-3 space-y-2 relative z-10">
+      <main className="flex-1 max-w-[1600px] w-full mx-auto p-2 sm:p-3 space-y-2 relative z-10">
         {/* Top Header Card - Floating Frosted Glass Bar */}
         <div className="glass-panel rounded-xl px-3 py-1.5 sm:py-2">
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -3083,15 +3083,15 @@ export default function Home() {
           )}
         </div>
 
-        {/* Filter Dropdowns - Compact Clean Row */}
-        <div className={`p-1 rounded-lg border grid grid-cols-2 sm:grid-cols-4 gap-1.5 ${
+        {/* Filter Dropdowns - Single Compact Row */}
+        <div className={`p-1 rounded-lg border grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-1.5 ${
           isDarkMode ? "bg-[#0c1220] border-slate-700" : "bg-white border-slate-300"
         }`}>
           {/* Kategori Filter */}
           <select
             value={katFilter}
             onChange={(e) => { setKatFilter(e.target.value as KatFilter); setPage(0); }}
-            className={`w-full px-2.5 py-1 rounded-md text-xs font-bold focus:outline-none transition-colors border ${
+            className={`w-full px-2 py-1 rounded-md text-[11px] sm:text-xs font-semibold focus:outline-none transition-colors border ${
               isDarkMode
                 ? "bg-slate-900 border-slate-700 text-white"
                 : "bg-slate-50 border-slate-300 text-slate-900"
@@ -3107,7 +3107,7 @@ export default function Home() {
           <select
             value={jenisFilter}
             onChange={(e) => { setJenisFilter(e.target.value as JenisFilter); setPage(0); }}
-            className={`w-full px-2.5 py-1 rounded-md text-xs font-bold focus:outline-none transition-colors border ${
+            className={`w-full px-2 py-1 rounded-md text-[11px] sm:text-xs font-semibold focus:outline-none transition-colors border ${
               isDarkMode
                 ? "bg-slate-900 border-slate-700 text-white"
                 : "bg-slate-50 border-slate-300 text-slate-900"
@@ -3122,7 +3122,7 @@ export default function Home() {
           <select
             value={klasFilter}
             onChange={(e) => { setKlasFilter(e.target.value as KlasFilter); setPage(0); }}
-            className={`w-full px-2.5 py-1 rounded-md text-xs font-bold focus:outline-none transition-colors border ${
+            className={`w-full px-2 py-1 rounded-md text-[11px] sm:text-xs font-semibold focus:outline-none transition-colors border ${
               isDarkMode
                 ? "bg-slate-900 border-slate-700 text-white"
                 : "bg-slate-50 border-slate-300 text-slate-900"
@@ -3140,7 +3140,7 @@ export default function Home() {
           <select
             value={txDateFilter}
             onChange={(e) => { setTxDateFilter(e.target.value); setPage(0); }}
-            className={`w-full px-2 py-1 rounded-md text-xs font-bold focus:outline-none transition-colors border ${
+            className={`w-full px-2 py-1 rounded-md text-[11px] sm:text-xs font-semibold focus:outline-none transition-colors border ${
               isDarkMode
                 ? "bg-slate-900 border-slate-700 text-white"
                 : "bg-slate-50 border-slate-300 text-slate-900"
@@ -3157,7 +3157,7 @@ export default function Home() {
           <select
             value={orderDateFilter}
             onChange={(e) => { setOrderDateFilter(e.target.value); setPage(0); }}
-            className={`w-full px-2 py-1 rounded-md text-xs font-bold focus:outline-none transition-colors border ${
+            className={`w-full px-2 py-1 rounded-md text-[11px] sm:text-xs font-semibold focus:outline-none transition-colors border ${
               isDarkMode
                 ? "bg-slate-900 border-slate-700 text-white"
                 : "bg-slate-50 border-slate-300 text-slate-900"
@@ -3178,23 +3178,23 @@ export default function Home() {
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
-                <tr className={`border-b-2 font-black text-xs sm:text-sm tracking-wider uppercase ${
+                <tr className={`border-b-2 font-black text-[11px] tracking-wider uppercase ${
                   isDarkMode
                     ? "bg-[#0c1322] border-slate-800 text-slate-200"
                     : "bg-slate-100 border-slate-300 text-slate-800"
                 }`}>
-                  <th className="px-3 py-2.5 w-8 text-center">#</th>
-                  <th className="px-3 py-2.5 w-12 text-center">Print</th>
-                  <th className="px-3 py-2.5">No SO</th>
-                  <th className="px-3 py-2.5">No Invoice</th>
-                  <th className="px-3 py-2.5">Kat Produk</th>
-                  <th className="px-3 py-2.5">Jenis</th>
-                  <th className="px-3 py-2.5">Pelanggan</th>
-                  <th className="px-3 py-2.5" title="Tanggal Faktur / Invoice Date (Transaction Date)">Tgl Faktur</th>
-                  <th className="px-3 py-2.5" title="Tanggal Sales Order Masuk (Order Date)">Tgl Order</th>
-                  <th className="px-3 py-2.5">Kat</th>
-                  <th className="px-3 py-2.5">Done Print (Waktu)</th>
-                  <th className="px-3 py-2.5 text-right" title="Grand Total sudah termasuk PPN 11% (sesuai faktur fisik)">Total (+PPN)</th>
+                  <th className="px-1.5 py-2 w-6 text-center">#</th>
+                  <th className="px-1.5 py-2 w-10 text-center">Print</th>
+                  <th className="px-2 py-2">No SO</th>
+                  <th className="px-2 py-2">No Invoice</th>
+                  <th className="px-1.5 py-2">Kat Produk</th>
+                  <th className="px-1.5 py-2 text-center">Jenis</th>
+                  <th className="px-2 py-2">Pelanggan</th>
+                  <th className="px-1.5 py-2 text-center" title="Tanggal Faktur / Invoice Date (Transaction Date)">Tgl Faktur</th>
+                  <th className="px-1.5 py-2 text-center" title="Tanggal Sales Order Masuk (Order Date)">Tgl Order</th>
+                  <th className="px-1.5 py-2 text-center">Kat</th>
+                  <th className="px-2 py-2">Done Print (Waktu)</th>
+                  <th className="px-2 py-2 text-right" title="Grand Total sudah termasuk PPN 11% (sesuai faktur fisik)">Total (+PPN)</th>
                 </tr>
               </thead>
               <tbody className={`divide-y-2 ${isDarkMode ? "divide-slate-800/80" : "divide-slate-200"}`}>
@@ -3264,7 +3264,7 @@ export default function Home() {
                         >
                           {/* Col 0: Expand */}
                           <td
-                            className={`px-2.5 py-1.5 text-center text-xs font-black ${
+                            className={`px-1.5 py-1 text-center text-[11px] font-black ${
                               isDarkMode ? "text-white" : "text-black"
                             } ${getCellCls(0)}`}
                             onClick={(e) => {
@@ -3278,7 +3278,7 @@ export default function Home() {
 
                           {/* Col 1: Print Checkbox */}
                           <td
-                            className={`px-2.5 py-1.5 text-center ${getCellCls(1)}`}
+                            className={`px-1.5 py-1 text-center ${getCellCls(1)}`}
                             onClick={(e) => {
                               e.stopPropagation();
                               onSelectCell(1);
@@ -3288,7 +3288,7 @@ export default function Home() {
                             <button
                               type="button"
                               disabled={currentUser?.role === "readonly"}
-                              className={`w-5 h-5 rounded flex items-center justify-center text-xs font-black shadow-xs transition-all ${
+                              className={`w-5 h-5 mx-auto rounded flex items-center justify-center text-xs font-black shadow-xs transition-all ${
                                 currentUser?.role === "readonly"
                                   ? "cursor-not-allowed opacity-50"
                                   : ""
@@ -3313,7 +3313,7 @@ export default function Home() {
 
                           {/* Col 2: No SO */}
                           <td
-                            className={`px-2.5 py-1.5 font-mono font-bold text-xs whitespace-nowrap ${
+                            className={`px-2 py-1 font-mono font-bold text-xs whitespace-nowrap ${
                               isDarkMode ? "text-white" : "text-black"
                             } ${getCellCls(2)}`}
                             onClick={(e) => {
@@ -3331,7 +3331,7 @@ export default function Home() {
 
                           {/* Col 3: No Invoice */}
                           <td
-                            className={`px-2.5 py-1.5 font-mono font-black text-xs sm:text-sm whitespace-nowrap ${
+                            className={`px-2 py-1 font-mono font-black text-xs whitespace-nowrap ${
                               isDarkMode ? "text-white" : "text-black"
                             } ${getCellCls(3)}`}
                             onClick={(e) => {
@@ -3339,11 +3339,11 @@ export default function Home() {
                               onSelectCell(3);
                             }}
                           >
-                            <div className="flex items-center gap-1.5 flex-wrap">
+                            <div className="flex items-center gap-1 flex-wrap">
                               <span>{g.invoiceNumber}</span>
                               {g.isRetur && (
                                 <span
-                                  className={`px-1.5 py-0.2 rounded text-[10px] font-black uppercase border border-black dark:border-white ${
+                                  className={`px-1 py-0.2 rounded text-[9px] font-black uppercase border border-black dark:border-white ${
                                     isDarkMode
                                       ? "bg-slate-800 text-white"
                                       : "bg-slate-200 text-black"
@@ -3358,14 +3358,14 @@ export default function Home() {
 
                           {/* Col 4: Kat Produk */}
                           <td
-                            className={`px-2.5 py-1.5 whitespace-nowrap ${getCellCls(4)}`}
+                            className={`px-1.5 py-1 whitespace-nowrap ${getCellCls(4)}`}
                             onClick={(e) => {
                               e.stopPropagation();
                               onSelectCell(4);
                             }}
                           >
                             <span
-                              className={`inline-block px-2 py-0.5 rounded text-xs font-bold border ${
+                              className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-bold border ${
                                 isDarkMode
                                   ? "bg-slate-800 text-white border-slate-600"
                                   : "bg-slate-100 text-black border-slate-400"
@@ -3377,13 +3377,13 @@ export default function Home() {
 
                           {/* Col 5: Jenis */}
                           <td
-                            className={`px-2.5 py-1.5 whitespace-nowrap ${getCellCls(5)}`}
+                            className={`px-1.5 py-1 text-center whitespace-nowrap ${getCellCls(5)}`}
                             onClick={(e) => {
                               e.stopPropagation();
                               onSelectCell(5);
                             }}
                           >
-                            <span className={`inline-block px-2 py-0.5 rounded text-xs font-mono font-black border ${
+                            <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-mono font-black border ${
                               g.jenisTransaksi === "ORA"
                                 ? (isDarkMode ? "bg-slate-700 text-white border-slate-500" : "bg-slate-300 text-black border-slate-500")
                                 : (isDarkMode ? "bg-slate-800 text-slate-100 border-slate-600" : "bg-slate-100 text-black border-slate-400")
@@ -3394,9 +3394,10 @@ export default function Home() {
 
                           {/* Col 6: Pelanggan */}
                           <td
-                            className={`px-2.5 py-1.5 max-w-xs truncate font-black text-xs sm:text-sm ${
+                            className={`px-2 py-1 max-w-[180px] lg:max-w-xs truncate font-bold text-xs ${
                               isDarkMode ? "text-white" : "text-black"
                             } ${getCellCls(6)}`}
+                            title={g.customerName}
                             onClick={(e) => {
                               e.stopPropagation();
                               onSelectCell(6);
@@ -3407,7 +3408,7 @@ export default function Home() {
 
                           {/* Col 7: Tgl Faktur (Transaction Date) */}
                           <td
-                            className={`px-2.5 py-1.5 whitespace-nowrap font-mono text-xs font-bold ${
+                            className={`px-1.5 py-1 text-center whitespace-nowrap font-mono text-[11px] font-semibold ${
                               isDarkMode ? "text-white" : "text-black"
                             } ${getCellCls(7)}`}
                             onClick={(e) => {
@@ -3420,8 +3421,8 @@ export default function Home() {
 
                           {/* Col 8: Tgl Order (Order Date / SO) */}
                           <td
-                            className={`px-2.5 py-1.5 whitespace-nowrap font-mono text-xs font-bold ${
-                              isDarkMode ? "text-slate-200" : "text-slate-800"
+                            className={`px-1.5 py-1 text-center whitespace-nowrap font-mono text-[11px] font-semibold ${
+                              isDarkMode ? "text-slate-300" : "text-slate-700"
                             } ${getCellCls(8)}`}
                             onClick={(e) => {
                               e.stopPropagation();
@@ -3433,7 +3434,7 @@ export default function Home() {
 
                           {/* Col 9: Kat (Editable Dropdown) */}
                           <td
-                            className={`px-2.5 py-1.5 whitespace-nowrap ${getCellCls(9)}`}
+                            className={`px-1.5 py-1 text-center whitespace-nowrap ${getCellCls(9)}`}
                             onClick={(e) => {
                               e.stopPropagation();
                               onSelectCell(9);
@@ -3445,7 +3446,7 @@ export default function Home() {
                               onChange={(e) => {
                                 handleUpdateCategory(g.invoiceKey, e.target.value as "1P" | "2P" | "3P", g.customerName);
                               }}
-                              className={`px-2 py-0.5 rounded text-xs font-black border ${
+                              className={`px-1.5 py-0.5 rounded text-xs font-black border ${
                                 currentUser?.role === "readonly" ? "cursor-not-allowed opacity-70" : "cursor-pointer"
                               } ${
                                 isDarkMode
@@ -3466,7 +3467,7 @@ export default function Home() {
 
                           {/* Col 10: Done Print Waktu */}
                           <td
-                            className={`px-2.5 py-1.5 whitespace-nowrap font-mono text-xs ${getCellCls(10)}`}
+                            className={`px-2 py-1 whitespace-nowrap font-mono text-[11px] ${getCellCls(10)}`}
                             onClick={(e) => {
                               e.stopPropagation();
                               onSelectCell(10);
@@ -3474,7 +3475,7 @@ export default function Home() {
                           >
                             {g.allPrinted && g.printedAt ? (
                               <div className="flex flex-col gap-0.5">
-                                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border font-bold text-xs ${
+                                <span className={`inline-flex items-center gap-1 px-1.5 py-0.2 rounded border font-semibold text-[11px] ${
                                   isDarkMode
                                     ? "text-white bg-slate-800 border-slate-600"
                                     : "text-black bg-slate-100 border-slate-300"
@@ -3482,8 +3483,8 @@ export default function Home() {
                                   ⏱ {formatPrintTime(g.printedAt)}
                                 </span>
                                 {g.printedBy && (
-                                  <span className={`text-[10px] font-sans font-bold px-0.5 ${
-                                    isDarkMode ? "text-slate-300" : "text-slate-800"
+                                  <span className={`text-[9px] font-sans font-medium px-0.5 ${
+                                    isDarkMode ? "text-slate-300" : "text-slate-700"
                                   }`}>
                                     oleh: <strong>{String(g.printedBy)}</strong>
                                   </span>
@@ -3496,7 +3497,7 @@ export default function Home() {
 
                           {/* Col 11: Total Harga (Grand Total include PPN 11%) */}
                           <td
-                            className={`px-2.5 py-1.5 text-right font-medium whitespace-nowrap ${
+                            className={`px-2 py-1 text-right font-medium whitespace-nowrap ${
                               isDarkMode
                                 ? "text-white"
                                 : "text-black"
@@ -3506,10 +3507,10 @@ export default function Home() {
                               onSelectCell(11);
                             }}
                           >
-                            <div className="font-mono font-black text-xs sm:text-sm">
+                            <div className="font-mono font-black text-xs">
                               {formatRupiah(Math.round(g.totalHarga * 1.11 * 100) / 100)}
                             </div>
-                            <div className={`text-[10px] font-mono font-bold ${isDarkMode ? "text-slate-300" : "text-slate-700"}`}>
+                            <div className={`text-[9px] font-mono font-medium ${isDarkMode ? "text-slate-400" : "text-slate-600"}`}>
                               DPP: {formatRupiah(Math.round(g.totalHarga * 100) / 100)}
                             </div>
                           </td>
