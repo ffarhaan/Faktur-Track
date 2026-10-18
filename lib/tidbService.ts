@@ -108,3 +108,60 @@ export async function fetchFaktursFromTiDB(): Promise<FirestoreFakturDoc[] | nul
   }
 }
 
+// -------------------------------------------------------------
+// High-Speed Local IndexedDB Cache for Instant 0ms App Launch
+// Emulates Firebase offline persistence with zero external deps
+// -------------------------------------------------------------
+const DB_NAME = "faktur_tidb_cache_db";
+const STORE_NAME = "fakturs_store";
+const KEY = "cached_fakturs";
+
+function openCacheDB(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    if (typeof window === "undefined" || !window.indexedDB) {
+      return reject(new Error("IndexedDB not available in current environment"));
+    }
+    const req = window.indexedDB.open(DB_NAME, 1);
+    req.onupgradeneeded = () => {
+      if (!req.result.objectStoreNames.contains(STORE_NAME)) {
+        req.result.createObjectStore(STORE_NAME);
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+export async function getLocalCachedFakturs(): Promise<FirestoreFakturDoc[] | null> {
+  try {
+    const db = await openCacheDB();
+    return new Promise((resolve) => {
+      const tx = db.transaction(STORE_NAME, "readonly");
+      const store = tx.objectStore(STORE_NAME);
+      const req = store.get(KEY);
+      req.onsuccess = () => {
+        if (Array.isArray(req.result) && req.result.length > 0) {
+          resolve(req.result as FirestoreFakturDoc[]);
+        } else {
+          resolve(null);
+        }
+      };
+      req.onerror = () => resolve(null);
+    });
+  } catch {
+    return null;
+  }
+}
+
+export async function setLocalCachedFakturs(fakturs: FirestoreFakturDoc[]): Promise<void> {
+  if (!fakturs || fakturs.length === 0) return;
+  try {
+    const db = await openCacheDB();
+    const tx = db.transaction(STORE_NAME, "readwrite");
+    const store = tx.objectStore(STORE_NAME);
+    store.put(fakturs, KEY);
+  } catch {
+    // Non-blocking fail-safe
+  }
+}
+
