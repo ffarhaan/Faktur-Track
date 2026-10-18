@@ -2122,10 +2122,10 @@ export default function Home() {
                           ? "bg-blue-950/60 hover:bg-blue-900/80 text-blue-300 border-blue-500/30 shadow-xs"
                           : "bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-200 shadow-xs"
                       }`}
-                      title="Klik untuk melihat catatan pembaruan & perbaikan v2.2"
+                      title="Klik untuk melihat catatan pembaruan & perbaikan v2.3"
                     >
                       <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></span>
-                      v2.2
+                      v2.3
                     </button>
                   </div>
                   <span className={`text-[9px] hidden md:inline leading-none font-medium ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>
@@ -3837,11 +3837,11 @@ export default function Home() {
                       Catatan Pembaruan Sistem
                     </h2>
                     <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-amber-400 text-slate-950 shadow-xs">
-                      v2.2
+                      v2.3
                     </span>
                   </div>
                   <p className="text-xs text-blue-100 font-medium mt-0.5">
-                    Pita telemetri interaktif, kolom pencarian luas, optimasi GPU 60 FPS, & isolasi mutlak
+                    Mesin TiDB Serverless (25 GB), Pemuatan Kilat &lt;0.4s, Realtime Dual-Sync, &amp; Kepatuhan LOCKED RULES
                   </p>
                 </div>
               </div>
@@ -3857,6 +3857,70 @@ export default function Home() {
 
             {/* Modal Body: Structured Cards with Distinct Icon Badges & Bold Contrast */}
             <div className="overflow-y-auto p-4 sm:p-5 space-y-3 text-xs sm:text-sm custom-scrollbar">
+              {/* Item 0: TiDB Serverless 25 GB Architecture */}
+              <div className={`p-3.5 rounded-xl border flex items-start gap-3 shadow-xs transition-all ${
+                isDarkMode
+                  ? "bg-[#11192e] border-blue-700/60 text-slate-200"
+                  : "bg-blue-50/70 border-blue-200 text-slate-800"
+              }`}>
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-base font-bold ${
+                  isDarkMode
+                    ? "bg-blue-950/70 border border-blue-700/60 text-blue-400"
+                    : "bg-blue-100 border border-blue-300 text-blue-800"
+                }`}>
+                  🗄️
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className={`font-bold text-sm ${isDarkMode ? "text-blue-400" : "text-blue-800"}`}>
+                      Mesin Database TiDB Cloud Serverless (25 GB &amp; Load &lt; 0.4s)
+                    </span>
+                    <span className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded ${
+                      isDarkMode
+                        ? "bg-blue-900/60 text-blue-300 border border-blue-700/50"
+                        : "bg-blue-600 text-white"
+                    }`}>
+                      DATABASE UTAMA
+                    </span>
+                  </div>
+                  <p className={`text-xs leading-relaxed ${isDarkMode ? "text-slate-300" : "text-slate-700"}`}>
+                    Penyimpanan puluhan ribu faktur kini ditopang oleh kluster <strong className={isDarkMode ? "text-white" : "text-slate-900 font-bold"}>TiDB Cloud Serverless (Region Singapore)</strong> dengan kapasitas 25 GB tanpa batas kuota reads harian. Seluruh 15.000+ faktur kini dapat dimuat secara instan ke tabel hanya dalam waktu <strong className={isDarkMode ? "text-white" : "text-slate-900 font-bold"}>~300 s/d 376 milidetik</strong>.
+                  </p>
+                </div>
+              </div>
+
+              {/* Item 0.5: Realtime Walkie-Talkie Dual-Sync */}
+              <div className={`p-3.5 rounded-xl border flex items-start gap-3 shadow-xs transition-all ${
+                isDarkMode
+                  ? "bg-[#11192e] border-indigo-700/60 text-slate-200"
+                  : "bg-indigo-50/70 border-indigo-200 text-slate-800"
+              }`}>
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-base font-bold ${
+                  isDarkMode
+                    ? "bg-indigo-950/70 border border-indigo-700/60 text-indigo-400"
+                    : "bg-indigo-100 border border-indigo-300 text-indigo-800"
+                }`}>
+                  📡
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className={`font-bold text-sm ${isDarkMode ? "text-indigo-400" : "text-indigo-800"}`}>
+                      Realtime Dual-Sync &amp; 0 MB Beban Penyimpanan Firestore
+                    </span>
+                    <span className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded ${
+                      isDarkMode
+                        ? "bg-indigo-900/60 text-indigo-300 border border-indigo-700/50"
+                        : "bg-indigo-600 text-white"
+                    }`}>
+                      REALTIME SYNC
+                    </span>
+                  </div>
+                  <p className={`text-xs leading-relaxed ${isDarkMode ? "text-slate-300" : "text-slate-700"}`}>
+                    Sinkronisasi status cetak antar-laptop staf tetap berjalan instan (<strong className={isDarkMode ? "text-white" : "text-slate-900 font-bold"}>&lt; 50ms</strong>) menggunakan sinyal ringan Firebase sebagai jalur walkie-talkie. Beban penyimpanan dokumen tebal di Firebase dipangkas hingga mendekati 0 MB.
+                  </p>
+                </div>
+              </div>
+
               {/* Item 1: Interactive Telemetry Ribbon & Instant Filters */}
               <div className={`p-3.5 rounded-xl border flex items-start gap-3 shadow-xs transition-all ${
                 isDarkMode
