@@ -27,7 +27,7 @@ import {
   subscribeToOnlinePresence,
   isStalePrintTimestamp,
 } from "@/lib/firestoreService";
-import { syncFaktursToTiDBBackground, syncPrintStatusToTiDBBackground } from "@/lib/tidbService";
+import { syncFaktursToTiDBBackground, syncPrintStatusToTiDBBackground, fetchFaktursFromTiDB } from "@/lib/tidbService";
 import MasterApotekModal from "@/components/MasterApotekModal";
 import MasterProductModal from "@/components/MasterProductModal";
 import LoginModal, { AppUser } from "@/components/LoginModal";
@@ -544,7 +544,48 @@ export default function Home() {
     [currentUser, showToast]
   );
 
-  // Real-time Firestore Subscription
+  // 1. Initial High-Speed Load from TiDB Cloud (< 400ms)
+  useEffect(() => {
+    let isMounted = true;
+    async function initTiDB() {
+      try {
+        const tidbDocs = await fetchFaktursFromTiDB();
+        if (!isMounted) return;
+        if (tidbDocs && tidbDocs.length > 0) {
+          currentFakturDocsRef.current = tidbDocs;
+          const { records: recs, printedSet: docPrintedSet, printedAtMap: docPrintedAtMap, printedByMap: docPrintedByMap } = dbRowsToFakturRecords(
+            tidbDocs as unknown as Array<Record<string, unknown>>,
+            productOverridesRef.current
+          );
+          setRecords(recs);
+          setPrintedInvoices((prev) => {
+            const next = new Set<string>([...Array.from(prev), ...Array.from(docPrintedSet)]);
+            printedInvoicesRef.current = next;
+            return next;
+          });
+          setPrintedAtMap((prev) => {
+            const next = { ...prev, ...docPrintedAtMap };
+            printedAtMapRef.current = next;
+            return next;
+          });
+          setPrintedByMap((prev) => {
+            const next = { ...prev, ...docPrintedByMap };
+            printedByMapRef.current = next;
+            return next;
+          });
+          setLoading(false);
+        }
+      } catch (err) {
+        console.warn("TiDB initial load fallback to Firestore:", err);
+      }
+    }
+    initTiDB();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // Real-time Firestore Subscription (Walkie-Talkie for Print Signals & Overrides)
   useEffect(() => {
     setLoading(true);
     const unsubscribe = subscribeToFakturs(
@@ -588,6 +629,16 @@ export default function Home() {
         if (uploadNotif && uploadNotif.uploaderId !== deviceIdRef.current) {
           setUploadNotification(uploadNotif);
           showToast(`📤 File baru diunggah rekan: ${uploadNotif.fileName} (${uploadNotif.newUnprinted} faktur baru)`);
+          fetchFaktursFromTiDB().then((tidbDocs) => {
+            if (tidbDocs && tidbDocs.length > 0) {
+              currentFakturDocsRef.current = tidbDocs;
+              const { records: recs } = dbRowsToFakturRecords(
+                tidbDocs as unknown as Array<Record<string, unknown>>,
+                productOverridesRef.current
+              );
+              setRecords(recs);
+            }
+          });
         }
 
         if (reason === "print" || reason === "meta") {

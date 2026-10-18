@@ -79,3 +79,25 @@ export function syncPrintStatusToTiDBBackground(
     }
   }, 100);
 }
+
+export async function fetchFaktursFromTiDB(): Promise<FirestoreFakturDoc[] | null> {
+  try {
+    const res = await fetch("/api/tidb", {
+      method: "GET",
+      headers: { "Cache-Control": "no-cache" },
+    });
+    if (!res.ok) {
+      console.warn("[TiDB Read] HTTP error:", res.status);
+      return null;
+    }
+    const data = await res.json();
+    if (data.success && Array.isArray(data.fakturs)) {
+      return data.fakturs as FirestoreFakturDoc[];
+    }
+    return null;
+  } catch (err) {
+    console.warn("[TiDB Read] Fetch failed safely:", err);
+    return null;
+  }
+}
+

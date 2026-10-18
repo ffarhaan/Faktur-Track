@@ -19,17 +19,90 @@ interface FakturPayload {
   items?: unknown[];
 }
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
+    const { searchParams } = new URL(req.url);
+    const action = searchParams.get("action");
     const conn = getTiDBClient();
-    const result = (await conn.execute("SELECT COUNT(*) as count FROM fakturs_archive;")) as Array<{ count: number }>;
+
+    if (action === "count") {
+      const result = (await conn.execute("SELECT COUNT(*) as count FROM fakturs_archive;")) as Array<{ count: number }>;
+      return Response.json({
+        success: true,
+        totalArchived: Number(result[0]?.count || 0),
+        timestamp: Date.now(),
+      });
+    }
+
+    // Default: fetch all fakturs
+    const rows = (await conn.execute(
+      `SELECT 
+        invoice_key, no_faktur, no_sales_order, customer_name,
+        order_date, transaction_date, jenis_transaksi, kategori,
+        kategori_produk, status_cetak, printed_at, printed_by,
+        total_harga, items_json
+      FROM fakturs_archive 
+      ORDER BY no_faktur DESC;`
+    )) as Array<{
+      invoice_key: string;
+      no_faktur: string;
+      no_sales_order: string;
+      customer_name: string;
+      order_date: string;
+      transaction_date: string;
+      jenis_transaksi: string;
+      kategori: string;
+      kategori_produk: string;
+      status_cetak: number;
+      printed_at: string | null;
+      printed_by: string | null;
+      total_harga: string | number;
+      items_json: string | null;
+    }>;
+
+    const docs = rows.map((r) => {
+      let parsedItems = [];
+      if (r.items_json) {
+        try {
+          parsedItems = typeof r.items_json === "string" ? JSON.parse(r.items_json) : r.items_json;
+        } catch {
+          parsedItems = [];
+        }
+      }
+
+      return {
+        id: r.invoice_key,
+        no_faktur: r.no_faktur,
+        no_sales_order: r.no_sales_order || "-",
+        customer_name: r.customer_name || "-",
+        order_date: r.order_date || "-",
+        transaction_date: r.transaction_date || r.order_date || "-",
+        jenis_transaksi: r.jenis_transaksi || "DOO",
+        kategori: r.kategori || "3P",
+        status_cetak: Number(r.status_cetak) === 1,
+        printed_at: r.printed_at || null,
+        printed_by: r.printed_by || null,
+        extra: {
+          nama_pelanggan: r.customer_name || "-",
+          order_date: r.order_date || "-",
+          transaction_date: r.transaction_date || r.order_date || "-",
+          jenis_transaksi: r.jenis_transaksi || "DOO",
+          kategori: r.kategori || "3P",
+          total_harga: Number(r.total_harga || 0),
+          items: parsedItems,
+        },
+      };
+    });
+
     return Response.json({
       success: true,
-      totalArchived: result[0]?.count || 0,
+      count: docs.length,
+      fakturs: docs,
       timestamp: Date.now(),
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
+    console.warn("TiDB GET error:", message);
     return Response.json({ success: false, error: message }, { status: 500 });
   }
 }
