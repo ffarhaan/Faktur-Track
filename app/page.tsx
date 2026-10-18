@@ -27,6 +27,7 @@ import {
   subscribeToOnlinePresence,
   isStalePrintTimestamp,
 } from "@/lib/firestoreService";
+import { syncFaktursToTiDBBackground, syncPrintStatusToTiDBBackground } from "@/lib/tidbService";
 import MasterApotekModal from "@/components/MasterApotekModal";
 import MasterProductModal from "@/components/MasterProductModal";
 import LoginModal, { AppUser } from "@/components/LoginModal";
@@ -758,6 +759,12 @@ export default function Home() {
           willBePrinted ? nowIso : null,
           willBePrinted ? currentUserName : null
         );
+        syncPrintStatusToTiDBBackground(
+          [targetKey],
+          willBePrinted,
+          willBePrinted ? nowIso : null,
+          willBePrinted ? currentUserName : null
+        );
       } catch (err) {
         console.error("Print toggle sync error:", err);
         showToast(`⚠️ Gagal menyimpan status faktur ${targetKey} ke server.`);
@@ -1197,6 +1204,7 @@ export default function Home() {
     try {
       setLoading(true);
       await updateFaktursPrintStatusBatch(targetKeys, true, nowIso, currentUserName);
+      syncPrintStatusToTiDBBackground(targetKeys, true, nowIso, currentUserName);
       showToast(`✓ Berhasil menandai ${targetKeys.length} faktur selesai dicetak oleh ${currentUserName}!`);
     } catch (err) {
       console.error("Batch print error:", err);
@@ -1945,6 +1953,9 @@ export default function Home() {
           newUnprintedKeys,
           notifPayload
         );
+
+        // Background fail-safe sync to TiDB archive (0ms impact on operational UI)
+        syncFaktursToTiDBBackground(payload);
 
         setTimeout(() => {
           isUploadingRef.current = false;
