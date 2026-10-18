@@ -27,7 +27,7 @@ import {
   subscribeToOnlinePresence,
   isStalePrintTimestamp,
 } from "@/lib/firestoreService";
-import { syncFaktursToTiDB, syncFaktursToTiDBBackground, syncPrintStatusToTiDBBackground, fetchFaktursFromTiDB, getLocalCachedFakturs, setLocalCachedFakturs } from "@/lib/tidbService";
+import { syncFaktursToTiDB, syncFaktursToTiDBBackground, syncPrintStatusToTiDBBackground, fetchFaktursFromTiDB, getLocalCachedFakturs, setLocalCachedFakturs, checkTiDBUpdates, fetchTiDBDelta } from "@/lib/tidbService";
 import MasterApotekModal from "@/components/MasterApotekModal";
 import MasterProductModal from "@/components/MasterProductModal";
 import LoginModal, { AppUser } from "@/components/LoginModal";
@@ -575,18 +575,23 @@ function mergeKumulatifDocs(existing: FirestoreFakturDoc[], incoming: FirestoreF
   return Array.from(map.values());
 }
 
-  // 1. Instant 0ms Load from Local IndexedDB Cache, then High-Speed Revalidation with TiDB
+  // 1. Instant 0ms Load from Local IndexedDB Cache, then Zero-Bandwidth Smart Delta Sync
   useEffect(() => {
     let isMounted = true;
 
     async function initData() {
+      let clientCount = 0;
+      let clientUpdated = 0;
+
       // Step 1: Read local IndexedDB cache INSTANTLY (0–10ms!)
       try {
         const cached = await getLocalCachedFakturs();
-        if (cached && cached.length > 0 && isMounted) {
-          currentFakturDocsRef.current = cached;
+        if (cached && cached.fakturs && cached.fakturs.length > 0 && isMounted) {
+          clientCount = cached.fakturs.length;
+          clientUpdated = cached.maxUpdated || 0;
+          currentFakturDocsRef.current = cached.fakturs;
           const { records: recs, printedSet: docPrintedSet, printedAtMap: docPrintedAtMap, printedByMap: docPrintedByMap } = dbRowsToFakturRecords(
-            cached as unknown as Array<Record<string, unknown>>,
+            cached.fakturs as unknown as Array<Record<string, unknown>>,
             productOverridesRef.current
           );
           setRecords(recs);
@@ -599,39 +604,58 @@ function mergeKumulatifDocs(existing: FirestoreFakturDoc[], incoming: FirestoreF
         console.warn("Local cache read error:", err);
       }
 
-      // Step 2: Fetch latest from TiDB in background (Stale-While-Revalidate)
+      // Step 2: Smart Zero-Bandwidth Delta Sync
       try {
-        const tidbDocs = await fetchFaktursFromTiDB();
+        // If we already have cached data, perform a lightweight 50-byte check!
+        if (clientCount > 0) {
+          const check = await checkTiDBUpdates(clientCount, clientUpdated);
+          if (check && check.upToDate) {
+            // DATA IS 100% UP TO DATE! ZERO BYTES DOWNLOADED FROM VERCEL!
+            if (isMounted) setLoading(false);
+            return;
+          }
+
+          // If there is an incremental update and clientUpdated is known, fetch only the delta!
+          if (check && check.maxUpdated > clientUpdated && clientUpdated > 0) {
+            const deltaDocs = await fetchTiDBDelta(clientUpdated);
+            if (!isMounted) return;
+            if (deltaDocs && deltaDocs.length > 0) {
+              const merged = mergeKumulatifDocs(currentFakturDocsRef.current || [], deltaDocs);
+              currentFakturDocsRef.current = merged;
+              const { records: recs, printedSet: docPrintedSet, printedAtMap: docPrintedAtMap, printedByMap: docPrintedByMap } = dbRowsToFakturRecords(
+                merged as unknown as Array<Record<string, unknown>>,
+                productOverridesRef.current
+              );
+              setRecords(recs);
+              setPrintedInvoices((prev) => new Set([...Array.from(prev), ...Array.from(docPrintedSet)]));
+              setPrintedAtMap((prev) => ({ ...prev, ...docPrintedAtMap }));
+              setPrintedByMap((prev) => ({ ...prev, ...docPrintedByMap }));
+              setLoading(false);
+              setLocalCachedFakturs(merged, check.maxUpdated);
+              return;
+            }
+          }
+        }
+
+        // Fallback for first-time visits: full load
+        const result = await fetchFaktursFromTiDB();
         if (!isMounted) return;
-        if (tidbDocs && tidbDocs.length > 0) {
-          const merged = mergeKumulatifDocs(currentFakturDocsRef.current || [], tidbDocs);
+        if (result && result.fakturs && result.fakturs.length > 0) {
+          const merged = mergeKumulatifDocs(currentFakturDocsRef.current || [], result.fakturs);
           currentFakturDocsRef.current = merged;
           const { records: recs, printedSet: docPrintedSet, printedAtMap: docPrintedAtMap, printedByMap: docPrintedByMap } = dbRowsToFakturRecords(
             merged as unknown as Array<Record<string, unknown>>,
             productOverridesRef.current
           );
           setRecords(recs);
-          setPrintedInvoices((prev) => {
-            const next = new Set<string>([...Array.from(prev), ...Array.from(docPrintedSet)]);
-            printedInvoicesRef.current = next;
-            return next;
-          });
-          setPrintedAtMap((prev) => {
-            const next = { ...prev, ...docPrintedAtMap };
-            printedAtMapRef.current = next;
-            return next;
-          });
-          setPrintedByMap((prev) => {
-            const next = { ...prev, ...docPrintedByMap };
-            printedByMapRef.current = next;
-            return next;
-          });
+          setPrintedInvoices((prev) => new Set([...Array.from(prev), ...Array.from(docPrintedSet)]));
+          setPrintedAtMap((prev) => ({ ...prev, ...docPrintedAtMap }));
+          setPrintedByMap((prev) => ({ ...prev, ...docPrintedByMap }));
           setLoading(false);
-          // Persist to local cache for instant load next time
-          setLocalCachedFakturs(merged);
+          setLocalCachedFakturs(merged, result.maxUpdated);
         }
       } catch (err) {
-        console.warn("TiDB background revalidation error:", err);
+        console.warn("TiDB background sync error:", err);
       } finally {
         if (isMounted) setLoading(false);
       }
@@ -687,15 +711,16 @@ function mergeKumulatifDocs(existing: FirestoreFakturDoc[], incoming: FirestoreF
         if (uploadNotif && uploadNotif.uploaderId !== deviceIdRef.current) {
           setUploadNotification(uploadNotif);
           showToast(`📤 File baru diunggah rekan: ${uploadNotif.fileName} (${uploadNotif.newUnprinted} faktur baru)`);
-          fetchFaktursFromTiDB().then((tidbDocs) => {
-            if (tidbDocs && tidbDocs.length > 0) {
-              const merged = mergeKumulatifDocs(currentFakturDocsRef.current || [], tidbDocs);
+          fetchFaktursFromTiDB().then((res) => {
+            if (res && res.fakturs && res.fakturs.length > 0) {
+              const merged = mergeKumulatifDocs(currentFakturDocsRef.current || [], res.fakturs);
               currentFakturDocsRef.current = merged;
               const { records: recs } = dbRowsToFakturRecords(
                 merged as unknown as Array<Record<string, unknown>>,
                 productOverridesRef.current
               );
               setRecords(recs);
+              setLocalCachedFakturs(merged, res.maxUpdated);
             }
           });
         }
@@ -760,7 +785,7 @@ function mergeKumulatifDocs(existing: FirestoreFakturDoc[], incoming: FirestoreF
   const handleManualRefresh = useCallback(async () => {
     setLoading(true);
     try {
-      const tidbDocs = await fetchFaktursFromTiDB();
+      const result = await fetchFaktursFromTiDB();
       const { progression: prog, printState, categoryOverrides: overrides, productCategoryOverrides: prodOverrides } = await getExistingFakturs();
       if (prog) setInvoiceProgression(prog);
       if (overrides) {
@@ -771,8 +796,8 @@ function mergeKumulatifDocs(existing: FirestoreFakturDoc[], incoming: FirestoreF
         setProductOverrides(prodOverrides);
         productOverridesRef.current = prodOverrides;
       }
-      if (tidbDocs && tidbDocs.length > 0) {
-        const merged = mergeKumulatifDocs(currentFakturDocsRef.current || [], tidbDocs);
+      if (result && result.fakturs && result.fakturs.length > 0) {
+        const merged = mergeKumulatifDocs(currentFakturDocsRef.current || [], result.fakturs);
         currentFakturDocsRef.current = merged;
         const { records: recs, printedSet: docPrintedSet, printedAtMap: docPrintedAtMap, printedByMap: docPrintedByMap } = dbRowsToFakturRecords(
           merged as unknown as Array<Record<string, unknown>>,
@@ -792,7 +817,7 @@ function mergeKumulatifDocs(existing: FirestoreFakturDoc[], incoming: FirestoreF
           ...docPrintedByMap,
         });
         setRecords(recs);
-        setLocalCachedFakturs(merged);
+        setLocalCachedFakturs(merged, result.maxUpdated);
       }
       showToast("✓ Data berhasil diperbarui langsung dari TiDB.");
     } catch (err) {

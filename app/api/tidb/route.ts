@@ -34,6 +34,96 @@ export async function GET(req: Request) {
       });
     }
 
+    if (action === "check") {
+      const result = (await conn.execute(
+        "SELECT COUNT(*) as count, UNIX_TIMESTAMP(MAX(updated_at)) as max_updated FROM fakturs_archive;"
+      )) as Array<{ count: number; max_updated: number | null }>;
+      const totalCount = Number(result[0]?.count || 0);
+      const maxUpdated = Number(result[0]?.max_updated || 0);
+
+      const clientCount = Number(searchParams.get("count") || 0);
+      const clientUpdated = Number(searchParams.get("updated") || 0);
+
+      const isUpToDate = clientCount === totalCount && (clientUpdated === 0 || clientUpdated >= maxUpdated);
+
+      return Response.json({
+        success: true,
+        upToDate: isUpToDate,
+        totalCount,
+        maxUpdated,
+      });
+    }
+
+    if (action === "delta") {
+      const sinceTimestamp = Number(searchParams.get("since") || 0);
+      const deltaRows = (await conn.execute(
+        `SELECT 
+          invoice_key, no_faktur, no_sales_order, customer_name,
+          order_date, transaction_date, jenis_transaksi, kategori,
+          kategori_produk, status_cetak, printed_at, printed_by,
+          total_harga, items_json
+        FROM fakturs_archive 
+        WHERE UNIX_TIMESTAMP(updated_at) > ?
+        ORDER BY updated_at ASC LIMIT 1000;`,
+        [sinceTimestamp]
+      )) as Array<{
+        invoice_key: string;
+        no_faktur: string;
+        no_sales_order: string;
+        customer_name: string;
+        order_date: string;
+        transaction_date: string;
+        jenis_transaksi: string;
+        kategori: string;
+        kategori_produk: string;
+        status_cetak: number;
+        printed_at: string | null;
+        printed_by: string | null;
+        total_harga: string | number;
+        items_json: string | null;
+      }>;
+
+      const docs = deltaRows.map((r) => {
+        let parsedItems = [];
+        if (r.items_json) {
+          try {
+            parsedItems = typeof r.items_json === "string" ? JSON.parse(r.items_json) : r.items_json;
+          } catch {
+            parsedItems = [];
+          }
+        }
+
+        return {
+          id: r.invoice_key,
+          no_faktur: r.no_faktur,
+          no_sales_order: r.no_sales_order || "-",
+          customer_name: r.customer_name || "-",
+          order_date: r.order_date || "-",
+          transaction_date: r.transaction_date || r.order_date || "-",
+          jenis_transaksi: r.jenis_transaksi || "DOO",
+          kategori: r.kategori || "3P",
+          status_cetak: Number(r.status_cetak) === 1,
+          printed_at: r.printed_at || null,
+          printed_by: r.printed_by || null,
+          extra: {
+            nama_pelanggan: r.customer_name || "-",
+            order_date: r.order_date || "-",
+            transaction_date: r.transaction_date || r.order_date || "-",
+            jenis_transaksi: r.jenis_transaksi || "DOO",
+            kategori: r.kategori || "3P",
+            total_harga: Number(r.total_harga || 0),
+            items: parsedItems,
+          },
+        };
+      });
+
+      return Response.json({
+        success: true,
+        count: docs.length,
+        fakturs: docs,
+      });
+    }
+
     // Default: fetch all fakturs
     const rows = (await conn.execute(
       `SELECT 
@@ -59,6 +149,11 @@ export async function GET(req: Request) {
       total_harga: string | number;
       items_json: string | null;
     }>;
+
+    const resultMeta = (await conn.execute(
+      "SELECT UNIX_TIMESTAMP(MAX(updated_at)) as max_updated FROM fakturs_archive;"
+    )) as Array<{ max_updated: number | null }>;
+    const maxUpdated = Number(resultMeta[0]?.max_updated || 0);
 
     const docs = rows.map((r) => {
       let parsedItems = [];
@@ -98,6 +193,7 @@ export async function GET(req: Request) {
       success: true,
       count: docs.length,
       fakturs: docs,
+      maxUpdated,
       timestamp: Date.now(),
     });
   } catch (err: unknown) {

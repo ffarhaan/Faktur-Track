@@ -87,7 +87,50 @@ export function syncPrintStatusToTiDBBackground(
   }, 100);
 }
 
-export async function fetchFaktursFromTiDB(): Promise<FirestoreFakturDoc[] | null> {
+export async function checkTiDBUpdates(
+  clientCount: number,
+  clientUpdated: number
+): Promise<{ upToDate: boolean; totalCount: number; maxUpdated: number } | null> {
+  try {
+    const res = await fetch(`/api/tidb?action=check&count=${clientCount}&updated=${clientUpdated}`, {
+      method: "GET",
+      headers: { "Cache-Control": "no-cache" },
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (data.success) {
+      return {
+        upToDate: Boolean(data.upToDate),
+        totalCount: Number(data.totalCount || 0),
+        maxUpdated: Number(data.maxUpdated || 0),
+      };
+    }
+    return null;
+  } catch (err) {
+    console.warn("[TiDB Check] Check failed safely:", err);
+    return null;
+  }
+}
+
+export async function fetchTiDBDelta(sinceTimestamp: number): Promise<FirestoreFakturDoc[] | null> {
+  try {
+    const res = await fetch(`/api/tidb?action=delta&since=${sinceTimestamp}`, {
+      method: "GET",
+      headers: { "Cache-Control": "no-cache" },
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (data.success && Array.isArray(data.fakturs)) {
+      return data.fakturs as FirestoreFakturDoc[];
+    }
+    return null;
+  } catch (err) {
+    console.warn("[TiDB Delta] Delta fetch failed safely:", err);
+    return null;
+  }
+}
+
+export async function fetchFaktursFromTiDB(): Promise<{ fakturs: FirestoreFakturDoc[]; maxUpdated: number } | null> {
   try {
     const res = await fetch("/api/tidb", {
       method: "GET",
@@ -99,7 +142,10 @@ export async function fetchFaktursFromTiDB(): Promise<FirestoreFakturDoc[] | nul
     }
     const data = await res.json();
     if (data.success && Array.isArray(data.fakturs)) {
-      return data.fakturs as FirestoreFakturDoc[];
+      return {
+        fakturs: data.fakturs as FirestoreFakturDoc[],
+        maxUpdated: Number(data.maxUpdated || 0),
+      };
     }
     return null;
   } catch (err) {
@@ -115,13 +161,14 @@ export async function fetchFaktursFromTiDB(): Promise<FirestoreFakturDoc[] | nul
 const DB_NAME = "faktur_tidb_cache_db";
 const STORE_NAME = "fakturs_store";
 const KEY = "cached_fakturs";
+const META_KEY = "cached_meta";
 
 function openCacheDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     if (typeof window === "undefined" || !window.indexedDB) {
       return reject(new Error("IndexedDB not available in current environment"));
     }
-    const req = window.indexedDB.open(DB_NAME, 1);
+    const req = window.indexedDB.open(DB_NAME, 2);
     req.onupgradeneeded = () => {
       if (!req.result.objectStoreNames.contains(STORE_NAME)) {
         req.result.createObjectStore(STORE_NAME);
@@ -132,34 +179,40 @@ function openCacheDB(): Promise<IDBDatabase> {
   });
 }
 
-export async function getLocalCachedFakturs(): Promise<FirestoreFakturDoc[] | null> {
+export async function getLocalCachedFakturs(): Promise<{ fakturs: FirestoreFakturDoc[]; maxUpdated: number } | null> {
   try {
     const db = await openCacheDB();
     return new Promise((resolve) => {
       const tx = db.transaction(STORE_NAME, "readonly");
       const store = tx.objectStore(STORE_NAME);
-      const req = store.get(KEY);
-      req.onsuccess = () => {
-        if (Array.isArray(req.result) && req.result.length > 0) {
-          resolve(req.result as FirestoreFakturDoc[]);
+      const reqDocs = store.get(KEY);
+      const reqMeta = store.get(META_KEY);
+
+      tx.oncomplete = () => {
+        if (Array.isArray(reqDocs.result) && reqDocs.result.length > 0) {
+          const maxUpdated = typeof reqMeta.result === "number" ? reqMeta.result : 0;
+          resolve({ fakturs: reqDocs.result as FirestoreFakturDoc[], maxUpdated });
         } else {
           resolve(null);
         }
       };
-      req.onerror = () => resolve(null);
+      tx.onerror = () => resolve(null);
     });
   } catch {
     return null;
   }
 }
 
-export async function setLocalCachedFakturs(fakturs: FirestoreFakturDoc[]): Promise<void> {
+export async function setLocalCachedFakturs(fakturs: FirestoreFakturDoc[], maxUpdated: number = 0): Promise<void> {
   if (!fakturs || fakturs.length === 0) return;
   try {
     const db = await openCacheDB();
     const tx = db.transaction(STORE_NAME, "readwrite");
     const store = tx.objectStore(STORE_NAME);
     store.put(fakturs, KEY);
+    if (maxUpdated > 0) {
+      store.put(maxUpdated, META_KEY);
+    }
   } catch {
     // Non-blocking fail-safe
   }
