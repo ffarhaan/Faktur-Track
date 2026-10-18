@@ -120,7 +120,9 @@ export async function fetchTiDBDelta(sinceTimestamp: number): Promise<FirestoreF
     if (!res.ok) return null;
     const data = await res.json();
     if (data.success && Array.isArray(data.fakturs)) {
-      return data.fakturs as FirestoreFakturDoc[];
+      const arr = data.fakturs as (FirestoreFakturDoc[] & { maxUpdated?: number });
+      arr.maxUpdated = Number(data.maxUpdated || sinceTimestamp);
+      return arr;
     }
     return null;
   } catch (err) {
@@ -241,15 +243,25 @@ export async function setLocalCachedFakturs(
   }
 }
 
+let cachedPrintTimer: NodeJS.Timeout | null = null;
+let pendingCachedPrintState: CachedPrintState | null = null;
+
 export async function setLocalCachedPrintState(printState: CachedPrintState): Promise<void> {
   if (!printState || !Array.isArray(printState.printedKeys)) return;
-  try {
-    const db = await openCacheDB();
-    const tx = db.transaction(STORE_NAME, "readwrite");
-    const store = tx.objectStore(STORE_NAME);
-    store.put(printState, PRINT_STATE_KEY);
-  } catch {
-    // Non-blocking fail-safe
-  }
+  pendingCachedPrintState = printState;
+
+  if (cachedPrintTimer) clearTimeout(cachedPrintTimer);
+  cachedPrintTimer = setTimeout(async () => {
+    try {
+      const stateToSave = pendingCachedPrintState;
+      if (!stateToSave) return;
+      const db = await openCacheDB();
+      const tx = db.transaction(STORE_NAME, "readwrite");
+      const store = tx.objectStore(STORE_NAME);
+      store.put(stateToSave, PRINT_STATE_KEY);
+    } catch {
+      // Non-blocking fail-safe
+    }
+  }, 300);
 }
 

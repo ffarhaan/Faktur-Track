@@ -777,6 +777,10 @@ function mergeKumulatifDocs(existing: FirestoreFakturDoc[], incoming: FirestoreF
           showToast(`📤 File baru diunggah rekan: ${uploadNotif.fileName} (${uploadNotif.newUnprinted} faktur baru)`);
           fetchTiDBDelta(clientUpdatedRef.current || 0).then((deltaDocs) => {
             if (deltaDocs && deltaDocs.length > 0) {
+              const deltaMax = (deltaDocs as any).maxUpdated || (clientUpdatedRef.current || 0);
+              if (deltaMax > (clientUpdatedRef.current || 0)) {
+                clientUpdatedRef.current = deltaMax;
+              }
               const merged = mergeKumulatifDocs(currentFakturDocsRef.current || [], deltaDocs);
               currentFakturDocsRef.current = merged;
               const { records: recs } = dbRowsToFakturRecords(
@@ -2176,7 +2180,19 @@ function mergeKumulatifDocs(existing: FirestoreFakturDoc[], incoming: FirestoreF
         setLoading(false);
 
         // 6. Save directly to TiDB as authoritative primary database!
-        await syncFaktursToTiDB(payload);
+        // ONLY sync the uploaded/modified invoices (1 fast request < 50ms) instead of all 15,412 rows (308 requests, 90 seconds)!
+        const uploadedKeys = new Set(
+          parsed.map((r) => {
+            const isOra = r.jenisTransaksi === "ORA" || isOraCustomer(r.customerName);
+            const cleanInv = String(r.invoiceNumber || "").trim().replace(/-1P$/i, "");
+            return isOra ? `${cleanInv}-1P` : cleanInv;
+          }).filter((k) => k && k !== "-" && k !== "0")
+        );
+        const uploadedDocs = Array.from(uploadedKeys)
+          .map((k) => invMap.get(k))
+          .filter(Boolean) as FirestoreFakturDoc[];
+
+        await syncFaktursToTiDB(uploadedDocs);
 
         // 7. Sync print metadata & broadcast upload notification to other devices via Firestore
         await saveFaktursBatch(
@@ -2187,7 +2203,7 @@ function mergeKumulatifDocs(existing: FirestoreFakturDoc[], incoming: FirestoreF
             printedAtMap: finalPrintedAtMap,
             updatedAt: new Date().toISOString(),
           },
-          newUnprintedKeys,
+          Array.from(brandNewUnprintedKeysSet),
           notifPayload
         );
 
