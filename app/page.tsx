@@ -544,6 +544,37 @@ export default function Home() {
     [currentUser, showToast]
   );
 
+// Kumulatif Merge Docs adhering 100% to LOCKED_RULES.md (Zero Data Loss & Anti-Downgrade)
+function mergeKumulatifDocs(existing: FirestoreFakturDoc[], incoming: FirestoreFakturDoc[]): FirestoreFakturDoc[] {
+  const map = new Map<string, FirestoreFakturDoc>();
+  for (const d of existing) {
+    if (d?.id) map.set(d.id, d);
+  }
+  for (const d of incoming) {
+    if (!d?.id) continue;
+    if (!map.has(d.id)) {
+      map.set(d.id, d);
+    } else {
+      const prev = map.get(d.id)!;
+      map.set(d.id, {
+        ...prev,
+        ...d,
+        no_sales_order: (d.no_sales_order && d.no_sales_order !== "-") ? d.no_sales_order : prev.no_sales_order,
+        customer_name: (d.customer_name && d.customer_name !== "-") ? d.customer_name : prev.customer_name,
+        status_cetak: Boolean(prev.status_cetak || d.status_cetak),
+        printed_at: prev.status_cetak ? prev.printed_at : (d.printed_at || prev.printed_at),
+        printed_by: prev.status_cetak ? prev.printed_by : (d.printed_by || prev.printed_by),
+        extra: {
+          ...prev.extra,
+          ...d.extra,
+          items: (d.extra?.items && d.extra.items.length > 0) ? d.extra.items : (prev.extra?.items || []),
+        },
+      });
+    }
+  }
+  return Array.from(map.values());
+}
+
   // 1. Initial High-Speed Load from TiDB Cloud (< 400ms)
   useEffect(() => {
     let isMounted = true;
@@ -552,9 +583,10 @@ export default function Home() {
         const tidbDocs = await fetchFaktursFromTiDB();
         if (!isMounted) return;
         if (tidbDocs && tidbDocs.length > 0) {
-          currentFakturDocsRef.current = tidbDocs;
+          const merged = mergeKumulatifDocs(currentFakturDocsRef.current || [], tidbDocs);
+          currentFakturDocsRef.current = merged;
           const { records: recs, printedSet: docPrintedSet, printedAtMap: docPrintedAtMap, printedByMap: docPrintedByMap } = dbRowsToFakturRecords(
-            tidbDocs as unknown as Array<Record<string, unknown>>,
+            merged as unknown as Array<Record<string, unknown>>,
             productOverridesRef.current
           );
           setRecords(recs);
@@ -631,9 +663,10 @@ export default function Home() {
           showToast(`📤 File baru diunggah rekan: ${uploadNotif.fileName} (${uploadNotif.newUnprinted} faktur baru)`);
           fetchFaktursFromTiDB().then((tidbDocs) => {
             if (tidbDocs && tidbDocs.length > 0) {
-              currentFakturDocsRef.current = tidbDocs;
+              const merged = mergeKumulatifDocs(currentFakturDocsRef.current || [], tidbDocs);
+              currentFakturDocsRef.current = merged;
               const { records: recs } = dbRowsToFakturRecords(
-                tidbDocs as unknown as Array<Record<string, unknown>>,
+                merged as unknown as Array<Record<string, unknown>>,
                 productOverridesRef.current
               );
               setRecords(recs);
@@ -647,9 +680,10 @@ export default function Home() {
         }
 
         if (docs.length > 0) {
-          currentFakturDocsRef.current = docs;
+          const merged = mergeKumulatifDocs(currentFakturDocsRef.current || [], docs);
+          currentFakturDocsRef.current = merged;
           const { records: recs, printedSet: docPrintedSet, printedAtMap: docPrintedAtMap, printedByMap: docPrintedByMap } = dbRowsToFakturRecords(
-            docs as unknown as Array<Record<string, unknown>>,
+            merged as unknown as Array<Record<string, unknown>>,
             prodOverrides || productOverridesRef.current
           );
           setRecords(recs);
