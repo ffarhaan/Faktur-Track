@@ -10,49 +10,52 @@
 
 import { FirestoreFakturDoc } from "./types";
 
+export async function syncFaktursToTiDB(fakturs: FirestoreFakturDoc[]): Promise<void> {
+  if (!fakturs || fakturs.length === 0) return;
+  try {
+    const payload = fakturs.map((f) => ({
+      invoice_key: f.id || f.no_faktur,
+      no_faktur: f.no_faktur,
+      no_sales_order: f.no_sales_order || "-",
+      customer_name: f.customer_name || f.extra?.nama_pelanggan || "-",
+      order_date: f.order_date || f.extra?.order_date || "-",
+      transaction_date: f.transaction_date || f.extra?.transaction_date || f.order_date || "-",
+      jenis_transaksi: f.jenis_transaksi || f.extra?.jenis_transaksi || "DOO",
+      kategori: f.kategori || f.extra?.kategori || "3P",
+      kategori_produk: (f.extra?.items && f.extra.items[0]?.kategori_produk) || "FARMA",
+      status_cetak: Boolean(f.status_cetak),
+      printed_at: f.printed_at || null,
+      printed_by: f.printed_by || null,
+      total_harga: Number(f.extra?.total_harga || 0),
+      items: f.extra?.items || [],
+    }));
+
+    const CHUNK_SIZE = 50;
+    for (let i = 0; i < payload.length; i += CHUNK_SIZE) {
+      const slice = payload.slice(i, i + CHUNK_SIZE);
+      await fetch("/api/tidb", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "upsert_batch",
+          fakturs: slice,
+        }),
+      }).catch((err) => {
+        console.warn("[TiDB Sync] Upsert slice failed:", err);
+      });
+    }
+  } catch (err) {
+    console.warn("[TiDB Sync] Error syncing to TiDB:", err);
+  }
+}
+
 export function syncFaktursToTiDBBackground(fakturs: FirestoreFakturDoc[]) {
   if (!fakturs || fakturs.length === 0) return;
 
   // Run in next tick / microtask to ensure zero interference with current call stack
   setTimeout(async () => {
-    try {
-      const payload = fakturs.map((f) => ({
-        invoice_key: f.id || f.no_faktur,
-        no_faktur: f.no_faktur,
-        no_sales_order: f.no_sales_order || "-",
-        customer_name: f.customer_name || f.extra?.nama_pelanggan || "-",
-        order_date: f.order_date || f.extra?.order_date || "-",
-        transaction_date: f.transaction_date || f.extra?.transaction_date || f.order_date || "-",
-        jenis_transaksi: f.jenis_transaksi || f.extra?.jenis_transaksi || "DOO",
-        kategori: f.kategori || f.extra?.kategori || "3P",
-        kategori_produk: (f.extra?.items && f.extra.items[0]?.kategori_produk) || "FARMA",
-        status_cetak: Boolean(f.status_cetak),
-        printed_at: f.printed_at || null,
-        printed_by: f.printed_by || null,
-        total_harga: Number(f.extra?.total_harga || 0),
-        items: f.extra?.items || [],
-      }));
-
-      // Send to internal API route in slices of 50 to strictly stay within Vercel body size limits
-      const CHUNK_SIZE = 50;
-      for (let i = 0; i < payload.length; i += CHUNK_SIZE) {
-        const slice = payload.slice(i, i + CHUNK_SIZE);
-        await fetch("/api/tidb", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            action: "upsert_batch",
-            fakturs: slice,
-          }),
-        }).catch((err) => {
-          // Safe silent catch: never bubble up to operational UI
-          console.warn("[TiDB Sync] Background upsert slice failed safely (non-blocking):", err);
-        });
-      }
-    } catch (err) {
-      console.warn("[TiDB Sync] Error preparing background payload:", err);
-    }
-  }, 100);
+    await syncFaktursToTiDB(fakturs);
+  }, 50);
 }
 
 export function syncPrintStatusToTiDBBackground(

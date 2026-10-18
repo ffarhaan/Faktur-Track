@@ -27,7 +27,7 @@ import {
   subscribeToOnlinePresence,
   isStalePrintTimestamp,
 } from "@/lib/firestoreService";
-import { syncFaktursToTiDBBackground, syncPrintStatusToTiDBBackground, fetchFaktursFromTiDB } from "@/lib/tidbService";
+import { syncFaktursToTiDB, syncFaktursToTiDBBackground, syncPrintStatusToTiDBBackground, fetchFaktursFromTiDB } from "@/lib/tidbService";
 import MasterApotekModal from "@/components/MasterApotekModal";
 import MasterProductModal from "@/components/MasterProductModal";
 import LoginModal, { AppUser } from "@/components/LoginModal";
@@ -718,15 +718,6 @@ function mergeKumulatifDocs(existing: FirestoreFakturDoc[], incoming: FirestoreF
             printedByMapRef.current = next;
             return next;
           });
-        } else if (reason === "chunks") {
-          currentFakturDocsRef.current = [];
-          setRecords([]);
-          printedInvoicesRef.current = new Set();
-          printedAtMapRef.current = {};
-          printedByMapRef.current = {};
-          setPrintedInvoices(new Set());
-          setPrintedAtMap({});
-          setPrintedByMap({});
         }
         setLoading(false);
       },
@@ -743,7 +734,8 @@ function mergeKumulatifDocs(existing: FirestoreFakturDoc[], incoming: FirestoreF
   const handleManualRefresh = useCallback(async () => {
     setLoading(true);
     try {
-      const { docs, progression: prog, printState, categoryOverrides: overrides, productCategoryOverrides: prodOverrides } = await getExistingFakturs();
+      const tidbDocs = await fetchFaktursFromTiDB();
+      const { progression: prog, printState, categoryOverrides: overrides, productCategoryOverrides: prodOverrides } = await getExistingFakturs();
       if (prog) setInvoiceProgression(prog);
       if (overrides) {
         setCategoryOverrides(overrides);
@@ -753,32 +745,36 @@ function mergeKumulatifDocs(existing: FirestoreFakturDoc[], incoming: FirestoreF
         setProductOverrides(prodOverrides);
         productOverridesRef.current = prodOverrides;
       }
-      const { records: recs, printedSet: docPrintedSet, printedAtMap: docPrintedAtMap, printedByMap: docPrintedByMap } = dbRowsToFakturRecords(
-        docs as unknown as Array<Record<string, unknown>>,
-        prodOverrides || productOverridesRef.current
-      );
-      const unifiedPrintedKeys = new Set([
-        ...(printState?.printedKeys || []),
-        ...Array.from(docPrintedSet),
-      ]);
-      setPrintedInvoices(unifiedPrintedKeys);
-      setPrintedAtMap({
-        ...(printState?.printedAtMap || {}),
-        ...docPrintedAtMap,
-      });
-      setPrintedByMap({
-        ...(printState?.printedByMap || {}),
-        ...docPrintedByMap,
-      });
-      setRecords(recs);
-      showToast("✓ Data berhasil diperbarui.");
+      if (tidbDocs && tidbDocs.length > 0) {
+        const merged = mergeKumulatifDocs(currentFakturDocsRef.current || [], tidbDocs);
+        currentFakturDocsRef.current = merged;
+        const { records: recs, printedSet: docPrintedSet, printedAtMap: docPrintedAtMap, printedByMap: docPrintedByMap } = dbRowsToFakturRecords(
+          merged as unknown as Array<Record<string, unknown>>,
+          prodOverrides || productOverridesRef.current
+        );
+        const unifiedPrintedKeys = new Set([
+          ...(printState?.printedKeys || []),
+          ...Array.from(docPrintedSet),
+        ]);
+        setPrintedInvoices(unifiedPrintedKeys);
+        setPrintedAtMap({
+          ...(printState?.printedAtMap || {}),
+          ...docPrintedAtMap,
+        });
+        setPrintedByMap({
+          ...(printState?.printedByMap || {}),
+          ...docPrintedByMap,
+        });
+        setRecords(recs);
+      }
+      showToast("✓ Data berhasil diperbarui langsung dari TiDB.");
     } catch (err) {
       console.error("Refresh error:", err);
       setError("Gagal memperbarui data.");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [showToast]);
 
   // Toggle Print Status (Immediate Firestore write & real-time sync)
   const togglePrint = useCallback(
@@ -2026,7 +2022,10 @@ function mergeKumulatifDocs(existing: FirestoreFakturDoc[], incoming: FirestoreF
         setPage(0);
         setLoading(false);
 
-        // 6. Save to Firestore and AWAIT completion so consecutive uploads cannot collide or overwrite with stale data
+        // 6. Save directly to TiDB as authoritative primary database!
+        await syncFaktursToTiDB(payload);
+
+        // 7. Sync print metadata & broadcast upload notification to other devices via Firestore
         await saveFaktursBatch(
           payload,
           progObj,
@@ -2038,9 +2037,6 @@ function mergeKumulatifDocs(existing: FirestoreFakturDoc[], incoming: FirestoreF
           newUnprintedKeys,
           notifPayload
         );
-
-        // Background fail-safe sync to TiDB archive (0ms impact on operational UI)
-        syncFaktursToTiDBBackground(payload);
 
         setTimeout(() => {
           isUploadingRef.current = false;

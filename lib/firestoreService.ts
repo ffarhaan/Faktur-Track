@@ -462,7 +462,7 @@ export function subscribeToFakturs(
         clearTimeout(initialEmitTimer);
         initialEmitTimer = null;
       }
-      emitData("chunks");
+      emitData("meta");
     }
   };
 
@@ -470,7 +470,7 @@ export function subscribeToFakturs(
   const debouncedEmitChunks = () => {
     if (chunkEmitTimer) clearTimeout(chunkEmitTimer);
     chunkEmitTimer = setTimeout(() => {
-      emitData("chunks");
+      emitData("meta");
     }, 30);
   };
 
@@ -485,49 +485,11 @@ export function subscribeToFakturs(
     }, 80);
   };
 
-  const unsubChunks = onSnapshot(
-    collection(db, CHUNKS_COLLECTION),
-    (snap) => {
-      // Efficiently update only changed / added / removed chunks in memory map
-      snap.docChanges().forEach((change) => {
-        if (change.type === "removed") {
-          currentChunksMap.delete(change.doc.id);
-          globalChunksMap.delete(change.doc.id);
-        } else {
-          const dData = change.doc.data();
-          if (Array.isArray(dData.items)) {
-            currentChunksMap.set(change.doc.id, dData.items as FirestoreFakturDoc[]);
-            globalChunksMap.set(change.doc.id, dData.items as FirestoreFakturDoc[]);
-          }
-        }
-      });
-
-      hasReceivedChunks = true;
-      if (!hasEmittedInitialPayload) {
-        if (hasReceivedPartitions || hasReceivedLegacyPrint || currentPrintState.printedKeys.length > 0) {
-          tryInitialEmit();
-        } else {
-          if (!initialEmitTimer) {
-            initialEmitTimer = setTimeout(() => {
-              if (!hasEmittedInitialPayload) emitData("chunks");
-            }, 100);
-          }
-        }
-      } else {
-        // If snapshot change is from our own background print status persistence,
-        // in-memory data and print partitions are already 100% updated.
-        // Skip re-emitting heavy chunks to protect UI from freeze/lag/crash!
-        if (internalChunkWriteInProgress) {
-          return;
-        }
-        debouncedEmitChunks();
-      }
-    },
-    (err) => {
-      console.warn("Chunks realtime stream error:", err);
-      onError?.(err);
-    }
-  );
+  // TiDB Cloud Serverless is now 100% authoritative for all faktur records.
+  // We decouple the heavy faktur_chunks listener from Firebase to eliminate Firestore read quotas
+  // and guarantee 100% immunity against chunk deletion.
+  hasReceivedChunks = true;
+  const unsubChunks = () => {};
 
   // Listen to legacy print state
   const unsubLegacyPrint = onSnapshot(
@@ -655,20 +617,14 @@ export async function getExistingFakturs(): Promise<{
   categoryOverrides: Record<string, "1P" | "2P" | "3P">;
   productCategoryOverrides: Record<string, string>;
 }> {
-  const [chunksSnap, metaSnap, legacyPrintSnap, partitionsSnap, overrideSnap, prodOverrideSnap] = await Promise.all([
-    getDocsFromServer(collection(db, CHUNKS_COLLECTION)).catch(() => getDocs(collection(db, CHUNKS_COLLECTION))),
+  const [, metaSnap, legacyPrintSnap, partitionsSnap, overrideSnap, prodOverrideSnap] = await Promise.all([
+    Promise.resolve({ docs: [] }),
     getDocFromServer(doc(db, APP_DATA_COLLECTION, METADATA_DOC)).catch(() => getDoc(doc(db, APP_DATA_COLLECTION, METADATA_DOC))),
     getDocFromServer(doc(db, APP_DATA_COLLECTION, PRINT_STATE_DOC)).catch(() => getDoc(doc(db, APP_DATA_COLLECTION, PRINT_STATE_DOC))),
     getDocsFromServer(collection(db, PRINT_PARTITIONS_COLLECTION)).catch(() => getDocs(collection(db, PRINT_PARTITIONS_COLLECTION))),
     getDocFromServer(doc(db, APP_DATA_COLLECTION, CATEGORY_OVERRIDES_DOC)).catch(() => getDoc(doc(db, APP_DATA_COLLECTION, CATEGORY_OVERRIDES_DOC))),
     getDocFromServer(doc(db, APP_DATA_COLLECTION, PRODUCT_CATEGORY_OVERRIDES_DOC)).catch(() => getDoc(doc(db, APP_DATA_COLLECTION, PRODUCT_CATEGORY_OVERRIDES_DOC))),
   ]);
-
-  const sortedDocs = chunksSnap.docs.sort((a, b) => {
-    const na = parseInt(a.id.replace(/\D/g, ""), 10) || 0;
-    const nb = parseInt(b.id.replace(/\D/g, ""), 10) || 0;
-    return na - nb;
-  });
 
   const categoryOverrides = (overrideSnap && overrideSnap.exists()
     ? (overrideSnap.data() as Record<string, "1P" | "2P" | "3P">)
@@ -679,12 +635,6 @@ export async function getExistingFakturs(): Promise<{
     : {}) || {};
 
   const docs: FirestoreFakturDoc[] = [];
-  sortedDocs.forEach((d) => {
-    const data = d.data();
-    if (Array.isArray(data.items)) {
-      docs.push(...(data.items as FirestoreFakturDoc[]));
-    }
-  });
 
   let progression: InvoiceProgression | null = null;
   if (metaSnap.exists()) {
@@ -920,27 +870,6 @@ export async function saveFaktursBatch(
     }
   });
 
-  // Prepare chunk writes
-  const chunkWritePromises = modifiedChunks.map((entry) => {
-    const chunkRef = doc(db, CHUNKS_COLLECTION, entry.chunkId);
-    return setDoc(chunkRef, {
-      chunkIndex: entry.idx,
-      count: entry.chunk.length,
-      items: entry.chunk,
-      updatedAt: nowIso,
-    }).then(() => {
-      globalChunksMap.set(entry.chunkId, entry.chunk);
-    });
-  });
-
-  // Remove orphan chunks
-  const newChunkIdSet = new Set(chunkIds);
-  const orphanDocs = previousChunkIds.filter((id) => !newChunkIdSet.has(id));
-  const orphanDeletePromises = orphanDocs.map((id) => {
-    globalChunksMap.delete(id);
-    return deleteDoc(doc(db, CHUNKS_COLLECTION, id)).catch(() => null);
-  });
-
   // Metadata write
   const metaDocRef = doc(db, APP_DATA_COLLECTION, METADATA_DOC);
   const metaWritePromise = setDoc(
@@ -968,10 +897,8 @@ export async function saveFaktursBatch(
     Array.from(newUnprintedSet)
   );
 
-  // Execute ALL writes in parallel for atomic, instantaneous sync across devices (< 500ms total)
+  // Execute writes in parallel for atomic, instantaneous sync across devices (< 200ms total)
   await Promise.all([
-    ...chunkWritePromises,
-    ...orphanDeletePromises,
     metaWritePromise,
     printStatePromise,
   ]);
