@@ -134,6 +134,7 @@ export interface UploadNotification {
   newUnprinted: number;
   time: string;
   uploaderId?: string;
+  uploadedAtMs?: number;
 }
 
 export interface ActiveUserPresence {

@@ -93,7 +93,8 @@ function formatPrintTime(dStr?: string | null): string {
 
 function dbRowsToFakturRecords(
   rows: Array<Record<string, unknown>>,
-  productOverrides?: Record<string, string>
+  productOverrides?: Record<string, string>,
+  existingPrintedSet?: Set<string>
 ): {
   records: FakturRecord[];
   printedSet: Set<string>;
@@ -120,7 +121,11 @@ function dbRowsToFakturRecords(
     const pAt = (r.printed_at as string) || null;
     const pBy = (r.printed_by as string) || (extra.printed_by as string) || null;
 
-    const isPrinted = Boolean(r.status_cetak);
+    // Strict Anti-Reappearance Guarantee: Respect both DB flag and live print set (LOCKED)
+    const isPrinted = Boolean(
+      r.status_cetak ||
+      (existingPrintedSet && existingPrintedSet.has(invKey))
+    );
 
     if (isPrinted) {
       printedSet.add(invKey);
@@ -659,7 +664,8 @@ function mergeKumulatifDocs(existing: FirestoreFakturDoc[], incoming: FirestoreF
             clientUpdatedRef.current = newMaxUpdated;
             const { records: recs, printedSet: docPrintedSet, printedAtMap: docPrintedAtMap, printedByMap: docPrintedByMap } = dbRowsToFakturRecords(
               merged as unknown as Array<Record<string, unknown>>,
-              productOverridesRef.current
+              productOverridesRef.current,
+              printedInvoicesRef.current
             );
             setRecords(recs);
             setPrintedInvoices((prev) => {
@@ -696,7 +702,8 @@ function mergeKumulatifDocs(existing: FirestoreFakturDoc[], incoming: FirestoreF
           clientUpdatedRef.current = result.maxUpdated;
           const { records: recs, printedSet: docPrintedSet, printedAtMap: docPrintedAtMap, printedByMap: docPrintedByMap } = dbRowsToFakturRecords(
             result.fakturs as unknown as Array<Record<string, unknown>>,
-            productOverridesRef.current
+            productOverridesRef.current,
+            printedInvoicesRef.current
           );
           setRecords(recs);
           setPrintedInvoices(docPrintedSet);
@@ -774,29 +781,35 @@ function mergeKumulatifDocs(existing: FirestoreFakturDoc[], incoming: FirestoreF
 
         // Real-time Upload Broadcast to all other devices!
         if (uploadNotif && uploadNotif.uploaderId !== deviceIdRef.current) {
-          setUploadNotification(uploadNotif);
-          showToast(`📤 File baru diunggah rekan: ${uploadNotif.fileName} (${uploadNotif.newUnprinted} faktur baru)`);
+          const isFresh = uploadNotif.uploadedAtMs ? (Date.now() - uploadNotif.uploadedAtMs < 60000) : true;
+          if (isFresh) {
+            setUploadNotification(uploadNotif);
+            showToast(`📤 File baru diunggah rekan: ${uploadNotif.fileName} (${uploadNotif.newUnprinted} faktur baru)`);
+          }
           if (docs.length === 0) {
-            fetchTiDBDelta(clientUpdatedRef.current || 0).then((deltaDocs) => {
-              if (deltaDocs && deltaDocs.length > 0) {
-                const deltaMax = (deltaDocs as any).maxUpdated || (clientUpdatedRef.current || 0);
-                if (deltaMax > (clientUpdatedRef.current || 0)) {
-                  clientUpdatedRef.current = deltaMax;
+            setTimeout(() => {
+              fetchTiDBDelta(clientUpdatedRef.current || 0).then((deltaDocs) => {
+                if (deltaDocs && deltaDocs.length > 0) {
+                  const deltaMax = (deltaDocs as any).maxUpdated || (clientUpdatedRef.current || 0);
+                  if (deltaMax > (clientUpdatedRef.current || 0)) {
+                    clientUpdatedRef.current = deltaMax;
+                  }
+                  const merged = mergeKumulatifDocs(currentFakturDocsRef.current || [], deltaDocs);
+                  currentFakturDocsRef.current = merged;
+                  const { records: recs } = dbRowsToFakturRecords(
+                    merged as unknown as Array<Record<string, unknown>>,
+                    productOverridesRef.current,
+                    printedInvoicesRef.current
+                  );
+                  setRecords(recs);
+                  setLocalCachedFakturs(merged, clientUpdatedRef.current || 0, {
+                    printedKeys: Array.from(printedInvoicesRef.current || []),
+                    printedAtMap: printedAtMapRef.current || {},
+                    printedByMap: printedByMapRef.current || {},
+                  });
                 }
-                const merged = mergeKumulatifDocs(currentFakturDocsRef.current || [], deltaDocs);
-                currentFakturDocsRef.current = merged;
-                const { records: recs } = dbRowsToFakturRecords(
-                  merged as unknown as Array<Record<string, unknown>>,
-                  productOverridesRef.current
-                );
-                setRecords(recs);
-                setLocalCachedFakturs(merged, clientUpdatedRef.current || 0, {
-                  printedKeys: Array.from(printedInvoicesRef.current || []),
-                  printedAtMap: printedAtMapRef.current || {},
-                  printedByMap: printedByMapRef.current || {},
-                });
-              }
-            });
+              });
+            }, 1500);
           }
         }
 
@@ -810,7 +823,8 @@ function mergeKumulatifDocs(existing: FirestoreFakturDoc[], incoming: FirestoreF
           currentFakturDocsRef.current = merged;
           const { records: recs, printedSet: docPrintedSet, printedAtMap: docPrintedAtMap, printedByMap: docPrintedByMap } = dbRowsToFakturRecords(
             merged as unknown as Array<Record<string, unknown>>,
-            prodOverrides || productOverridesRef.current
+            prodOverrides || productOverridesRef.current,
+            printedInvoicesRef.current
           );
           setRecords(recs);
 
@@ -891,7 +905,8 @@ function mergeKumulatifDocs(existing: FirestoreFakturDoc[], incoming: FirestoreF
         clientUpdatedRef.current = newMax;
         const { records: recs, printedSet: docPrintedSet, printedAtMap: docPrintedAtMap, printedByMap: docPrintedByMap } = dbRowsToFakturRecords(
           merged as unknown as Array<Record<string, unknown>>,
-          prodOverrides || productOverridesRef.current
+          prodOverrides || productOverridesRef.current,
+          printedInvoicesRef.current
         );
         const unifiedPrintedKeys = new Set([
           ...(printState?.printedKeys || []),
@@ -2148,7 +2163,9 @@ function mergeKumulatifDocs(existing: FirestoreFakturDoc[], incoming: FirestoreF
 
         // 5. Update Local State Instantly (< 1 second response)
         const { records: localRecs } = dbRowsToFakturRecords(
-          payload as unknown as Array<Record<string, unknown>>
+          payload as unknown as Array<Record<string, unknown>>,
+          productOverridesRef.current,
+          mergedPrintedSet
         );
 
         const finalPrintedSet = new Set<string>(mergedPrintedSet);

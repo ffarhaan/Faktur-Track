@@ -200,7 +200,7 @@ export async function fetchAllLivePrintKeys(): Promise<{
   const gatheredMap: Record<string, string> = {};
   const gatheredByMap: Record<string, string> = {};
 
-  // 1. Include current memory caches
+  // 1. If memory cache already has partitions (e.g. from real-time listener), return instantly in 0ms!
   if (globalPartitionMap.size > 0) {
     globalPartitionMap.forEach((p) => {
       const pMap = p.printedAtMap || {};
@@ -209,30 +209,16 @@ export async function fetchAllLivePrintKeys(): Promise<{
       Object.assign(gatheredMap, pMap);
       Object.assign(gatheredByMap, pBy);
     });
+    return {
+      printedKeys: gatheredKeys,
+      printedAtMap: gatheredMap,
+      printedByMap: gatheredByMap,
+    };
   }
-  if (globalLegacyPrintState) {
-    const lMap = globalLegacyPrintState.printedAtMap || {};
-    const lBy = globalLegacyPrintState.printedByMap || {};
-    (globalLegacyPrintState.printedKeys || []).forEach((k) => registerPrintKeyVariants(k, lMap[k], gatheredKeys, gatheredMap));
-    Object.assign(gatheredMap, lMap);
-    Object.assign(gatheredByMap, lBy);
-  }
-  globalChunksMap.forEach((items) => {
-    items.forEach((item) => {
-      const k = item.id || item.no_faktur;
-      if (k && item.status_cetak) {
-        registerPrintKeyVariants(k, item.printed_at || undefined, gatheredKeys, gatheredMap);
-        if (item.printed_by && !gatheredByMap[k]) gatheredByMap[k] = item.printed_by;
-      }
-    });
-  });
 
-  // 2. Fetch all partition documents from Firestore
+  // 2. Fetch all partition documents from Firestore (< 25KB each, fast!)
   try {
-    const [partitionsSnap, legacySnap] = await Promise.all([
-      getDocs(collection(db, PRINT_PARTITIONS_COLLECTION)).catch(() => null),
-      getDoc(doc(db, APP_DATA_COLLECTION, PRINT_STATE_DOC)).catch(() => null),
-    ]);
+    const partitionsSnap = await getDocs(collection(db, PRINT_PARTITIONS_COLLECTION)).catch(() => null);
 
     if (partitionsSnap && !partitionsSnap.empty) {
       partitionsSnap.forEach((pDoc) => {
@@ -245,16 +231,6 @@ export async function fetchAllLivePrintKeys(): Promise<{
         Object.assign(gatheredByMap, pBy);
         globalPartitionMap.set(pDoc.id, { printedKeys: pKeys, printedAtMap: pMap, printedByMap: pBy });
       });
-    }
-
-    if (legacySnap && legacySnap.exists()) {
-      const legData = legacySnap.data() as PrintState;
-      const legMap = legData.printedAtMap || {};
-      const legBy = legData.printedByMap || {};
-      (legData.printedKeys || []).forEach((k) => registerPrintKeyVariants(k, legMap[k], gatheredKeys, gatheredMap));
-      Object.assign(gatheredMap, legMap);
-      Object.assign(gatheredByMap, legBy);
-      globalLegacyPrintState = legData;
     }
   } catch (err) {
     console.warn("fetchAllLivePrintKeys Firestore error:", err);
@@ -551,6 +527,7 @@ export function subscribeToFakturs(
         const data = snap.data();
         if (Array.isArray(data.docs) && data.docs.length > 0) {
           const syncDocs = data.docs as FirestoreFakturDoc[];
+          const uploadedAtMs = data.uploadedAt ? new Date(data.uploadedAt).getTime() : Date.now();
           const syncNotif: UploadNotification = {
             fileName: data.fileName || "File Upload",
             uploaderId: data.uploaderId || "",
@@ -558,6 +535,7 @@ export function subscribeToFakturs(
             totalItems: data.totalItems || syncDocs.length,
             totalInvoices: data.totalInvoices || syncDocs.length,
             time: data.uploadedAt ? new Date(data.uploadedAt).toLocaleTimeString("id-ID") : new Date().toLocaleTimeString("id-ID"),
+            uploadedAtMs,
           };
           const nextProg = (data.progression as InvoiceProgression) || currentProgression;
           onData(syncDocs, nextProg, currentPrintState, currentCategoryOverrides, syncNotif, "chunks", currentProductCategoryOverrides);
@@ -593,8 +571,14 @@ export async function broadcastRecentUpload(
 ): Promise<void> {
   try {
     const syncDocRef = doc(db, APP_DATA_COLLECTION, "recent_sync");
-    // Limit to 500 docs max to stay comfortably under 1MB Firestore doc limit
-    const docsToBroadcast = uploadedDocs.slice(0, 500);
+    // Ensure size stays comfortably under 800 KB limit of Firestore
+    let docsToBroadcast = uploadedDocs;
+    if (JSON.stringify(docsToBroadcast).length > 750000) {
+      docsToBroadcast = uploadedDocs.slice(0, 300);
+      if (JSON.stringify(docsToBroadcast).length > 750000) {
+        docsToBroadcast = uploadedDocs.slice(0, 150);
+      }
+    }
     await setDoc(syncDocRef, {
       syncId: `sync_${Date.now()}_${uploaderId}`,
       uploaderId,
@@ -839,38 +823,7 @@ export async function saveFaktursBatch(
     }
   }
 
-  const chunks = createSafeChunks(fakturs);
   const nowIso = new Date().toISOString();
-  const chunkIds: string[] = chunks.map((_, idx) => `chunk_${idx}`);
-
-  // Fetch current chunk signatures from memory cache (0ms) instead of reading 48 docs over network (2000ms)!
-  const existingChunkJsonMap = new Map<string, string>();
-  if (globalChunksMap.size > 0) {
-    globalChunksMap.forEach((items, chunkId) => {
-      existingChunkJsonMap.set(chunkId, JSON.stringify(items));
-    });
-  } else {
-    const existingChunkDocs = await getDocs(collection(db, CHUNKS_COLLECTION)).catch(() => null);
-    if (existingChunkDocs && !existingChunkDocs.empty) {
-      existingChunkDocs.forEach((d) => {
-        const data = d.data();
-        if (Array.isArray(data.items)) {
-          existingChunkJsonMap.set(d.id, JSON.stringify(data.items));
-        }
-      });
-    }
-  }
-
-  // Filter only chunks that are new or genuinely modified
-  const modifiedChunks: Array<{ idx: number; chunkId: string; chunk: FirestoreFakturDoc[] }> = [];
-  chunks.forEach((chunk, idx) => {
-    const chunkId = `chunk_${idx}`;
-    const newJson = JSON.stringify(chunk);
-    const oldJson = existingChunkJsonMap.get(chunkId);
-    if (!oldJson || oldJson !== newJson) {
-      modifiedChunks.push({ idx, chunkId, chunk });
-    }
-  });
 
   // Metadata write
   const metaDocRef = doc(db, APP_DATA_COLLECTION, METADATA_DOC);
@@ -879,15 +832,15 @@ export async function saveFaktursBatch(
     {
       invoiceProgression: progression || null,
       totalInvoices: fakturs.length,
-      totalChunks: chunks.length,
-      chunkIds,
+      totalChunks: previousChunkIds.length,
+      chunkIds: previousChunkIds,
       updatedAt: nowIso,
       ...(uploadNotification ? { lastUploadNotification: uploadNotification } : {}),
     },
     { merge: true }
   ).then(() => {
     globalMetadata = {
-      chunkIds,
+      chunkIds: previousChunkIds,
       invoiceProgression: progression || undefined,
     };
   });
@@ -937,15 +890,11 @@ export async function updatePrintState(
     const mergedKeysSet = new Set<string>([...existingKeys, ...data.keys]);
     const mergedMap = { ...(existing ? existing.printedAtMap : {}), ...data.map };
 
-    // Explicitly unprint keys if specified
+    // Explicitly unprint keys if specified (Strict DOO vs ORA Key Isolation - LOCKED)
     if (unprintedKeys && unprintedKeys.length > 0) {
       unprintedKeys.forEach((k) => {
         mergedKeysSet.delete(k);
-        mergedKeysSet.delete(k.replace(/-1P$/i, ""));
-        mergedKeysSet.delete(`${k.replace(/-1P$/i, "")}-1P`);
         delete mergedMap[k];
-        delete mergedMap[k.replace(/-1P$/i, "")];
-        delete mergedMap[`${k.replace(/-1P$/i, "")}-1P`];
       });
     }
 
