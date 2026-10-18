@@ -33,18 +33,22 @@ export function syncFaktursToTiDBBackground(fakturs: FirestoreFakturDoc[]) {
         items: f.extra?.items || [],
       }));
 
-      // Send to internal API route
-      await fetch("/api/tidb", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "upsert_batch",
-          fakturs: payload,
-        }),
-      }).catch((err) => {
-        // Safe silent catch: never bubble up to operational UI
-        console.warn("[TiDB Sync] Background upsert failed safely (non-blocking):", err);
-      });
+      // Send to internal API route in slices of 50 to strictly stay within Vercel body size limits
+      const CHUNK_SIZE = 50;
+      for (let i = 0; i < payload.length; i += CHUNK_SIZE) {
+        const slice = payload.slice(i, i + CHUNK_SIZE);
+        await fetch("/api/tidb", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "upsert_batch",
+            fakturs: slice,
+          }),
+        }).catch((err) => {
+          // Safe silent catch: never bubble up to operational UI
+          console.warn("[TiDB Sync] Background upsert slice failed safely (non-blocking):", err);
+        });
+      }
     } catch (err) {
       console.warn("[TiDB Sync] Error preparing background payload:", err);
     }
