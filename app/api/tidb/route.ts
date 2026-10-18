@@ -57,15 +57,23 @@ export async function GET(req: Request) {
     if (action === "delta") {
       const sinceTimestamp = Number(searchParams.get("since") || 0);
       const deltaRows = (await conn.execute(
-        `SELECT 
-          invoice_key, no_faktur, no_sales_order, customer_name,
-          order_date, transaction_date, jenis_transaksi, kategori,
-          kategori_produk, status_cetak, printed_at, printed_by,
-          total_harga, items_json, UNIX_TIMESTAMP(updated_at) as row_updated
-        FROM fakturs_archive 
-        WHERE UNIX_TIMESTAMP(updated_at) > ?
-        ORDER BY updated_at ASC LIMIT 1000;`,
-        [sinceTimestamp]
+        sinceTimestamp > 0
+          ? `SELECT 
+              invoice_key, no_faktur, no_sales_order, customer_name,
+              order_date, transaction_date, jenis_transaksi, kategori,
+              kategori_produk, status_cetak, printed_at, printed_by,
+              total_harga, items_json, UNIX_TIMESTAMP(updated_at) as row_updated
+            FROM fakturs_archive 
+            WHERE UNIX_TIMESTAMP(updated_at) > ?
+            ORDER BY updated_at DESC LIMIT 1000;`
+          : `SELECT 
+              invoice_key, no_faktur, no_sales_order, customer_name,
+              order_date, transaction_date, jenis_transaksi, kategori,
+              kategori_produk, status_cetak, printed_at, printed_by,
+              total_harga, items_json, UNIX_TIMESTAMP(updated_at) as row_updated
+            FROM fakturs_archive 
+            ORDER BY updated_at DESC LIMIT 500;`,
+        sinceTimestamp > 0 ? [sinceTimestamp] : []
       )) as Array<{
         invoice_key: string;
         no_faktur: string;
@@ -123,12 +131,21 @@ export async function GET(req: Request) {
         };
       });
 
-      return Response.json({
-        success: true,
-        count: docs.length,
-        fakturs: docs,
-        maxUpdated,
-      });
+      return Response.json(
+        {
+          success: true,
+          count: docs.length,
+          fakturs: docs,
+          maxUpdated,
+        },
+        {
+          headers: {
+            "Cache-Control": "no-store, no-cache, must-revalidate",
+            "CDN-Cache-Control": "no-store",
+            "Vercel-CDN-Cache-Control": "no-store",
+          },
+        }
+      );
     }
 
     // Default: fetch all fakturs

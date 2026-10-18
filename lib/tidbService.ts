@@ -114,8 +114,10 @@ export async function checkTiDBUpdates(
 
 export async function fetchTiDBDelta(sinceTimestamp: number): Promise<FirestoreFakturDoc[] | null> {
   try {
-    const res = await fetch(`/api/tidb?action=delta&since=${sinceTimestamp}`, {
+    const res = await fetch(`/api/tidb?action=delta&since=${sinceTimestamp}&_t=${Date.now()}`, {
       method: "GET",
+      cache: "no-store",
+      headers: { "Cache-Control": "no-cache" },
     });
     if (!res.ok) return null;
     const data = await res.json();

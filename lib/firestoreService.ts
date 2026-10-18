@@ -544,17 +544,69 @@ export function subscribeToFakturs(
     (err) => console.warn("Metadata sync warning:", err)
   );
 
+  const unsubRecentSync = onSnapshot(
+    doc(db, APP_DATA_COLLECTION, "recent_sync"),
+    (snap) => {
+      if (snap.exists()) {
+        const data = snap.data();
+        if (Array.isArray(data.docs) && data.docs.length > 0) {
+          const syncDocs = data.docs as FirestoreFakturDoc[];
+          const syncNotif: UploadNotification = {
+            fileName: data.fileName || "File Upload",
+            uploaderId: data.uploaderId || "",
+            newUnprinted: data.newUnprintedCount || syncDocs.length,
+            totalItems: data.totalItems || syncDocs.length,
+            totalInvoices: data.totalInvoices || syncDocs.length,
+            time: data.uploadedAt ? new Date(data.uploadedAt).toLocaleTimeString("id-ID") : new Date().toLocaleTimeString("id-ID"),
+          };
+          const nextProg = (data.progression as InvoiceProgression) || currentProgression;
+          onData(syncDocs, nextProg, currentPrintState, currentCategoryOverrides, syncNotif, "chunks", currentProductCategoryOverrides);
+        }
+      }
+    },
+    (err) => console.warn("Recent sync listener warning:", err)
+  );
+
   return () => {
     if (initialEmitTimer) clearTimeout(initialEmitTimer);
     if (chunkEmitTimer) clearTimeout(chunkEmitTimer);
     if (printEmitTimer) clearTimeout(printEmitTimer);
     unsubChunks();
     unsubMeta();
+    unsubRecentSync();
     unsubLegacyPrint();
     unsubPartitions();
     unsubOverrides();
     unsubProductOverrides();
   };
+}
+
+/**
+ * Broadcast freshly uploaded invoices to all peer devices in real-time (< 30ms) via Firestore
+ */
+export async function broadcastRecentUpload(
+  uploadedDocs: FirestoreFakturDoc[],
+  progression: InvoiceProgression | null,
+  fileName: string,
+  uploaderId: string,
+  newUnprintedCount: number
+): Promise<void> {
+  try {
+    const syncDocRef = doc(db, APP_DATA_COLLECTION, "recent_sync");
+    // Limit to 500 docs max to stay comfortably under 1MB Firestore doc limit
+    const docsToBroadcast = uploadedDocs.slice(0, 500);
+    await setDoc(syncDocRef, {
+      syncId: `sync_${Date.now()}_${uploaderId}`,
+      uploaderId,
+      uploadedAt: new Date().toISOString(),
+      fileName,
+      newUnprintedCount,
+      progression,
+      docs: docsToBroadcast,
+    });
+  } catch (err) {
+    console.warn("Broadcast recent upload warning:", err);
+  }
 }
 
 /**

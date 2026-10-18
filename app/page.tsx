@@ -26,6 +26,7 @@ import {
   removeUserPresence,
   subscribeToOnlinePresence,
   isStalePrintTimestamp,
+  broadcastRecentUpload,
 } from "@/lib/firestoreService";
 import { syncFaktursToTiDB, syncFaktursToTiDBBackground, syncPrintStatusToTiDBBackground, fetchFaktursFromTiDB, getLocalCachedFakturs, setLocalCachedFakturs, setLocalCachedPrintState, checkTiDBUpdates, fetchTiDBDelta } from "@/lib/tidbService";
 import MasterApotekModal from "@/components/MasterApotekModal";
@@ -775,26 +776,28 @@ function mergeKumulatifDocs(existing: FirestoreFakturDoc[], incoming: FirestoreF
         if (uploadNotif && uploadNotif.uploaderId !== deviceIdRef.current) {
           setUploadNotification(uploadNotif);
           showToast(`📤 File baru diunggah rekan: ${uploadNotif.fileName} (${uploadNotif.newUnprinted} faktur baru)`);
-          fetchTiDBDelta(clientUpdatedRef.current || 0).then((deltaDocs) => {
-            if (deltaDocs && deltaDocs.length > 0) {
-              const deltaMax = (deltaDocs as any).maxUpdated || (clientUpdatedRef.current || 0);
-              if (deltaMax > (clientUpdatedRef.current || 0)) {
-                clientUpdatedRef.current = deltaMax;
+          if (docs.length === 0) {
+            fetchTiDBDelta(clientUpdatedRef.current || 0).then((deltaDocs) => {
+              if (deltaDocs && deltaDocs.length > 0) {
+                const deltaMax = (deltaDocs as any).maxUpdated || (clientUpdatedRef.current || 0);
+                if (deltaMax > (clientUpdatedRef.current || 0)) {
+                  clientUpdatedRef.current = deltaMax;
+                }
+                const merged = mergeKumulatifDocs(currentFakturDocsRef.current || [], deltaDocs);
+                currentFakturDocsRef.current = merged;
+                const { records: recs } = dbRowsToFakturRecords(
+                  merged as unknown as Array<Record<string, unknown>>,
+                  productOverridesRef.current
+                );
+                setRecords(recs);
+                setLocalCachedFakturs(merged, clientUpdatedRef.current || 0, {
+                  printedKeys: Array.from(printedInvoicesRef.current || []),
+                  printedAtMap: printedAtMapRef.current || {},
+                  printedByMap: printedByMapRef.current || {},
+                });
               }
-              const merged = mergeKumulatifDocs(currentFakturDocsRef.current || [], deltaDocs);
-              currentFakturDocsRef.current = merged;
-              const { records: recs } = dbRowsToFakturRecords(
-                merged as unknown as Array<Record<string, unknown>>,
-                productOverridesRef.current
-              );
-              setRecords(recs);
-              setLocalCachedFakturs(merged, clientUpdatedRef.current || 0, {
-                printedKeys: Array.from(printedInvoicesRef.current || []),
-                printedAtMap: printedAtMapRef.current || {},
-                printedByMap: printedByMapRef.current || {},
-              });
-            }
-          });
+            });
+          }
         }
 
         if (reason === "print" || reason === "meta") {
@@ -2192,9 +2195,19 @@ function mergeKumulatifDocs(existing: FirestoreFakturDoc[], incoming: FirestoreF
           .map((k) => invMap.get(k))
           .filter(Boolean) as FirestoreFakturDoc[];
 
-        await syncFaktursToTiDB(uploadedDocs);
+        // 6. Broadcast uploaded documents immediately via Firebase for 0ms Real-Time sync to all peer devices!
+        await broadcastRecentUpload(
+          uploadedDocs,
+          progObj,
+          fileNames.join(", "),
+          deviceIdRef.current,
+          brandNewUnprintedKeysSet.size
+        );
 
-        // 7. Sync print metadata & broadcast upload notification to other devices via Firestore
+        // 7. Save to TiDB in the background as permanent authoritative archive
+        syncFaktursToTiDBBackground(uploadedDocs);
+
+        // 8. Sync print metadata & broadcast upload notification to other devices via Firestore
         await saveFaktursBatch(
           payload,
           progObj,
