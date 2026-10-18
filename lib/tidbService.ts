@@ -162,6 +162,19 @@ const DB_NAME = "faktur_tidb_cache_db";
 const STORE_NAME = "fakturs_store";
 const KEY = "cached_fakturs";
 const META_KEY = "cached_meta";
+const PRINT_STATE_KEY = "cached_print_state";
+
+export interface CachedPrintState {
+  printedKeys: string[];
+  printedAtMap: Record<string, string>;
+  printedByMap: Record<string, string>;
+}
+
+export interface LocalCachedFaktursResult {
+  fakturs: FirestoreFakturDoc[];
+  maxUpdated: number;
+  printState?: CachedPrintState;
+}
 
 function openCacheDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -179,7 +192,7 @@ function openCacheDB(): Promise<IDBDatabase> {
   });
 }
 
-export async function getLocalCachedFakturs(): Promise<{ fakturs: FirestoreFakturDoc[]; maxUpdated: number } | null> {
+export async function getLocalCachedFakturs(): Promise<LocalCachedFaktursResult | null> {
   try {
     const db = await openCacheDB();
     return new Promise((resolve) => {
@@ -187,11 +200,16 @@ export async function getLocalCachedFakturs(): Promise<{ fakturs: FirestoreFaktu
       const store = tx.objectStore(STORE_NAME);
       const reqDocs = store.get(KEY);
       const reqMeta = store.get(META_KEY);
+      const reqPrint = store.get(PRINT_STATE_KEY);
 
       tx.oncomplete = () => {
         if (Array.isArray(reqDocs.result) && reqDocs.result.length > 0) {
           const maxUpdated = typeof reqMeta.result === "number" ? reqMeta.result : 0;
-          resolve({ fakturs: reqDocs.result as FirestoreFakturDoc[], maxUpdated });
+          const printState =
+            reqPrint && reqPrint.result && typeof reqPrint.result === "object"
+              ? (reqPrint.result as CachedPrintState)
+              : undefined;
+          resolve({ fakturs: reqDocs.result as FirestoreFakturDoc[], maxUpdated, printState });
         } else {
           resolve(null);
         }
@@ -203,7 +221,11 @@ export async function getLocalCachedFakturs(): Promise<{ fakturs: FirestoreFaktu
   }
 }
 
-export async function setLocalCachedFakturs(fakturs: FirestoreFakturDoc[], maxUpdated: number = 0): Promise<void> {
+export async function setLocalCachedFakturs(
+  fakturs: FirestoreFakturDoc[],
+  maxUpdated: number = 0,
+  printState?: CachedPrintState
+): Promise<void> {
   if (!fakturs || fakturs.length === 0) return;
   try {
     const db = await openCacheDB();
@@ -213,6 +235,21 @@ export async function setLocalCachedFakturs(fakturs: FirestoreFakturDoc[], maxUp
     if (maxUpdated > 0) {
       store.put(maxUpdated, META_KEY);
     }
+    if (printState && Array.isArray(printState.printedKeys) && printState.printedKeys.length > 0) {
+      store.put(printState, PRINT_STATE_KEY);
+    }
+  } catch {
+    // Non-blocking fail-safe
+  }
+}
+
+export async function setLocalCachedPrintState(printState: CachedPrintState): Promise<void> {
+  if (!printState || !Array.isArray(printState.printedKeys)) return;
+  try {
+    const db = await openCacheDB();
+    const tx = db.transaction(STORE_NAME, "readwrite");
+    const store = tx.objectStore(STORE_NAME);
+    store.put(printState, PRINT_STATE_KEY);
   } catch {
     // Non-blocking fail-safe
   }

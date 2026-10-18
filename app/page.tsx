@@ -27,7 +27,7 @@ import {
   subscribeToOnlinePresence,
   isStalePrintTimestamp,
 } from "@/lib/firestoreService";
-import { syncFaktursToTiDB, syncFaktursToTiDBBackground, syncPrintStatusToTiDBBackground, fetchFaktursFromTiDB, getLocalCachedFakturs, setLocalCachedFakturs, checkTiDBUpdates, fetchTiDBDelta } from "@/lib/tidbService";
+import { syncFaktursToTiDB, syncFaktursToTiDBBackground, syncPrintStatusToTiDBBackground, fetchFaktursFromTiDB, getLocalCachedFakturs, setLocalCachedFakturs, setLocalCachedPrintState, checkTiDBUpdates, fetchTiDBDelta } from "@/lib/tidbService";
 import MasterApotekModal from "@/components/MasterApotekModal";
 import MasterProductModal from "@/components/MasterProductModal";
 import LoginModal, { AppUser } from "@/components/LoginModal";
@@ -119,8 +119,7 @@ function dbRowsToFakturRecords(
     const pAt = (r.printed_at as string) || null;
     const pBy = (r.printed_by as string) || (extra.printed_by as string) || null;
 
-    const isStale = isStalePrintTimestamp(pAt, date);
-    const isPrinted = !isStale && Boolean(r.status_cetak);
+    const isPrinted = Boolean(r.status_cetak);
 
     if (isPrinted) {
       printedSet.add(invKey);
@@ -595,9 +594,29 @@ function mergeKumulatifDocs(existing: FirestoreFakturDoc[], incoming: FirestoreF
             productOverridesRef.current
           );
           setRecords(recs);
-          setPrintedInvoices((prev) => new Set([...Array.from(prev), ...Array.from(docPrintedSet)]));
-          setPrintedAtMap((prev) => ({ ...prev, ...docPrintedAtMap }));
-          setPrintedByMap((prev) => ({ ...prev, ...docPrintedByMap }));
+
+          // Restore authoritative print state instantly at 0ms!
+          const combinedKeys = new Set<string>([
+            ...Array.from(docPrintedSet),
+            ...(cached.printState?.printedKeys || []),
+          ]);
+          setPrintedInvoices(combinedKeys);
+          printedInvoicesRef.current = combinedKeys;
+
+          const combinedAtMap = {
+            ...docPrintedAtMap,
+            ...(cached.printState?.printedAtMap || {}),
+          };
+          setPrintedAtMap(combinedAtMap);
+          printedAtMapRef.current = combinedAtMap;
+
+          const combinedByMap = {
+            ...docPrintedByMap,
+            ...(cached.printState?.printedByMap || {}),
+          };
+          setPrintedByMap(combinedByMap);
+          printedByMapRef.current = combinedByMap;
+
           setLoading(false); // Instantly render UI without delay!
         }
       } catch (err) {
@@ -627,11 +646,27 @@ function mergeKumulatifDocs(existing: FirestoreFakturDoc[], incoming: FirestoreF
                 productOverridesRef.current
               );
               setRecords(recs);
-              setPrintedInvoices((prev) => new Set([...Array.from(prev), ...Array.from(docPrintedSet)]));
-              setPrintedAtMap((prev) => ({ ...prev, ...docPrintedAtMap }));
-              setPrintedByMap((prev) => ({ ...prev, ...docPrintedByMap }));
+              setPrintedInvoices((prev) => {
+                const next = new Set([...Array.from(prev), ...Array.from(docPrintedSet)]);
+                printedInvoicesRef.current = next;
+                return next;
+              });
+              setPrintedAtMap((prev) => {
+                const next = { ...prev, ...docPrintedAtMap };
+                printedAtMapRef.current = next;
+                return next;
+              });
+              setPrintedByMap((prev) => {
+                const next = { ...prev, ...docPrintedByMap };
+                printedByMapRef.current = next;
+                return next;
+              });
               setLoading(false);
-              setLocalCachedFakturs(merged, check.maxUpdated);
+              setLocalCachedFakturs(merged, check.maxUpdated, {
+                printedKeys: Array.from(printedInvoicesRef.current || []),
+                printedAtMap: printedAtMapRef.current || {},
+                printedByMap: printedByMapRef.current || {},
+              });
               return;
             }
           }
@@ -648,11 +683,27 @@ function mergeKumulatifDocs(existing: FirestoreFakturDoc[], incoming: FirestoreF
             productOverridesRef.current
           );
           setRecords(recs);
-          setPrintedInvoices((prev) => new Set([...Array.from(prev), ...Array.from(docPrintedSet)]));
-          setPrintedAtMap((prev) => ({ ...prev, ...docPrintedAtMap }));
-          setPrintedByMap((prev) => ({ ...prev, ...docPrintedByMap }));
+          setPrintedInvoices((prev) => {
+            const next = new Set([...Array.from(prev), ...Array.from(docPrintedSet)]);
+            printedInvoicesRef.current = next;
+            return next;
+          });
+          setPrintedAtMap((prev) => {
+            const next = { ...prev, ...docPrintedAtMap };
+            printedAtMapRef.current = next;
+            return next;
+          });
+          setPrintedByMap((prev) => {
+            const next = { ...prev, ...docPrintedByMap };
+            printedByMapRef.current = next;
+            return next;
+          });
           setLoading(false);
-          setLocalCachedFakturs(merged, result.maxUpdated);
+          setLocalCachedFakturs(merged, result.maxUpdated, {
+            printedKeys: Array.from(printedInvoicesRef.current || []),
+            printedAtMap: printedAtMapRef.current || {},
+            printedByMap: printedByMapRef.current || {},
+          });
         }
       } catch (err) {
         console.warn("TiDB background sync error:", err);
@@ -669,7 +720,6 @@ function mergeKumulatifDocs(existing: FirestoreFakturDoc[], incoming: FirestoreF
 
   // Real-time Firestore Subscription (Walkie-Talkie for Print Signals & Overrides)
   useEffect(() => {
-    setLoading(true);
     const unsubscribe = subscribeToFakturs(
       (docs, prog, printState, overrides, uploadNotif, reason, prodOverrides) => {
         if (isUploadingRef.current) return;
@@ -690,9 +740,11 @@ function mergeKumulatifDocs(existing: FirestoreFakturDoc[], incoming: FirestoreF
           const newKeys = printState.printedKeys;
           const newMap = printState.printedAtMap || {};
           const newByMap = printState.printedByMap || {};
+          let nextKeys: Set<string>;
           setPrintedInvoices((prev) => {
             const next = new Set<string>([...Array.from(prev), ...newKeys]);
             printedInvoicesRef.current = next;
+            nextKeys = next;
             return next;
           });
           setPrintedAtMap((prev) => {
@@ -704,6 +756,12 @@ function mergeKumulatifDocs(existing: FirestoreFakturDoc[], incoming: FirestoreF
             const next = { ...prev, ...newByMap };
             printedByMapRef.current = next;
             return next;
+          });
+          // Cache print state locally into IndexedDB for instant 0ms reload
+          setLocalCachedPrintState({
+            printedKeys: Array.from(nextKeys!),
+            printedAtMap: { ...(printedAtMapRef.current || {}), ...newMap },
+            printedByMap: { ...(printedByMapRef.current || {}), ...newByMap },
           });
         }
 
@@ -864,6 +922,12 @@ function mergeKumulatifDocs(existing: FirestoreFakturDoc[], incoming: FirestoreF
         else delete next[targetKey];
         printedByMapRef.current = next;
         return next;
+      });
+
+      setLocalCachedPrintState({
+        printedKeys: Array.from(printedInvoicesRef.current || []),
+        printedAtMap: printedAtMapRef.current || {},
+        printedByMap: printedByMapRef.current || {},
       });
 
       if (currentFakturDocsRef.current) {
@@ -1317,6 +1381,12 @@ function mergeKumulatifDocs(existing: FirestoreFakturDoc[], incoming: FirestoreF
       });
       printedByMapRef.current = next;
       return next;
+    });
+
+    setLocalCachedPrintState({
+      printedKeys: Array.from(printedInvoicesRef.current || []),
+      printedAtMap: printedAtMapRef.current || {},
+      printedByMap: printedByMapRef.current || {},
     });
 
     const targetSet = new Set(targetKeys);

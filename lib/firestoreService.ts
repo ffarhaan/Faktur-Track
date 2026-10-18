@@ -94,15 +94,6 @@ export function isStalePrintTimestamp(
   orderDate: string | null | undefined
 ): boolean {
   if (!printedAt) return false;
-  // Any legacy dummy print from Oct 1st 2026 is unconditionally stale
-  if (
-    printedAt === "2026-10-01T15:42:48.544Z" ||
-    printedAt.startsWith("2026-10-01") ||
-    printedAt.includes("2026-10-01") ||
-    printedAt.includes("01/10/2026")
-  ) {
-    return true;
-  }
   if (!orderDate || orderDate === "-") return false;
   const pDate = new Date(printedAt);
   if (isNaN(pDate.getTime())) return false;
@@ -135,8 +126,8 @@ function registerPrintKeyVariants(
   atMap: Record<string, string>
 ) {
   if (!k) return;
-  // Anti-Ghost Guard: Block October 1st ghost collision keys in 20000-24999 range
-  if (pAt && (pAt === "2026-10-01T15:42:48.544Z" || pAt.startsWith("2026-10-01") || pAt.includes("2026-10-01") || pAt.includes("01/10/2026"))) {
+  // Anti-Ghost Guard: Block ghost collision keys in 20000-24999 range
+  if (pAt === "2026-10-01T15:42:48.544Z") {
     const num = parseInt(k.replace(/\D/g, ""), 10);
     if (num >= 20000 && num <= 24999) return;
   }
