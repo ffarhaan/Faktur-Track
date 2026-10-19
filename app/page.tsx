@@ -658,47 +658,53 @@ function mergeKumulatifDocs(existing: FirestoreFakturDoc[], incoming: FirestoreF
             return;
           }
 
-          // Fetch ONLY the incremental delta (a few KB, never 25 MB)!
-          const deltaDocs = await fetchTiDBDelta(clientUpdated);
-          if (!isMounted) return;
-          if (deltaDocs && deltaDocs.length > 0) {
-            const merged = mergeKumulatifDocs(currentFakturDocsRef.current || [], deltaDocs);
-            currentFakturDocsRef.current = merged;
-            const newMaxUpdated = check ? Math.max(check.maxUpdated, clientUpdated) : clientUpdated;
-            clientUpdatedRef.current = newMaxUpdated;
-            const { records: recs, printedSet: docPrintedSet, printedAtMap: docPrintedAtMap, printedByMap: docPrintedByMap } = dbRowsToFakturRecords(
-              merged as unknown as Array<Record<string, unknown>>,
-              productOverridesRef.current,
-              printedInvoicesRef.current
-            );
-            setRecords(recs);
-            setPrintedInvoices((prev) => {
-              const next = new Set([...Array.from(prev), ...Array.from(docPrintedSet)]);
-              printedInvoicesRef.current = next;
-              return next;
-            });
-            setPrintedAtMap((prev) => {
-              const next = { ...prev, ...docPrintedAtMap };
-              printedAtMapRef.current = next;
-              return next;
-            });
-            setPrintedByMap((prev) => {
-              const next = { ...prev, ...docPrintedByMap };
-              printedByMapRef.current = next;
-              return next;
-            });
-            setLoading(false);
-            setLocalCachedFakturs(merged, newMaxUpdated, {
-              printedKeys: Array.from(printedInvoicesRef.current || []),
-              printedAtMap: printedAtMapRef.current || {},
-              printedByMap: printedByMapRef.current || {},
-            });
+          // If client has a massive gap (e.g. client only has 500 rows, but DB has 15,442 rows),
+          // incremental delta is insufficient! The client MUST do a full download to restore complete data!
+          const isMassiveGap = Boolean(check && check.totalCount && (check.totalCount - clientCount > 200));
+
+          if (!isMassiveGap) {
+            // Fetch ONLY the incremental delta (a few KB, never full download)!
+            const deltaDocs = await fetchTiDBDelta(clientUpdated);
+            if (!isMounted) return;
+            if (deltaDocs && deltaDocs.length > 0) {
+              const merged = mergeKumulatifDocs(currentFakturDocsRef.current || [], deltaDocs);
+              currentFakturDocsRef.current = merged;
+              const newMaxUpdated = check ? Math.max(check.maxUpdated, clientUpdated) : clientUpdated;
+              clientUpdatedRef.current = newMaxUpdated;
+              const { records: recs, printedSet: docPrintedSet, printedAtMap: docPrintedAtMap, printedByMap: docPrintedByMap } = dbRowsToFakturRecords(
+                merged as unknown as Array<Record<string, unknown>>,
+                productOverridesRef.current,
+                printedInvoicesRef.current
+              );
+              setRecords(recs);
+              setPrintedInvoices((prev) => {
+                const next = new Set([...Array.from(prev), ...Array.from(docPrintedSet)]);
+                printedInvoicesRef.current = next;
+                return next;
+              });
+              setPrintedAtMap((prev) => {
+                const next = { ...prev, ...docPrintedAtMap };
+                printedAtMapRef.current = next;
+                return next;
+              });
+              setPrintedByMap((prev) => {
+                const next = { ...prev, ...docPrintedByMap };
+                printedByMapRef.current = next;
+                return next;
+              });
+              setLoading(false);
+              setLocalCachedFakturs(merged, newMaxUpdated, {
+                printedKeys: Array.from(printedInvoicesRef.current || []),
+                printedAtMap: printedAtMapRef.current || {},
+                printedByMap: printedByMapRef.current || {},
+              });
+            }
+            if (isMounted) setLoading(false);
+            return; // STOP! NEVER FALL THROUGH TO FULL DOWNLOAD WHEN CLIENT HAS DATA!
           }
-          if (isMounted) setLoading(false);
-          return; // STOP! NEVER FALL THROUGH TO FULL 25 MB DOWNLOAD WHEN CLIENT HAS DATA!
         }
 
-        // Fallback for first-time visits only (empty IndexedDB cache)
+        // Fallback for first-time visits OR clients recovering from an incomplete cache (e.g. 500 vs 15,442)
         const result = await fetchFaktursFromTiDB();
         if (!isMounted) return;
         if (result && result.fakturs && result.fakturs.length > 0) {
@@ -798,29 +804,31 @@ function mergeKumulatifDocs(existing: FirestoreFakturDoc[], incoming: FirestoreF
 
           // ALWAYS trigger TiDB delta in background (after 1000ms debounce) to ensure all peer devices
           // achieve 100% total invoice count parity (e.g. 15442) and full line items!
-          setTimeout(() => {
-            fetchTiDBDelta(clientUpdatedRef.current || 0).then((deltaDocs) => {
-              if (deltaDocs && deltaDocs.length > 0) {
-                const deltaMax = (deltaDocs as any).maxUpdated || (clientUpdatedRef.current || 0);
-                if (deltaMax > (clientUpdatedRef.current || 0)) {
-                  clientUpdatedRef.current = deltaMax;
+          if (clientUpdatedRef.current && clientUpdatedRef.current > 0) {
+            setTimeout(() => {
+              fetchTiDBDelta(clientUpdatedRef.current || 0).then((deltaDocs) => {
+                if (deltaDocs && deltaDocs.length > 0) {
+                  const deltaMax = (deltaDocs as any).maxUpdated || (clientUpdatedRef.current || 0);
+                  if (deltaMax > (clientUpdatedRef.current || 0)) {
+                    clientUpdatedRef.current = deltaMax;
+                  }
+                  const merged = mergeKumulatifDocs(currentFakturDocsRef.current || [], deltaDocs);
+                  currentFakturDocsRef.current = merged;
+                  const { records: recs } = dbRowsToFakturRecords(
+                    merged as unknown as Array<Record<string, unknown>>,
+                    productOverridesRef.current,
+                    printedInvoicesRef.current
+                  );
+                  setRecords(recs);
+                  setLocalCachedFakturs(merged, clientUpdatedRef.current || 0, {
+                    printedKeys: Array.from(printedInvoicesRef.current || []),
+                    printedAtMap: printedAtMapRef.current || {},
+                    printedByMap: printedByMapRef.current || {},
+                  });
                 }
-                const merged = mergeKumulatifDocs(currentFakturDocsRef.current || [], deltaDocs);
-                currentFakturDocsRef.current = merged;
-                const { records: recs } = dbRowsToFakturRecords(
-                  merged as unknown as Array<Record<string, unknown>>,
-                  productOverridesRef.current,
-                  printedInvoicesRef.current
-                );
-                setRecords(recs);
-                setLocalCachedFakturs(merged, clientUpdatedRef.current || 0, {
-                  printedKeys: Array.from(printedInvoicesRef.current || []),
-                  printedAtMap: printedAtMapRef.current || {},
-                  printedByMap: printedByMapRef.current || {},
-                });
-              }
-            });
-          }, 1000);
+              });
+            }, 1000);
+          }
         }
 
         if (reason === "print" || reason === "meta") {
