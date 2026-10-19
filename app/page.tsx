@@ -1028,7 +1028,7 @@ function mergeKumulatifDocs(existing: FirestoreFakturDoc[], incoming: FirestoreF
 
     for (const r of records) {
       const key = r.invoiceKey || r.invoiceNumber;
-      if (!key) continue;
+      if (!key || key.startsWith("TEST-") || String(r.invoiceNumber || "").startsWith("TEST-")) continue;
 
       if (!map.has(key)) {
         map.set(key, {
