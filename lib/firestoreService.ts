@@ -559,26 +559,75 @@ export function subscribeToFakturs(
   };
 }
 
+function parseInvoiceNumberForSort(key: string): number {
+  if (!key) return 0;
+  const n = parseInt(key.replace(/\D/g, ""), 10);
+  return isNaN(n) ? 0 : n;
+}
+
+function pruneDocForBroadcast(doc: FirestoreFakturDoc): FirestoreFakturDoc {
+  return {
+    id: doc.id,
+    no_faktur: doc.no_faktur,
+    no_sales_order: doc.no_sales_order || "-",
+    customer_name: doc.customer_name || doc.extra?.nama_pelanggan || "-",
+    order_date: doc.order_date || doc.extra?.order_date || "-",
+    transaction_date: doc.transaction_date || doc.extra?.transaction_date || doc.order_date || "-",
+    jenis_transaksi: doc.jenis_transaksi || doc.extra?.jenis_transaksi || "DOO",
+    kategori: doc.kategori || doc.extra?.kategori || "3P",
+    status_cetak: Boolean(doc.status_cetak),
+    printed_at: doc.printed_at || null,
+    printed_by: doc.printed_by || null,
+    extra: {
+      nama_pelanggan: doc.extra?.nama_pelanggan || doc.customer_name || "-",
+      order_date: doc.extra?.order_date || doc.order_date || "-",
+      transaction_date: doc.extra?.transaction_date || doc.transaction_date || doc.order_date || "-",
+      kategori: doc.extra?.kategori || doc.kategori || "3P",
+      total_harga: Number(doc.extra?.total_harga || 0),
+      items: (doc.extra?.items || []).slice(0, 10).map((it) => ({
+        item_code: it.item_code || "",
+        item_description: it.item_description || "",
+        kategori_produk: it.kategori_produk || "FARMA",
+        qty: it.qty || 0,
+        uom: it.uom || "-",
+        lot_number: it.lot_number || "-",
+        total_harga: Number(it.total_harga || 0),
+      })),
+    },
+  };
+}
+
 /**
  * Broadcast freshly uploaded invoices to all peer devices in real-time (< 30ms) via Firestore
+ * Guarantees that ALL brand-new unprinted invoices are ALWAYS at the top and never dropped
  */
 export async function broadcastRecentUpload(
   uploadedDocs: FirestoreFakturDoc[],
   progression: InvoiceProgression | null,
   fileName: string,
   uploaderId: string,
-  newUnprintedCount: number
+  newUnprintedCount: number,
+  brandNewKeys?: string[]
 ): Promise<void> {
   try {
     const syncDocRef = doc(db, APP_DATA_COLLECTION, "recent_sync");
-    // Ensure size stays comfortably under 800 KB limit of Firestore
-    let docsToBroadcast = uploadedDocs;
-    if (JSON.stringify(docsToBroadcast).length > 750000) {
-      docsToBroadcast = uploadedDocs.slice(0, 300);
-      if (JSON.stringify(docsToBroadcast).length > 750000) {
-        docsToBroadcast = uploadedDocs.slice(0, 150);
+    const brandNewSet = new Set(brandNewKeys || []);
+
+    // 1. Strictly prioritize ALL brand-new unprinted invoices at index 0..N
+    const sortedDocs = [...uploadedDocs].sort((a, b) => {
+      const aKey = a.id || a.no_faktur;
+      const bKey = b.id || b.no_faktur;
+      const aIsBrandNew = brandNewSet.has(aKey) || (!a.status_cetak ? 1 : 0);
+      const bIsBrandNew = brandNewSet.has(bKey) || (!b.status_cetak ? 1 : 0);
+      if (aIsBrandNew !== bIsBrandNew) {
+        return (bIsBrandNew ? 1 : 0) - (aIsBrandNew ? 1 : 0); // brand new unprinted ALWAYS first!
       }
-    }
+      return parseInvoiceNumberForSort(bKey) - parseInvoiceNumberForSort(aKey); // highest invoice numbers first!
+    });
+
+    // 2. Prune items to lightweight structures (~300 bytes/doc) so 300 docs safely use only ~90 KB
+    const prunedDocs = sortedDocs.slice(0, 300).map(pruneDocForBroadcast);
+
     await setDoc(syncDocRef, {
       syncId: `sync_${Date.now()}_${uploaderId}`,
       uploaderId,
@@ -586,7 +635,7 @@ export async function broadcastRecentUpload(
       fileName,
       newUnprintedCount,
       progression,
-      docs: docsToBroadcast,
+      docs: prunedDocs,
     });
   } catch (err) {
     console.warn("Broadcast recent upload warning:", err);

@@ -786,31 +786,32 @@ function mergeKumulatifDocs(existing: FirestoreFakturDoc[], incoming: FirestoreF
             setUploadNotification(uploadNotif);
             showToast(`📤 File baru diunggah rekan: ${uploadNotif.fileName} (${uploadNotif.newUnprinted} faktur baru)`);
           }
-          if (docs.length === 0) {
-            setTimeout(() => {
-              fetchTiDBDelta(clientUpdatedRef.current || 0).then((deltaDocs) => {
-                if (deltaDocs && deltaDocs.length > 0) {
-                  const deltaMax = (deltaDocs as any).maxUpdated || (clientUpdatedRef.current || 0);
-                  if (deltaMax > (clientUpdatedRef.current || 0)) {
-                    clientUpdatedRef.current = deltaMax;
-                  }
-                  const merged = mergeKumulatifDocs(currentFakturDocsRef.current || [], deltaDocs);
-                  currentFakturDocsRef.current = merged;
-                  const { records: recs } = dbRowsToFakturRecords(
-                    merged as unknown as Array<Record<string, unknown>>,
-                    productOverridesRef.current,
-                    printedInvoicesRef.current
-                  );
-                  setRecords(recs);
-                  setLocalCachedFakturs(merged, clientUpdatedRef.current || 0, {
-                    printedKeys: Array.from(printedInvoicesRef.current || []),
-                    printedAtMap: printedAtMapRef.current || {},
-                    printedByMap: printedByMapRef.current || {},
-                  });
+
+          // ALWAYS trigger TiDB delta in background (after 1000ms debounce) to ensure all peer devices
+          // achieve 100% total invoice count parity (e.g. 15442) and full line items!
+          setTimeout(() => {
+            fetchTiDBDelta(clientUpdatedRef.current || 0).then((deltaDocs) => {
+              if (deltaDocs && deltaDocs.length > 0) {
+                const deltaMax = (deltaDocs as any).maxUpdated || (clientUpdatedRef.current || 0);
+                if (deltaMax > (clientUpdatedRef.current || 0)) {
+                  clientUpdatedRef.current = deltaMax;
                 }
-              });
-            }, 1500);
-          }
+                const merged = mergeKumulatifDocs(currentFakturDocsRef.current || [], deltaDocs);
+                currentFakturDocsRef.current = merged;
+                const { records: recs } = dbRowsToFakturRecords(
+                  merged as unknown as Array<Record<string, unknown>>,
+                  productOverridesRef.current,
+                  printedInvoicesRef.current
+                );
+                setRecords(recs);
+                setLocalCachedFakturs(merged, clientUpdatedRef.current || 0, {
+                  printedKeys: Array.from(printedInvoicesRef.current || []),
+                  printedAtMap: printedAtMapRef.current || {},
+                  printedByMap: printedByMapRef.current || {},
+                });
+              }
+            });
+          }, 1000);
         }
 
         if (reason === "print" || reason === "meta") {
@@ -2191,6 +2192,7 @@ function mergeKumulatifDocs(existing: FirestoreFakturDoc[], incoming: FirestoreF
           newUnprinted: brandNewUnprintedKeysSet.size,
           time: new Date().toLocaleTimeString("id-ID"),
           uploaderId: deviceIdRef.current,
+          uploadedAtMs: Date.now(),
         };
 
         setInvoiceProgression(progObj);
@@ -2218,7 +2220,8 @@ function mergeKumulatifDocs(existing: FirestoreFakturDoc[], incoming: FirestoreF
           progObj,
           fileNames.join(", "),
           deviceIdRef.current,
-          brandNewUnprintedKeysSet.size
+          brandNewUnprintedKeysSet.size,
+          Array.from(brandNewUnprintedKeysSet)
         );
 
         // 7. Save to TiDB in the background as permanent authoritative archive
