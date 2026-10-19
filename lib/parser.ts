@@ -390,7 +390,8 @@ function parseXXCUST(
     const isOra = isOraCustomer(customerName) || isOraCustomer(customerCode) || customerCode === "CA-900001";
     const jenisTransaksi: "ORA" | "DOO" = isOra ? "ORA" : "DOO";
     const kategori = categorize(jenisTransaksi, customerName, jenisTransaksi);
-    const invoiceKey = isOra ? `${invoiceNumber}-1P` : invoiceNumber;
+    const cleanInv = invoiceNumber.replace(/-1P$/i, "");
+    const invoiceKey = isOra ? `${cleanInv}-1P` : cleanInv;
 
     const itemCode = val(idx.itemCode);
     const itemDescription = val(idx.itemDescription);
@@ -528,7 +529,8 @@ function parseHTMLTable(html: string): FakturRecord[] {
     const billSite = colMap["billSite"] !== undefined ? texts[colMap["billSite"]] : "";
 
     const kategori = isOra ? "1P" : categorize(jenisTransaksi, customerName, jenisTransaksi, shipSite, billSite);
-    const invoiceKey = isOra ? `${invVal}-1P` : invVal;
+    const cleanInv = invVal.replace(/-1P$/i, "");
+    const invoiceKey = isOra ? `${cleanInv}-1P` : cleanInv;
     const finalSO = isOra ? "-" : (soVal || "-");
     const txVal = colMap["txDate"] !== undefined ? texts[colMap["txDate"]] : undefined;
 
@@ -598,7 +600,8 @@ function parseExportArray(data: unknown[][], headerIdx: number): FakturRecord[] 
     const billSite = String((colMap["billSite"] !== undefined ? row[colMap["billSite"]] : "") || "");
 
     const kategori = isOra ? "1P" : categorize(jenisTransaksi, customerName, jenisTransaksi, shipSite, billSite);
-    const invoiceKey = isOra ? `${invVal}-1P` : invVal;
+    const cleanInv = invVal.replace(/-1P$/i, "");
+    const invoiceKey = isOra ? `${cleanInv}-1P` : cleanInv;
     const rawAmount = row[colMap["amount"] ?? 11];
     const totalHarga = typeof rawAmount === "number" ? rawAmount : Number(String(rawAmount || "").replace(/[^0-9.-]/g, "") || 0);
     const finalSO = isOra ? "-" : (soVal || "-");

@@ -27,11 +27,20 @@ export async function GET(req: Request) {
 
     if (action === "count") {
       const result = (await conn.execute("SELECT COUNT(*) as count FROM fakturs_archive;")) as Array<{ count: number }>;
-      return Response.json({
-        success: true,
-        totalArchived: Number(result[0]?.count || 0),
-        timestamp: Date.now(),
-      });
+      return Response.json(
+        {
+          success: true,
+          totalArchived: Number(result[0]?.count || 0),
+          timestamp: Date.now(),
+        },
+        {
+          headers: {
+            "Cache-Control": "no-store, no-cache, must-revalidate",
+            "CDN-Cache-Control": "no-store",
+            "Vercel-CDN-Cache-Control": "no-store",
+          },
+        }
+      );
     }
 
     if (action === "check") {
@@ -46,12 +55,21 @@ export async function GET(req: Request) {
 
       const isUpToDate = clientCount === totalCount && (clientUpdated === 0 || clientUpdated >= maxUpdated);
 
-      return Response.json({
-        success: true,
-        upToDate: isUpToDate,
-        totalCount,
-        maxUpdated,
-      });
+      return Response.json(
+        {
+          success: true,
+          upToDate: isUpToDate,
+          totalCount,
+          maxUpdated,
+        },
+        {
+          headers: {
+            "Cache-Control": "no-store, no-cache, must-revalidate",
+            "CDN-Cache-Control": "no-store",
+            "Vercel-CDN-Cache-Control": "no-store",
+          },
+        }
+      );
     }
 
     if (action === "delta") {
@@ -98,10 +116,11 @@ export async function GET(req: Request) {
           const ts = Number(r.row_updated);
           if (ts > maxUpdated) maxUpdated = ts;
         }
-        let parsedItems = [];
+        let parsedItems: unknown[] = [];
         if (r.items_json) {
           try {
-            parsedItems = typeof r.items_json === "string" ? JSON.parse(r.items_json) : r.items_json;
+            const parsed = typeof r.items_json === "string" ? JSON.parse(r.items_json) : r.items_json;
+            parsedItems = Array.isArray(parsed) ? parsed : [];
           } catch {
             parsedItems = [];
           }
@@ -180,10 +199,11 @@ export async function GET(req: Request) {
     const maxUpdated = Number(resultMeta[0]?.max_updated || 0);
 
     const docs = rows.map((r) => {
-      let parsedItems = [];
+      let parsedItems: unknown[] = [];
       if (r.items_json) {
         try {
-          parsedItems = typeof r.items_json === "string" ? JSON.parse(r.items_json) : r.items_json;
+          const parsed = typeof r.items_json === "string" ? JSON.parse(r.items_json) : r.items_json;
+          parsedItems = Array.isArray(parsed) ? parsed : [];
         } catch {
           parsedItems = [];
         }

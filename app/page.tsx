@@ -790,7 +790,7 @@ function mergeKumulatifDocs(existing: FirestoreFakturDoc[], incoming: FirestoreF
 
         // Real-time Upload Broadcast to all other devices!
         if (uploadNotif && uploadNotif.uploaderId !== deviceIdRef.current) {
-          const isFresh = uploadNotif.uploadedAtMs ? (Date.now() - uploadNotif.uploadedAtMs < 60000) : true;
+          const isFresh = uploadNotif.uploadedAtMs ? (Math.abs(Date.now() - uploadNotif.uploadedAtMs) < 60000) : true;
           if (isFresh) {
             setUploadNotification(uploadNotif);
             showToast(`📤 File baru diunggah rekan: ${uploadNotif.fileName} (${uploadNotif.newUnprinted} faktur baru)`);
@@ -2228,7 +2228,13 @@ function mergeKumulatifDocs(existing: FirestoreFakturDoc[], incoming: FirestoreF
           notifPayload
         );
 
-        setLocalCachedFakturs(payload);
+        const uploadMaxUpdated = Math.floor(Date.now() / 1000);
+        clientUpdatedRef.current = Math.max(clientUpdatedRef.current || 0, uploadMaxUpdated);
+        setLocalCachedFakturs(payload, uploadMaxUpdated, {
+          printedKeys: Array.from(finalPrintedSet),
+          printedAtMap: finalPrintedAtMap,
+          printedByMap: printedByMapRef.current || {},
+        });
 
         setTimeout(() => {
           isUploadingRef.current = false;
