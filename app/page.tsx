@@ -750,32 +750,37 @@ function mergeKumulatifDocs(existing: FirestoreFakturDoc[], incoming: FirestoreF
           productOverridesRef.current = prodOverrides;
         }
 
-        if (printState && (printState.printedKeys?.length || 0) > 0) {
-          const newKeys = printState.printedKeys;
+        if (printState) {
+          const newKeys = printState.printedKeys || [];
           const newMap = printState.printedAtMap || {};
           const newByMap = printState.printedByMap || {};
-          let nextKeys: Set<string>;
-          setPrintedInvoices((prev) => {
-            const next = new Set<string>([...Array.from(prev), ...newKeys]);
-            printedInvoicesRef.current = next;
-            nextKeys = next;
-            return next;
-          });
-          setPrintedAtMap((prev) => {
-            const next = { ...prev, ...newMap };
-            printedAtMapRef.current = next;
-            return next;
-          });
-          setPrintedByMap((prev) => {
-            const next = { ...prev, ...newByMap };
-            printedByMapRef.current = next;
-            return next;
-          });
+          const nextKeys = new Set<string>(newKeys);
+
+          setPrintedInvoices(nextKeys);
+          printedInvoicesRef.current = nextKeys;
+          setPrintedAtMap(newMap);
+          printedAtMapRef.current = newMap;
+          setPrintedByMap(newByMap);
+          printedByMapRef.current = newByMap;
+
+          // Update currentFakturDocsRef in-place so status_cetak stays 100% in sync
+          if (currentFakturDocsRef.current) {
+            currentFakturDocsRef.current.forEach((d) => {
+              const k = d.id || d.no_faktur;
+              if (k) {
+                const isP = nextKeys.has(k);
+                d.status_cetak = isP;
+                d.printed_at = isP ? (newMap[k] || null) : null;
+                d.printed_by = isP ? (newByMap[k] || null) : null;
+              }
+            });
+          }
+
           // Cache print state locally into IndexedDB for instant 0ms reload
           setLocalCachedPrintState({
-            printedKeys: Array.from(nextKeys!),
-            printedAtMap: { ...(printedAtMapRef.current || {}), ...newMap },
-            printedByMap: { ...(printedByMapRef.current || {}), ...newByMap },
+            printedKeys: newKeys,
+            printedAtMap: newMap,
+            printedByMap: newByMap,
           });
         }
 
@@ -829,36 +834,15 @@ function mergeKumulatifDocs(existing: FirestoreFakturDoc[], incoming: FirestoreF
           );
           setRecords(recs);
 
-          // Synchronously merge printed invoices so they NEVER desynchronize!
-          setPrintedInvoices((prev) => {
-            const next = new Set<string>([
-              ...Array.from(prev),
-              ...(printState?.printedKeys || []),
-              ...Array.from(docPrintedSet),
-            ]);
+          if (printState?.printedKeys && printState.printedKeys.length > 0) {
+            const next = new Set<string>(printState.printedKeys);
+            setPrintedInvoices(next);
             printedInvoicesRef.current = next;
-            return next;
-          });
-
-          setPrintedAtMap((prev) => {
-            const next = {
-              ...prev,
-              ...(printState?.printedAtMap || {}),
-              ...docPrintedAtMap,
-            };
-            printedAtMapRef.current = next;
-            return next;
-          });
-
-          setPrintedByMap((prev) => {
-            const next = {
-              ...prev,
-              ...(printState?.printedByMap || {}),
-              ...docPrintedByMap,
-            };
-            printedByMapRef.current = next;
-            return next;
-          });
+            setPrintedAtMap(printState.printedAtMap || {});
+            printedAtMapRef.current = printState.printedAtMap || {};
+            setPrintedByMap(printState.printedByMap || {});
+            printedByMapRef.current = printState.printedByMap || {};
+          }
         }
         setLoading(false);
       },

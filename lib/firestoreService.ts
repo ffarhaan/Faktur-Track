@@ -265,10 +265,6 @@ export function subscribeToFakturs(
   let currentProductCategoryOverrides: Record<string, string> = { ...globalProductCategoryOverrides };
   let currentUploadNotification: UploadNotification | null = null;
 
-  // Track partitioned print docs with module cache pre-population
-  const partitionMap = new Map<string, { printedKeys: string[]; printedAtMap: Record<string, string>; printedByMap?: Record<string, string> }>(globalPartitionMap);
-  let legacyPrintState: PrintState | null = globalLegacyPrintState;
-
   let currentPrintState: PrintState = {
     printedKeys: [],
     printedAtMap: {},
@@ -280,14 +276,6 @@ export function subscribeToFakturs(
     const combinedKeys = new Set<string>();
     const combinedMap: Record<string, string> = {};
     const combinedByMap: Record<string, string> = {};
-
-    partitionMap.forEach((part) => {
-      const pMap = part.printedAtMap || {};
-      const pBy = part.printedByMap || {};
-      (part.printedKeys || []).forEach((k) => registerPrintKeyVariants(k, pMap[k], combinedKeys, combinedMap));
-      Object.assign(combinedMap, pMap);
-      Object.assign(combinedByMap, pBy);
-    });
 
     globalPartitionMap.forEach((part) => {
       const pMap = part.printedAtMap || {};
@@ -444,7 +432,6 @@ export function subscribeToFakturs(
     (snap) => {
       snap.docChanges().forEach((change) => {
         if (change.type === "removed") {
-          partitionMap.delete(change.doc.id);
           globalPartitionMap.delete(change.doc.id);
         } else {
           const data = change.doc.data();
@@ -453,7 +440,6 @@ export function subscribeToFakturs(
             printedAtMap: (data.printedAtMap as Record<string, string>) || {},
             printedByMap: (data.printedByMap as Record<string, string>) || {},
           };
-          partitionMap.set(change.doc.id, pEntry);
           globalPartitionMap.set(change.doc.id, pEntry);
         }
       });
