@@ -202,17 +202,40 @@ Dokumen ini secara permanen mengunci prinsip efisiensi kuota dan kompresi data u
 
 ---
 
-### 4. KLAUSUL INTEGRITAS MUTLAK (INVIOLABILITY CLAUSE)
+---
+
+### 4. ARSITEKTUR HYBRID DUAL-SYNC REALTIME (TIDB + FIREBASE - LOCKED MUTLAK)
+
+1. **Pemisahan Peran Tegas (Separation of Concerns)**:
+   - **TiDB Cloud Serverless (Primary Authoritative Archive)**:
+     - Menyimpan seluruh 15.000+ hingga jutaan master record faktur secara permanen di cloud (kapasitas 25 GB).
+     - Menjadi sumber kebenaran data (*Single Source of Truth*) untuk data historis, sinkronisasi delta berkala, dan pemuatan awal aplikasi.
+   - **Firebase Cloud Firestore (Real-Time Dispatcher & Walkie-Talkie)**:
+     - Bertanggung jawab 100% atas komunikasi kilat antar-perangkat (< 50ms).
+     - **Done Print Realtime Sync**: Mengirim status cetak faktur detik itu juga antar-laptop via `print_state_partitions`.
+     - **Realtime Upload Broadcast (`broadcastRecentUpload`)**: Saat salah satu admin mengunggah file faktur baru, data faktur baru tersebut WAJIB langsung disiarkan detik itu juga melalui dokumen `app_data/recent_sync`.
+     - Seluruh laptop rekan yang sedang online WAJIB langsung menangkap siaran tersebut, menampilkan banner toast upload, dan menyisipkan faktur baru langsung di posisi teratas tab **"Belum Terprint"** secara instan tanpa perlu me-refresh halaman.
+
+2. **Jaminan Paritas Data Latar Belakang (Background Delta Parity Guard)**:
+   - 1 detik setelah notifikasi upload Firebase diterima, perangkat rekan secara otomatis mengeksekusi `fetchTiDBDelta(clientUpdated)` di latar belakang untuk menjamin keselarasan 100% rincian item, nomor SO, dan lot produk dari TiDB tanpa memblokir antarmuka pengguna.
+
+3. **Proteksi Sanitasi Data Uji Coba (Test Data Sanitization Guard - LOCKED)**:
+   - Data faktur uji coba atau data berawalan prefix `TEST-` secara ketat dilarang masuk ke dalam memori aplikasi, dilarang masuk ke tabel kerja, dan otomatis disaring dari penyimpanan lokal IndexedDB.
+
+---
+
+### 5. KLAUSUL INTEGRITAS MUTLAK (INVIOLABILITY CLAUSE)
 
 > **DILARANG MERUBAH LOGIKA DASAR PADA PERMINTAAN FITUR BARU APAPUN:**
 > Setiap penambahan fitur, perubahan tampilan, atau optimasi di masa mendatang **WAJIB** tunduk pada dokumen `LOCKED_RULES.md` ini dan **TIDAK BOLEH** merusak atau mengubah:
-> 1. Isolasi mutlak DOO vs ORA
+> 1. Isolasi mutlak DOO vs ORA (`-1P`)
 > 2. Jaminan anti-reappearance faktur yang sudah dicetak
 > 3. Jaminan faktur baru masuk ke Belum Terprint
-> 4. Real-time sync multi-device Firestore
+> 4. Real-time sync multi-device Firestore (Done Print + Realtime Upload Broadcast)
 > 5. Retensi kustom kategori apotek dan produk
 > 6. Aturan baku urutan Hook React (Top-Level Hooks Only)
 > 7. Arsitektur performa kilat `baseGroups` dan eliminasi loading palsu
 > 8. Sistem hak akses role pengguna dan proteksi stranger
-> 9. Arsitektur efisiensi ekstrim (Chunking, Data Pruning, dan Zero-Read Client Filtering).
+> 9. Arsitektur efisiensi ekstrim (Chunking, Data Pruning, dan Zero-Read Client Filtering)
+> 10. Arsitektur Hybrid Dual-Sync (TiDB Authoritative + Firebase Realtime Broadcast).
 

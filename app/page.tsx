@@ -108,6 +108,7 @@ function dbRowsToFakturRecords(
 
   for (const r of rows) {
     const rawInv = String(r.no_faktur || "");
+    if (!rawInv || rawInv.startsWith("TEST-")) continue;
     const cleanInv = rawInv.replace(/-1P$/i, "");
     const extra = (r.extra as Record<string, unknown>) || {};
     const items = (extra.items as Array<Record<string, unknown>>) || [];
@@ -554,10 +555,10 @@ export default function Home() {
 function mergeKumulatifDocs(existing: FirestoreFakturDoc[], incoming: FirestoreFakturDoc[]): FirestoreFakturDoc[] {
   const map = new Map<string, FirestoreFakturDoc>();
   for (const d of existing) {
-    if (d?.id) map.set(d.id, d);
+    if (d?.id && !d.id.startsWith("TEST-")) map.set(d.id, d);
   }
   for (const d of incoming) {
-    if (!d?.id) continue;
+    if (!d?.id || d.id.startsWith("TEST-")) continue;
     if (!map.has(d.id)) {
       map.set(d.id, d);
     } else {
@@ -593,6 +594,9 @@ function mergeKumulatifDocs(existing: FirestoreFakturDoc[], incoming: FirestoreF
       try {
         const cached = await getLocalCachedFakturs();
         if (cached && cached.fakturs && cached.fakturs.length > 0 && isMounted) {
+          cached.fakturs = cached.fakturs.filter(
+            (f) => !String(f.id || f.no_faktur || "").startsWith("TEST-")
+          );
           clientCount = cached.fakturs.length;
           clientUpdated = cached.maxUpdated || 0;
 
