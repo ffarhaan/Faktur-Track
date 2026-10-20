@@ -1,6 +1,38 @@
 import { getTiDBClient } from "@/lib/tidb";
+import zlib from "zlib";
 
 export const dynamic = "force-dynamic";
+
+function compressedJsonResponse(
+  req: Request,
+  data: unknown,
+  customHeaders: Record<string, string> = {},
+  status = 200
+): Response {
+  const jsonStr = JSON.stringify(data);
+  const acceptEncoding = req.headers.get("accept-encoding") || "";
+
+  if (acceptEncoding.includes("gzip")) {
+    const compressed = zlib.gzipSync(Buffer.from(jsonStr), { level: 6 });
+    return new Response(compressed as unknown as BodyInit, {
+      status,
+      headers: {
+        "Content-Type": "application/json",
+        "Content-Encoding": "gzip",
+        "Vary": "Accept-Encoding",
+        ...customHeaders,
+      },
+    });
+  }
+
+  return new Response(jsonStr, {
+    status,
+    headers: {
+      "Content-Type": "application/json",
+      ...customHeaders,
+    },
+  });
+}
 
 interface FakturPayload {
   invoice_key: string;
@@ -150,7 +182,8 @@ export async function GET(req: Request) {
         };
       });
 
-      return Response.json(
+      return compressedJsonResponse(
+        req,
         {
           success: true,
           count: docs.length,
@@ -158,11 +191,9 @@ export async function GET(req: Request) {
           maxUpdated,
         },
         {
-          headers: {
-            "Cache-Control": "no-store, no-cache, must-revalidate",
-            "CDN-Cache-Control": "no-store",
-            "Vercel-CDN-Cache-Control": "no-store",
-          },
+          "Cache-Control": "no-store, no-cache, must-revalidate",
+          "CDN-Cache-Control": "no-store",
+          "Vercel-CDN-Cache-Control": "no-store",
         }
       );
     }
@@ -233,7 +264,8 @@ export async function GET(req: Request) {
       };
     });
 
-    return Response.json(
+    return compressedJsonResponse(
+      req,
       {
         success: true,
         count: docs.length,
@@ -242,11 +274,9 @@ export async function GET(req: Request) {
         timestamp: Date.now(),
       },
       {
-        headers: {
-          "Cache-Control": "public, s-maxage=86400, stale-while-revalidate=86400",
-          "CDN-Cache-Control": "public, s-maxage=86400",
-          "Vercel-CDN-Cache-Control": "public, s-maxage=86400",
-        },
+        "Cache-Control": "public, s-maxage=86400, stale-while-revalidate=86400",
+        "CDN-Cache-Control": "public, s-maxage=86400",
+        "Vercel-CDN-Cache-Control": "public, s-maxage=86400",
       }
     );
   } catch (err: unknown) {
