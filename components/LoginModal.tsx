@@ -15,8 +15,10 @@ export const ALLOWED_USERS = [
   { name: "Aqsal", icon: "👨‍🔬" },
   { name: "Wibi", icon: "👨‍🔧" },
   { name: "Andre", icon: "👨‍💼" },
-  { name: "Melin", icon: "👩‍💼" },
+  { name: "Melinda", icon: "👩‍💼" },
   { name: "Mahendra", icon: "👨‍💻" },
+  { name: "Putri", icon: "👩‍💼" },
+  { name: "Azizah", icon: "👩‍💻" },
   { name: "stranger", icon: "👁️", isReadOnly: true },
 ] as const;
 
